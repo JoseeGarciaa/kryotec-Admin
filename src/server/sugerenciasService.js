@@ -109,15 +109,7 @@ const sugerenciasService = {
           return null; // No cabe, excluir este modelo
         }
         
-        // Filtrar modelos demasiado grandes (más del 50% más grande en cualquier dimensión)
-        const factorMaximo = 1.5; // 50% más grande como máximo
-        const demasiadoGrande = frenteModelo > (frenteRequerido * factorMaximo) ||
-                               profundoModelo > (profundoRequerido * factorMaximo) ||
-                               altoModelo > (altoRequerido * factorMaximo);
-        
-        if (demasiadoGrande) {
-          return null; // Demasiado grande, excluir este modelo
-        }
+        // ELIMINADO: Filtro de "demasiado grande" - ahora recomendamos cualquier tamaño
         
         // Calcular cuántas cajas caben en un modelo (por volumen)
         const volumenModeloM3 = modelo.volumen_litros / 1000;
