@@ -125,7 +125,7 @@ const ClientesView: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-blue-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
@@ -136,6 +136,17 @@ const ClientesView: React.FC = () => {
           </div>
         </div>
         
+        <div className="bg-orange-500 rounded-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-orange-100 text-sm">Este Mes</p>
+              <p className="text-2xl font-bold">{stats.esteMes}</p>
+            </div>
+            <Calendar size={40} className="text-orange-200" />
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-green-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
