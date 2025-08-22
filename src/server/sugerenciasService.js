@@ -96,49 +96,58 @@ const sugerenciasService = {
         const profundoModelo = modelo.dim_int_profundo; // Ya en mm
         const altoModelo = modelo.dim_int_alto; // Ya en mm
         
-        // Verificar si UNA caja cabe físicamente en el modelo (comparar mm con mm)
-        const frenteRequerido = dimensiones_requeridas.frente;
-        const profundoRequerido = dimensiones_requeridas.profundo;
-        const altoRequerido = dimensiones_requeridas.alto;
-        
-        const cabeEnDimensiones = frenteModelo >= frenteRequerido && 
-                                 profundoModelo >= profundoRequerido && 
-                                 altoModelo >= altoRequerido;
-        
-        if (!cabeEnDimensiones) {
-          return null; // No cabe, excluir este modelo
-        }
-        
-        // ELIMINADO: Filtro de "demasiado grande" - ahora recomendamos cualquier tamaño
+        // ELIMINADO: Verificación de dimensiones físicas - ahora recomendamos por volumen
+        // const cabeEnDimensiones = frenteModelo >= frenteRequerido && 
+        //                          profundoModelo >= profundoRequerido && 
+        //                          altoModelo >= altoRequerido;
+        // 
+        // if (!cabeEnDimensiones) {
+        //   return null; // No cabe, excluir este modelo
+        // }
         
         // Calcular cuántas cajas caben en un modelo (por volumen)
         const volumenModeloM3 = modelo.volumen_litros / 1000;
         const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
         
-        if (cajasPorModelo === 0) {
-          return null; // No cabe ni una caja
-        }
+        // MODIFICADO: Permitir modelos aunque no quepa ni una caja completa
+        // En este caso, recomendaremos múltiples modelos pequeños
+        let modelosNecesarios, cajasQueSeGuardan, eficiencia;
         
-        // Calcular cuántos modelos se necesitan para todas las cajas
-        const modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
-        const cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
-        const eficiencia = (cantidadCajas / cajasQueSeGuardan) * 100;
+        if (cajasPorModelo === 0) {
+          // Si no cabe ni una caja, calculamos cuántos modelos necesitamos
+          // para aproximarnos al volumen total requerido
+          const volumenTotalRequerido = volumenUnaCaja * cantidadCajas;
+          modelosNecesarios = Math.ceil(volumenTotalRequerido / volumenModeloM3);
+          cajasQueSeGuardan = cantidadCajas; // Asumimos que se guardarán todas
+          eficiencia = (volumenTotalRequerido / (modelosNecesarios * volumenModeloM3)) * 100;
+        } else {
+          // Lógica normal cuando sí caben cajas
+          modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
+          cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
+          eficiencia = (cantidadCajas / cajasQueSeGuardan) * 100;
+        }
         
         return {
           modelo_id: modelo.modelo_id,
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: modelosNecesarios,
-          cajas_por_modelo: cajasPorModelo,
+          cajas_por_modelo: Math.max(cajasPorModelo, 0), // Mostrar 0 si no cabe ninguna
           total_cajas_guardadas: cajasQueSeGuardan,
           eficiencia: Math.round(eficiencia * 10) / 10,
           dimensiones_internas: {
             frente: frenteModelo, // Mantener en mm
             profundo: profundoModelo, // Mantener en mm
             alto: altoModelo // Mantener en mm
-          }
+          },
+          // Agregar indicador si las cajas no caben físicamente
+          nota_dimensional: (frenteModelo < dimensiones_requeridas.frente || 
+                           profundoModelo < dimensiones_requeridas.profundo || 
+                           altoModelo < dimensiones_requeridas.alto) 
+                           ? 'Las cajas exceden las dimensiones del modelo - aproximación por volumen' 
+                           : null
         };
-      }).filter(sugerencia => sugerencia !== null); // Filtrar modelos que no sirven
+      }); // Ya no filtramos ningún modelo
       
       // Ordenar por eficiencia descendente
       sugerencias.sort((a, b) => b.eficiencia - a.eficiencia);
