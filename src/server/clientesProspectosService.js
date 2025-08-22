@@ -1,4 +1,4 @@
-const { pool } = require('../db');
+const pool = require('./config/db');
 const cache = require('./utils/cache');
 
 const CLIENTES_CACHE_KEY = 'clientes_prospectos';
