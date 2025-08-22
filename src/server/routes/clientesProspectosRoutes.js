@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const clientesProspectosService = require('./clientesProspectosService');
+const clientesProspectosService = require('../clientesProspectosService'); // Corregir la ruta
 
 // Obtener todos los clientes prospectos
 router.get('/', async (req, res) => {

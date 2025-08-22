@@ -7,6 +7,7 @@ const authService = require('./authService');
 const credocubeService = require('./credocubeService');
 const tenantService = require('./tenantService');
 const clientesProspectosService = require('./clientesProspectosService');
+const clientesProspectosRoutes = require('./routes/clientesProspectosRoutes'); // Agregar esta línea
 
 const app = express();
 const PORT = process.env.PORT || 3002; // Cambiado a 3002 para evitar conflictos
@@ -19,6 +20,9 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Registrar las rutas de clientes-prospectos
+app.use('/api/clientes-prospectos', clientesProspectosRoutes); // Agregar esta línea
 
 // Endpoint de verificación de salud para Railway
 app.get('/api/health', async (req, res) => {
