@@ -109,6 +109,16 @@ const sugerenciasService = {
           return null; // No cabe, excluir este modelo
         }
         
+        // Filtrar modelos demasiado grandes (más del 50% más grande en cualquier dimensión)
+        const factorMaximo = 1.5; // 50% más grande como máximo
+        const demasiadoGrande = frenteModelo > (frenteRequerido * factorMaximo) ||
+                               profundoModelo > (profundoRequerido * factorMaximo) ||
+                               altoModelo > (altoRequerido * factorMaximo);
+        
+        if (demasiadoGrande) {
+          return null; // Demasiado grande, excluir este modelo
+        }
+        
         // Calcular cuántas cajas caben en un modelo (por volumen)
         const volumenModeloM3 = modelo.volumen_litros / 1000;
         const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
@@ -131,9 +141,9 @@ const sugerenciasService = {
           total_cajas_guardadas: cajasQueSeGuardan,
           eficiencia: Math.round(eficiencia * 10) / 10,
           dimensiones_internas: {
-            frente: Math.round(frenteModelo / 10), // Convertir mm a cm para mostrar
-            profundo: Math.round(profundoModelo / 10), // Convertir mm a cm para mostrar
-            alto: Math.round(altoModelo / 10) // Convertir mm a cm para mostrar
+            frente: frenteModelo, // Mantener en mm
+            profundo: profundoModelo, // Mantener en mm
+            alto: altoModelo // Mantener en mm
           }
         };
       }).filter(sugerencia => sugerencia !== null); // Filtrar modelos que no sirven

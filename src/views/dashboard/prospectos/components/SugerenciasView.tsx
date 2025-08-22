@@ -171,7 +171,7 @@ const SugerenciasView: React.FC = () => {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Frente (cm) *
+                  Frente (mm) *
                 </label>
                 <input
                   type="number"
@@ -183,7 +183,7 @@ const SugerenciasView: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Profundo (cm) *
+                  Profundo (mm) *
                 </label>
                 <input
                   type="number"
@@ -195,7 +195,7 @@ const SugerenciasView: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Alto (cm) *
+                  Alto (mm) *
                 </label>
                 <input
                   type="number"
@@ -283,7 +283,7 @@ const SugerenciasView: React.FC = () => {
                     <div>
                       <p className="text-gray-400">Dimensiones internas:</p>
                       <p className="text-white">
-                        {resultado.dimensiones_internas.frente} × {resultado.dimensiones_internas.profundo} × {resultado.dimensiones_internas.alto} cm
+                        {resultado.dimensiones_internas.frente} × {resultado.dimensiones_internas.profundo} × {resultado.dimensiones_internas.alto} mm
                       </p>
                     </div>
                     <div>
