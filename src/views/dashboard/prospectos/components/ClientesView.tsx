@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ClienteProspecto, CreateClienteProspectoData } from '../../../../models/ClienteProspectoModel';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
-import { Plus, Edit2, Trash2, Search, Users, UserCheck, UserPlus, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, Calendar } from 'lucide-react';
 
 const ClientesView: React.FC = () => {
   const { clientes, loading, error, createCliente, updateCliente, deleteCliente } = useClienteProspectoController();
@@ -133,28 +133,8 @@ const ClientesView: React.FC = () => {
             <Users size={40} className="text-blue-200" />
           </div>
         </div>
-        
-        <div className="bg-orange-500 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
-            
-            <Calendar size={40} className="text-orange-200" />
-          </div>
-        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-green-500 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
-           
-            <UserCheck size={40} className="text-green-200" />
-          </div>
-        </div>
-        
-        <div className="bg-purple-500 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
-      
-            <UserPlus size={40} className="text-purple-200" />
-          </div>
-        </div>
         
         <div className="bg-orange-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
