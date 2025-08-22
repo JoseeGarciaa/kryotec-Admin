@@ -58,16 +58,16 @@ const InventarioView: React.FC = () => {
 
   // Calcular estadísticas
   const stats = useMemo(() => {
-    const totalItems = inventario.reduce((sum, item) => sum + item.cantidad, 0);
-    const volumenTotal = inventario.reduce((sum, item) => {
-      const volumen = Number(item.volumen_total_m3) || 0;
-      return sum + volumen;
-    }, 0);
-    const icoporItems = inventario.filter(item => item.material === 'ICOPOR').reduce((sum, item) => sum + item.cantidad, 0);
-    const termicoItems = inventario.filter(item => item.material === 'TERMICO').reduce((sum, item) => sum + item.cantidad, 0);
-  
-    return { totalItems, volumenTotal, icoporItems, termicoItems };
-  }, [inventario]);
+  const totalItems = inventario.reduce((sum, item) => sum + item.cantidad, 0);
+  const volumenTotal = inventario.reduce((sum, item) => {
+    const volumen = Number(item.volumen_total_m3) || 0;
+    return sum + volumen;
+  }, 0);
+  const icoporItems = inventario.filter(item => item.material === 'ICOPOR').reduce((sum, item) => sum + item.cantidad, 0);
+  const termicoItems = inventario.filter(item => item.material === 'TERMICO').reduce((sum, item) => sum + item.cantidad, 0);
+
+  return { totalItems, volumenTotal, icoporItems, termicoItems };
+}, [inventario]);
 
   // Filtrar inventario
   const filteredInventario = useMemo(() => {
@@ -298,7 +298,7 @@ const InventarioView: React.FC = () => {
                       {item.largo_mm} × {item.ancho_mm} × {item.alto_mm}
                     </td>
                     <td className="px-4 py-3 text-sm font-medium">{item.cantidad}</td>
-                    <td className="px-4 py-3 text-sm">{item.volumen_total_m3?.toFixed(6) || '0.000000'}</td>
+                    <td className="px-4 py-3 text-sm">{(Number(item.volumen_total_m3) || 0).toFixed(6)}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">
                         <button
