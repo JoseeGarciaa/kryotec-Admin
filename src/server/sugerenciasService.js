@@ -96,30 +96,34 @@ const sugerenciasService = {
         const profundoModelo = modelo.dim_int_profundo; // Ya en mm
         const altoModelo = modelo.dim_int_alto; // Ya en mm
         
-        // ELIMINADO: Verificación de dimensiones físicas - ahora recomendamos por volumen
-        // const cabeEnDimensiones = frenteModelo >= frenteRequerido && 
-        //                          profundoModelo >= profundoRequerido && 
-        //                          altoModelo >= altoRequerido;
-        // 
-        // if (!cabeEnDimensiones) {
-        //   return null; // No cabe, excluir este modelo
-        // }
+        const volumenModeloM3 = modelo.volumen_litros / 1000;
+        
+        // NUEVA LÓGICA: Filtrar modelos demasiado grandes para volúmenes pequeños
+        const factorProporcion = volumenModeloM3 / volumenTotalRequeridoM3;
+        
+        // Si el modelo es más de 3 veces el volumen requerido Y el volumen total es pequeño (< 0.1 m³)
+        // entonces no lo recomendamos (evita recomendar contenedores gigantes para pocas cajas pequeñas)
+        if (factorProporcion > 3 && volumenTotalRequeridoM3 < 0.1) {
+          return null; // Modelo demasiado grande para pocas cajas pequeñas
+        }
+        
+        // Si el modelo es más de 10 veces el volumen requerido Y el volumen total es mediano (< 0.5 m³)
+        // entonces tampoco lo recomendamos
+        if (factorProporcion > 10 && volumenTotalRequeridoM3 < 0.5) {
+          return null; // Modelo excesivamente grande
+        }
         
         // Calcular cuántas cajas caben en un modelo (por volumen)
-        const volumenModeloM3 = modelo.volumen_litros / 1000;
         const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
         
-        // MODIFICADO: Permitir modelos aunque no quepa ni una caja completa
-        // En este caso, recomendaremos múltiples modelos pequeños
         let modelosNecesarios, cajasQueSeGuardan, eficiencia;
         
         if (cajasPorModelo === 0) {
           // Si no cabe ni una caja, calculamos cuántos modelos necesitamos
           // para aproximarnos al volumen total requerido
-          const volumenTotalRequerido = volumenUnaCaja * cantidadCajas;
-          modelosNecesarios = Math.ceil(volumenTotalRequerido / volumenModeloM3);
+          modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
           cajasQueSeGuardan = cantidadCajas; // Asumimos que se guardarán todas
-          eficiencia = (volumenTotalRequerido / (modelosNecesarios * volumenModeloM3)) * 100;
+          eficiencia = (volumenTotalRequeridoM3 / (modelosNecesarios * volumenModeloM3)) * 100;
         } else {
           // Lógica normal cuando sí caben cajas
           modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
@@ -132,7 +136,7 @@ const sugerenciasService = {
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: modelosNecesarios,
-          cajas_por_modelo: Math.max(cajasPorModelo, 0), // Mostrar 0 si no cabe ninguna
+          cajas_por_modelo: Math.max(cajasPorModelo, 0),
           total_cajas_guardadas: cajasQueSeGuardan,
           eficiencia: Math.round(eficiencia * 10) / 10,
           dimensiones_internas: {
@@ -144,10 +148,10 @@ const sugerenciasService = {
           nota_dimensional: (frenteModelo < dimensiones_requeridas.frente || 
                            profundoModelo < dimensiones_requeridas.profundo || 
                            altoModelo < dimensiones_requeridas.alto) 
-                           ? 'Las cajas exceden las dimensiones del modelo - aproximación por volumen' 
+                           ? 'Aproximación por volumen - las cajas exceden las dimensiones del modelo' 
                            : null
         };
-      }); // Ya no filtramos ningún modelo
+      }).filter(sugerencia => sugerencia !== null); // Filtrar modelos excluidos
       
       // Ordenar por eficiencia descendente
       sugerencias.sort((a, b) => b.eficiencia - a.eficiencia);
