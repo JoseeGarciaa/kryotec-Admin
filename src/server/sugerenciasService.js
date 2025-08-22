@@ -63,10 +63,10 @@ const sugerenciasService = {
       
       const cantidadCajas = cantidad || 1; // Cantidad de cajas del cliente
       
-      // Convertir centímetros a metros para las dimensiones de UNA caja
-      const frente_m = parseFloat(dimensiones_requeridas.frente) / 100;
-      const profundo_m = parseFloat(dimensiones_requeridas.profundo) / 100;
-      const alto_m = parseFloat(dimensiones_requeridas.alto) / 100;
+      // Convertir milímetros a metros para las dimensiones de UNA caja
+      const frente_m = parseFloat(dimensiones_requeridas.frente) / 1000; // mm a m
+      const profundo_m = parseFloat(dimensiones_requeridas.profundo) / 1000; // mm a m
+      const alto_m = parseFloat(dimensiones_requeridas.alto) / 1000; // mm a m
       
       // Calcular volumen de UNA caja en metros cúbicos
       const volumenUnaCaja = frente_m * profundo_m * alto_m;
@@ -91,12 +91,12 @@ const sugerenciasService = {
       
       // Calcular sugerencias para cada modelo
       const sugerencias = modelos.map(modelo => {
-        // Convertir dimensiones internas del modelo de mm a cm
-        const frenteModelo = modelo.dim_int_frente / 10;
-        const profundoModelo = modelo.dim_int_profundo / 10;
-        const altoModelo = modelo.dim_int_alto / 10;
+        // Convertir dimensiones internas del modelo de mm a mm (mantener)
+        const frenteModelo = modelo.dim_int_frente; // Ya en mm
+        const profundoModelo = modelo.dim_int_profundo; // Ya en mm
+        const altoModelo = modelo.dim_int_alto; // Ya en mm
         
-        // Verificar si UNA caja cabe físicamente en el modelo
+        // Verificar si UNA caja cabe físicamente en el modelo (comparar mm con mm)
         const frenteRequerido = dimensiones_requeridas.frente;
         const profundoRequerido = dimensiones_requeridas.profundo;
         const altoRequerido = dimensiones_requeridas.alto;
@@ -131,9 +131,9 @@ const sugerenciasService = {
           total_cajas_guardadas: cajasQueSeGuardan,
           eficiencia: Math.round(eficiencia * 10) / 10,
           dimensiones_internas: {
-            frente: Math.round(frenteModelo),
-            profundo: Math.round(profundoModelo),
-            alto: Math.round(altoModelo)
+            frente: Math.round(frenteModelo / 10), // Convertir mm a cm para mostrar
+            profundo: Math.round(profundoModelo / 10), // Convertir mm a cm para mostrar
+            alto: Math.round(altoModelo / 10) // Convertir mm a cm para mostrar
           }
         };
       }).filter(sugerencia => sugerencia !== null); // Filtrar modelos que no sirven

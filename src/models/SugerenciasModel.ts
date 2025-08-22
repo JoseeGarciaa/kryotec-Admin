@@ -25,10 +25,11 @@ export interface CalculoSugerencia {
   cliente_id: number;
   inv_id: number;
   volumen_requerido: number;
+  cantidad: number; // Agregar cantidad de cajas
   dimensiones_requeridas: {
-    frente: number;
-    profundo: number;
-    alto: number;
+    frente: number; // Ahora en mm
+    profundo: number; // Ahora en mm
+    alto: number; // Ahora en mm
   };
 }
 
@@ -37,6 +38,8 @@ export interface ResultadoSugerencia {
   modelo_id: number;
   nombre_modelo: string;
   cantidad_sugerida: number;
+  cajas_por_modelo?: number; // Agregar información adicional
+  total_cajas_guardadas?: number;
   eficiencia: number;
   dimensiones_internas: {
     frente: number;

@@ -40,13 +40,12 @@ const SugerenciasView: React.FC = () => {
       const item = inventario.find((inv: InventarioProspecto) => inv.inv_id === Number(selectedInventario));
       if (item) {
         setVolumenRequerido(item.volumen_total_m3?.toString() || '');
-        // Si el item tiene dimensiones, las usamos
+        // Si el item tiene dimensiones, las usamos (mantener en mm)
         if (item.largo_mm && item.ancho_mm && item.alto_mm) {
-          // Convertir de mm a las unidades que necesites (probablemente metros o cm)
           setDimensiones({
-            frente: (item.largo_mm / 1000).toString(), // Convertir mm a metros
-            profundo: (item.ancho_mm / 1000).toString(), // Convertir mm a metros
-            alto: (item.alto_mm / 1000).toString() // Convertir mm a metros
+            frente: item.largo_mm.toString(), // Mantener en mm
+            profundo: item.ancho_mm.toString(), // Mantener en mm
+            alto: item.alto_mm.toString() // Mantener en mm
           });
         }
       }
@@ -61,14 +60,19 @@ const SugerenciasView: React.FC = () => {
 
     setCalculando(true);
     try {
+      // Obtener la cantidad del item de inventario seleccionado
+      const item = inventario.find((inv: InventarioProspecto) => inv.inv_id === Number(selectedInventario));
+      const cantidadCajas = item?.cantidad || 1;
+
       const calculo: CalculoSugerencia = {
         cliente_id: Number(selectedCliente),
         inv_id: Number(selectedInventario),
         volumen_requerido: Number(volumenRequerido) || 0,
+        cantidad: cantidadCajas, // Agregar la cantidad de cajas
         dimensiones_requeridas: {
-          frente: Number(dimensiones.frente),
-          profundo: Number(dimensiones.profundo),
-          alto: Number(dimensiones.alto)
+          frente: Number(dimensiones.frente), // Ahora en mm
+          profundo: Number(dimensiones.profundo), // Ahora en mm
+          alto: Number(dimensiones.alto) // Ahora en mm
         }
       };
 
