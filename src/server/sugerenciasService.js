@@ -73,6 +73,10 @@ const sugerenciasService = {
       console.log('Volumen de una caja:', volumenUnaCaja, 'm³');
       console.log('Cantidad de cajas:', cantidadCajas);
       
+      // Calcular volumen total requerido
+      const volumenTotalRequeridoM3 = volumenUnaCaja * cantidadCajas;
+      console.log('Volumen total requerido:', volumenTotalRequeridoM3, 'm³');
+      
       // Buscar TODOS los modelos Cube disponibles
       const query = `
         SELECT 
