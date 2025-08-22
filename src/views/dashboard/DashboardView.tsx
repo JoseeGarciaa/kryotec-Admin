@@ -155,7 +155,7 @@ export const DashboardView: React.FC = () => {
           {activeTab === 'usuarios' && <UsersView />}
           {activeTab === 'empresas' && <TenantsView />}
           {activeTab === 'credocubes' && <CredocubesView />}
-          {activeTab === 'prospectos' && <ProspectosView />}
+          {(activeTab === 'prospectos' || activeTab.startsWith('prospectos-')) && <ProspectosView activeSubTab={activeTab} />}
         </main>
       </div>
     </div>

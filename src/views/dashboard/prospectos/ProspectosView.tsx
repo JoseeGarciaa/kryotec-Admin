@@ -1,11 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ClientesView from './components/ClientesView';
 import InventarioView from './components/InventarioView';
 import SugerenciasView from './components/SugerenciasView';
 import { Users, Package, Lightbulb } from 'lucide-react';
 
-const ProspectosView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'clientes' | 'inventario' | 'sugerencias'>('clientes');
+interface ProspectosViewProps {
+  activeSubTab?: string;
+}
+
+const ProspectosView: React.FC<ProspectosViewProps> = ({ activeSubTab }) => {
+  const [activeTab, setActiveTab] = useState<'clientes' | 'inventario' | 'sugerencias'>(
+    activeSubTab?.replace('prospectos-', '') as any || 'clientes'
+  );
+
+  // Actualizar el tab activo cuando cambie desde la URL
+  useEffect(() => {
+    const newTab = activeSubTab?.replace('prospectos-', '') as 'clientes' | 'inventario' | 'sugerencias';
+    if (newTab) {
+      setActiveTab(newTab);
+    }
+  }, [activeSubTab]);
 
   const tabs = [
     {
