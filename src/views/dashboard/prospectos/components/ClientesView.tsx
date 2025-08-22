@@ -133,8 +133,6 @@ const ClientesView: React.FC = () => {
             <Users size={40} className="text-blue-200" />
           </div>
         </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         
         <div className="bg-orange-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
@@ -145,6 +143,8 @@ const ClientesView: React.FC = () => {
             <Calendar size={40} className="text-orange-200" />
           </div>
         </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       </div>
 
       {/* Filters */}
