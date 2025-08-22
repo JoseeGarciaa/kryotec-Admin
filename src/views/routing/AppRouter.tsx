@@ -6,7 +6,7 @@ import { TenantsView } from '../dashboard/TenantsView';
 import { useAuthContext } from '../contexts/AuthContext';
 import { MobileNavigation } from '../../components/navigation/MobileNavigation';
 import { useBreakpoint } from '../../utils/responsive';
-import ProspectosView from '../dashboard/components/prospectos/ProspectosView';
+import ProspectosView from '../dashboard/prospectos/ProspectosView';
 
 // Componente para proteger rutas que requieren autenticación
 const ProtectedRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {

@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { ClienteProspecto, CreateClienteProspectoData } from '../../../../models/ClienteProspectoModel';
-import { ClienteProspectoController } from '../../../../controllers/ClienteProspectoController';
+import React, { useState } from 'react';
+import { ClienteProspecto, CreateClienteProspectoData } from '../../../models/ClienteProspectoModel';
+import { useClienteProspectoController } from '../../../controllers/hooks/useClienteProspectoController';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 
 const ClientesView: React.FC = () => {
-  const [clientes, setClientes] = useState<ClienteProspecto[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { clientes, loading, error, createCliente, updateCliente, deleteCliente } = useClienteProspectoController();
+  const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<ClienteProspecto | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
 
   // Form state
   const [formData, setFormData] = useState<CreateClienteProspectoData>({
@@ -21,52 +20,28 @@ const ClientesView: React.FC = () => {
     telefono: '',
     estado: 'Activo'
   });
-  
-  const [isLoading, setIsLoading] = useState(true); // Renombramos loading a isLoading
-
-  useEffect(() => {
-    loadClientes();
-  }, []);
-
-  const loadClientes = async () => {
-    setIsLoading(true);
-    try {
-      const data = await ClienteProspectoController.getAllClientes();
-      setClientes(data);
-      setError(null);
-    } catch (err) {
-      setError('Error al cargar los clientes');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (selectedCliente) {
-        await ClienteProspectoController.updateCliente(selectedCliente.cliente_id, formData);
+        await updateCliente(selectedCliente.cliente_id, formData);
       } else {
-        await ClienteProspectoController.createCliente(formData);
+        await createCliente(formData);
       }
       setShowModal(false);
-      loadClientes();
       resetForm();
     } catch (err) {
-      setError('Error al guardar el cliente');
-      console.error(err);
+      console.error('Error al guardar el cliente:', err);
     }
   };
 
   const handleDelete = async (id: number) => {
     if (window.confirm('¿Está seguro de que desea eliminar este cliente?')) {
       try {
-        await ClienteProspectoController.deleteCliente(id);
-        loadClientes();
+        await deleteCliente(id);
       } catch (err) {
-        setError('Error al eliminar el cliente');
-        console.error(err);
+        console.error('Error al eliminar el cliente:', err);
       }
     }
   };
@@ -140,7 +115,7 @@ const ClientesView: React.FC = () => {
       )}
 
       {/* Indicador de carga */}
-      {isLoading ? (
+      {loading === 'loading' ? (
         <div className="flex items-center justify-center p-8">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
@@ -148,56 +123,56 @@ const ClientesView: React.FC = () => {
         /* Tabla de clientes */
         <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cliente</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Identificación</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contacto</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {filteredClientes.map((cliente) => (
-              <tr key={cliente.cliente_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">{cliente.nombre_cliente}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.tipo_cliente}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_identificacion}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.numero_identificacion}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">{cliente.correo}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.telefono}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    cliente.estado === 'Activo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {cliente.estado}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => handleEdit(cliente)}
-                    className="text-blue-600 hover:text-blue-900 mr-4"
-                  >
-                    <Edit2 size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(cliente.cliente_id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </td>
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cliente</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Identificación</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contacto</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredClientes.map((cliente) => (
+                <tr key={cliente.cliente_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">{cliente.nombre_cliente}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.tipo_cliente}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_identificacion}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.numero_identificacion}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">{cliente.correo}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.telefono}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      cliente.estado === 'Activo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {cliente.estado}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleEdit(cliente)}
+                      className="text-blue-600 hover:text-blue-900 mr-4"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(cliente.cliente_id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Modal de creación/edición */}

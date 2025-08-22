@@ -18,7 +18,7 @@ import { InventarioCredocubesSection } from './components/InventarioCredocubesSe
 import { UsersView } from './UsersView';
 import { CredocubesView } from './CredocubesView';
 import { TenantsView } from './TenantsView';
-import ProspectosView from './components/prospectos/ProspectosView';
+import ProspectosView from './prospectos/ProspectosView';
 
 export const DashboardView: React.FC = () => {
   const location = useLocation();
