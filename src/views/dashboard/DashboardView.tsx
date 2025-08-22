@@ -3,7 +3,8 @@ import {
   Home, 
   Users, 
   Building2, 
-  CreditCard
+  CreditCard,
+  UserPlus
 } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { useThemeContext } from '../contexts/ThemeContext';
@@ -15,6 +16,7 @@ import { InventarioCredocubesSection } from './components/InventarioCredocubesSe
 import { UsersView } from './UsersView';
 import { CredocubesView } from './CredocubesView';
 import { TenantsView } from './TenantsView';
+import ProspectosView from './components/prospectos/ProspectosView';
 
 export const DashboardView: React.FC = () => {
   const location = useLocation();
@@ -79,6 +81,7 @@ export const DashboardView: React.FC = () => {
     { id: 'usuarios', label: 'Usuarios', icon: Users },
     { id: 'empresas', label: 'Empresas', icon: Building2 },
     { id: 'credocubes', label: 'Credocubes', icon: CreditCard },
+    { id: 'prospectos', label: 'Prospectos', icon: UserPlus },
   ];
 
   // Ya no necesitamos datos falsos para gráficos y métricas
@@ -125,6 +128,7 @@ export const DashboardView: React.FC = () => {
           {activeTab === 'usuarios' && <UsersView />}
           {activeTab === 'empresas' && <TenantsView />}
           {activeTab === 'credocubes' && <CredocubesView />}
+          {activeTab === 'prospectos' && <ProspectosView />}
         </main>
       </div>
     </div>
