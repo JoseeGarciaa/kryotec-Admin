@@ -120,30 +120,40 @@ const sugerenciasService = {
         // Calcular cuántas cajas caben en un modelo (por volumen)
         const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
         
+        // Verificar si las dimensiones de la caja coinciden exactamente con el modelo
+        const dimensionesCoinciden = (
+          frenteModelo >= dimensiones_requeridas.frente &&
+          profundoModelo >= dimensiones_requeridas.profundo &&
+          altoModelo >= dimensiones_requeridas.alto
+        );
+        
         let modelosNecesarios, cajasQueSeGuardan, eficiencia;
         
         if (cajasPorModelo === 0) {
-          // Si no cabe ni una caja, calculamos cuántos modelos necesitamos
+          // Si no cabe ni una caja por volumen, calculamos cuántos modelos necesitamos
           modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
           cajasQueSeGuardan = cantidadCajas;
-          // Para modelos muy pequeños, la eficiencia será baja
           eficiencia = (volumenTotalRequeridoM3 / (modelosNecesarios * volumenModeloM3)) * 100;
         } else {
           // Lógica normal cuando sí caben cajas
           modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
           cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
           
-          // LÓGICA CORREGIDA DE EFICIENCIA:
-          // Eficiencia = qué porcentaje del espacio total se usa realmente
-          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-          const volumenRealmenteUsado = cantidadCajas * volumenUnaCaja;
-          
-          // Eficiencia = (volumen usado / volumen disponible) * 100
-          // 100% = uso perfecto del espacio
-          // < 100% = hay espacio desperdiciado
-          // Nunca debería ser > 100% porque no puede usar más espacio del disponible
-          eficiencia = (volumenRealmenteUsado / volumenTotalDisponible) * 100;
+          // NUEVA LÓGICA DE EFICIENCIA CORREGIDA:
+          // Si las dimensiones coinciden perfectamente, verificar si es ajuste 1:1
+          if (dimensionesCoinciden && cajasPorModelo === 1) {
+            // Ajuste perfecto: 1 caja = 1 modelo con dimensiones exactas
+            eficiencia = 100;
+          } else {
+            // Calcular eficiencia basada en aprovechamiento del volumen
+            const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
+            const volumenRealmenteUsado = cantidadCajas * volumenUnaCaja;
+            eficiencia = (volumenRealmenteUsado / volumenTotalDisponible) * 100;
+          }
         }
+        
+        // Redondear a 1 decimal
+        eficiencia = Math.round(eficiencia * 10) / 10;
         
         // Redondear a 1 decimal y asegurar que esté en rango válido
         eficiencia = Math.round(Math.min(Math.max(eficiencia, 1), 100) * 10) / 10;
