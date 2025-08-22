@@ -58,16 +58,16 @@ const InventarioView: React.FC = () => {
 
   // Calcular estadísticas
   const stats = useMemo(() => {
-  const totalItems = inventario.reduce((sum, item) => sum + item.cantidad, 0);
-  const volumenTotal = inventario.reduce((sum, item) => {
-    const volumen = Number(item.volumen_total_m3) || 0;
-    return sum + volumen;
-  }, 0);
-  const icoporItems = inventario.filter(item => item.material === 'ICOPOR').reduce((sum, item) => sum + item.cantidad, 0);
-  const termicoItems = inventario.filter(item => item.material === 'TERMICO').reduce((sum, item) => sum + item.cantidad, 0);
-
-  return { totalItems, volumenTotal, icoporItems, termicoItems };
-}, [inventario]);
+    const totalItems = inventario.reduce((sum, item) => sum + item.cantidad, 0);
+    const volumenTotal = inventario.reduce((sum, item) => {
+      const volumen = Number(item.volumen_total_m3) || 0;
+      return sum + volumen;
+    }, 0);
+    const icoporItems = inventario.filter(item => item.material === 'ICOPOR').reduce((sum, item) => sum + item.cantidad, 0);
+    const termicoItems = inventario.filter(item => item.material === 'TERMICO').reduce((sum, item) => sum + item.cantidad, 0);
+  
+    return { totalItems, volumenTotal, icoporItems, termicoItems };
+  }, [inventario]);
 
   // Filtrar inventario
   const filteredInventario = useMemo(() => {
