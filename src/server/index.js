@@ -8,6 +8,7 @@ const credocubeService = require('./credocubeService');
 const tenantService = require('./tenantService');
 const clientesProspectosService = require('./clientesProspectosService');
 const clientesProspectosRoutes = require('./routes/clientesProspectosRoutes'); // Agregar esta línea
+const inventarioProspectosService = require('./inventarioProspectosService');
 
 const app = express();
 const PORT = process.env.PORT || 3002; // Cambiado a 3002 para evitar conflictos
@@ -416,6 +417,55 @@ app.delete('/api/prospectos/:id', async (req, res) => {
   } catch (error) {
     console.error(`Error en DELETE /api/prospectos/${req.params.id}:`, error);
     res.status(500).json({ error: 'Error al eliminar prospecto' });
+  }
+});
+
+// Rutas de inventario prospectos
+app.get('/api/inventario-prospectos', async (req, res) => {
+  try {
+    const inventario = await inventarioProspectosService.getAllInventario();
+    res.json(inventario);
+  } catch (error) {
+    console.error('Error al obtener inventario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+app.post('/api/inventario-prospectos', async (req, res) => {
+  try {
+    const nuevoItem = await inventarioProspectosService.createInventario(req.body);
+    res.status(201).json(nuevoItem);
+  } catch (error) {
+    console.error('Error al crear item de inventario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+app.put('/api/inventario-prospectos/:id', async (req, res) => {
+  try {
+    const itemActualizado = await inventarioProspectosService.updateInventario(req.params.id, req.body);
+    if (itemActualizado) {
+      res.json(itemActualizado);
+    } else {
+      res.status(404).json({ error: 'Item no encontrado' });
+    }
+  } catch (error) {
+    console.error('Error al actualizar item de inventario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+app.delete('/api/inventario-prospectos/:id', async (req, res) => {
+  try {
+    const eliminado = await inventarioProspectosService.deleteInventario(req.params.id);
+    if (eliminado) {
+      res.json({ message: 'Item eliminado exitosamente' });
+    } else {
+      res.status(404).json({ error: 'Item no encontrado' });
+    }
+  } catch (error) {
+    console.error('Error al eliminar item de inventario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
