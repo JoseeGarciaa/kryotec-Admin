@@ -127,12 +127,17 @@ const sugerenciasService = {
           // para aproximarnos al volumen total requerido
           modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
           cajasQueSeGuardan = cantidadCajas; // Asumimos que se guardarán todas
+          // Eficiencia basada en volumen: volumen requerido / volumen total disponible
           eficiencia = (volumenTotalRequeridoM3 / (modelosNecesarios * volumenModeloM3)) * 100;
         } else {
           // Lógica normal cuando sí caben cajas
           modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
           cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
-          eficiencia = (cantidadCajas / cajasQueSeGuardan) * 100;
+          
+          // NUEVA LÓGICA DE EFICIENCIA:
+          // Comparar el volumen requerido vs el volumen total disponible
+          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
+          eficiencia = (volumenTotalRequeridoM3 / volumenTotalDisponible) * 100;
         }
         
         return {
