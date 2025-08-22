@@ -26,8 +26,6 @@ const ClientesView: React.FC = () => {
   // Calcular estadísticas
   const stats = useMemo(() => {
     const total = clientes.length;
-    const activos = clientes.filter(c => c.estado === 'Activo').length;
-    const prospectos = clientes.filter(c => c.estado === 'Pendiente').length;
     
     // Clientes de este mes (asumiendo que tienes fecha_registro)
     const thisMonth = new Date();
@@ -40,7 +38,7 @@ const ClientesView: React.FC = () => {
       return false;
     }).length;
 
-    return { total, activos, prospectos, esteMes };
+    return { total, esteMes };
   }, [clientes]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -138,10 +136,7 @@ const ClientesView: React.FC = () => {
         
         <div className="bg-orange-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-orange-100 text-sm">Este Mes</p>
-              <p className="text-2xl font-bold">{stats.esteMes}</p>
-            </div>
+            
             <Calendar size={40} className="text-orange-200" />
           </div>
         </div>
@@ -149,20 +144,14 @@ const ClientesView: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-green-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-green-100 text-sm">Activos</p>
-              <p className="text-2xl font-bold">{stats.activos}</p>
-            </div>
+           
             <UserCheck size={40} className="text-green-200" />
           </div>
         </div>
         
         <div className="bg-purple-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-purple-100 text-sm">Prospectos</p>
-              <p className="text-2xl font-bold">{stats.prospectos}</p>
-            </div>
+      
             <UserPlus size={40} className="text-purple-200" />
           </div>
         </div>
