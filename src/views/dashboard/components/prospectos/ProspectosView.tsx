@@ -1,10 +1,18 @@
 import React, { useState } from 'react';
+import { ChevronDown, ChevronUp, Users, Package, Lightbulb } from 'lucide-react';
 import ClientesView from './ClientesView';
 import InventarioView from './InventarioView';
 import SugerenciasView from './SugerenciasView';
 
 const ProspectosView: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('clientes');
+
+  const menuItems = [
+    { id: 'clientes', label: 'Clientes', icon: Users },
+    { id: 'inventario', label: 'Inventario', icon: Package },
+    { id: 'sugerencias', label: 'Sugerencias', icon: Lightbulb },
+  ];
 
   const renderContent = () => {
     switch (activeTab) {
@@ -21,36 +29,51 @@ const ProspectosView: React.FC = () => {
 
   return (
     <div className="p-4">
-      <h1 className="text-3xl font-bold mb-6">Prospectos</h1>
-      
-      <div className="flex space-x-4 mb-4">
+      {/* Cabecera desplegable */}
+      <div className="mb-4">
         <button
-          className={`px-4 py-2 rounded ${
-            activeTab === 'clientes' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-          }`}
-          onClick={() => setActiveTab('clientes')}
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full flex items-center justify-between p-4 bg-gray-800 dark:bg-gray-900 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-800 transition-all duration-200"
         >
-          Clientes
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5" />
+            <span className="text-lg font-semibold">Prospectos</span>
+          </div>
+          {isOpen ? (
+            <ChevronUp className="w-5 h-5" />
+          ) : (
+            <ChevronDown className="w-5 h-5" />
+          )}
         </button>
-        <button
-          className={`px-4 py-2 rounded ${
-            activeTab === 'inventario' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-          }`}
-          onClick={() => setActiveTab('inventario')}
-        >
-          Inventario
-        </button>
-        <button
-          className={`px-4 py-2 rounded ${
-            activeTab === 'sugerencias' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-          }`}
-          onClick={() => setActiveTab('sugerencias')}
-        >
-          Sugerencias
-        </button>
+
+        {/* Menú desplegable */}
+        {isOpen && (
+          <div className="ml-4 mt-2 space-y-1 border-l-2 border-gray-600 pl-4">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${
+                    activeTab === item.id
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {renderContent()}
+      {/* Contenido */}
+      <div className={`mt-4 transition-all duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
+        {renderContent()}
+      </div>
     </div>
   );
 };
