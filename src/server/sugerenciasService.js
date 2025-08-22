@@ -121,10 +121,10 @@ const sugerenciasService = {
         const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
         
         // Verificar si las dimensiones de la caja coinciden exactamente con el modelo
-        const dimensionesCoinciden = (
-          frenteModelo >= dimensiones_requeridas.frente &&
-          profundoModelo >= dimensiones_requeridas.profundo &&
-          altoModelo >= dimensiones_requeridas.alto
+        const dimensionesExactas = (
+          frenteModelo === dimensiones_requeridas.frente &&
+          profundoModelo === dimensiones_requeridas.profundo &&
+          altoModelo === dimensiones_requeridas.alto
         );
         
         let modelosNecesarios, cajasQueSeGuardan, eficiencia;
@@ -139,24 +139,44 @@ const sugerenciasService = {
           modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
           cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
           
-          // NUEVA LÓGICA DE EFICIENCIA CORREGIDA:
-          // Si las dimensiones coinciden perfectamente, verificar si es ajuste 1:1
-          if (dimensionesCoinciden && cajasPorModelo === 1) {
-            // Ajuste perfecto: 1 caja = 1 modelo con dimensiones exactas
+          // LÓGICA DE EFICIENCIA AJUSTADA:
+          if (dimensionesExactas && cajasPorModelo === 1) {
+            // Dimensiones exactamente iguales = 100%
             eficiencia = 100;
           } else {
             // Calcular eficiencia basada en aprovechamiento del volumen
             const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
             const volumenRealmenteUsado = cantidadCajas * volumenUnaCaja;
             eficiencia = (volumenRealmenteUsado / volumenTotalDisponible) * 100;
+            
+            // Si la eficiencia es muy alta (95% o más), aproximarla hacia 100%
+            if (eficiencia >= 95) {
+              eficiencia = Math.min(99, eficiencia + (100 - eficiencia) * 0.5);
+            }
           }
         }
         
         // Redondear a 1 decimal
         eficiencia = Math.round(eficiencia * 10) / 10;
         
-        // Redondear a 1 decimal y asegurar que esté en rango válido
-        eficiencia = Math.round(Math.min(Math.max(eficiencia, 1), 100) * 10) / 10;
+        // Determinar mensaje de comparación de tamaño
+        let mensajeComparacion;
+        if (dimensionesExactas) {
+          mensajeComparacion = "✅ Ajuste perfecto";
+        } else if (frenteModelo >= dimensiones_requeridas.frente && 
+                   profundoModelo >= dimensiones_requeridas.profundo && 
+                   altoModelo >= dimensiones_requeridas.alto) {
+          // El modelo es más grande en todas las dimensiones
+          const volumenModelo = (frenteModelo * profundoModelo * altoModelo) / 1000000000; // mm³ a m³
+          const volumenRequerido = volumenUnaCaja;
+          if (volumenModelo > volumenRequerido * 1.5) {
+            mensajeComparacion = "📦 Modelo más grande (mucho espacio extra)";
+          } else {
+            mensajeComparacion = "📦 Modelo más grande (espacio extra)";
+          }
+        } else {
+          mensajeComparacion = "⚠️ Modelo más pequeño (aproximación por volumen)";
+        }
         
         return {
           modelo_id: modelo.modelo_id,
@@ -166,6 +186,7 @@ const sugerenciasService = {
           cajas_por_modelo: Math.max(cajasPorModelo, 0),
           total_cajas_guardadas: cajasQueSeGuardan,
           eficiencia: eficiencia,
+          mensaje_comparacion: mensajeComparacion,
           dimensiones_internas: {
             frente: frenteModelo, // Mantener en mm
             profundo: profundoModelo, // Mantener en mm
