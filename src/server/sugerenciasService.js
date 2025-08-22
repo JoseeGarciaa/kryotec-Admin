@@ -50,18 +50,24 @@ const sugerenciasService = {
   },
 
   // Calcular sugerencias basadas en dimensiones
-  calcularSugerencias: async (dimensiones) => {
+  calcularSugerencias: async (datos) => {
     try {
-      console.log('Dimensiones recibidas:', dimensiones);
+      console.log('Datos recibidos:', datos);
       
-      const { frente_m, profundo_m, alto_m } = dimensiones;
+      // Extraer dimensiones del objeto recibido
+      const { dimensiones_requeridas } = datos;
       
-      if (!frente_m || !profundo_m || !alto_m) {
-        throw new Error('Faltan dimensiones requeridas: frente_m, profundo_m, alto_m');
+      if (!dimensiones_requeridas || !dimensiones_requeridas.frente || !dimensiones_requeridas.profundo || !dimensiones_requeridas.alto) {
+        throw new Error('Faltan dimensiones requeridas: frente, profundo, alto');
       }
       
+      // Convertir centímetros a metros
+      const frente_m = parseFloat(dimensiones_requeridas.frente) / 100;
+      const profundo_m = parseFloat(dimensiones_requeridas.profundo) / 100;
+      const alto_m = parseFloat(dimensiones_requeridas.alto) / 100;
+      
       // Calcular volumen requerido en metros cúbicos
-      const volumenRequerido = parseFloat(frente_m) * parseFloat(profundo_m) * parseFloat(alto_m);
+      const volumenRequerido = frente_m * profundo_m * alto_m;
       console.log('Volumen requerido calculado:', volumenRequerido, 'm³');
       
       // Buscar modelos que puedan satisfacer el volumen requerido
@@ -91,28 +97,23 @@ const sugerenciasService = {
         const volumenModeloM3 = modelo.volumen_litros / 1000;
         const cantidadSugerida = Math.ceil(volumenRequerido / volumenModeloM3);
         const volumenTotalSugerido = cantidadSugerida * volumenModeloM3;
-        const eficiencia = ((volumenRequerido / volumenTotalSugerido) * 100).toFixed(2);
+        const eficiencia = (volumenRequerido / volumenTotalSugerido); // Sin multiplicar por 100 ni toFixed
         
         return {
           modelo_id: modelo.modelo_id,
           nombre_modelo: modelo.nombre_modelo,
-          volumen_unitario_litros: modelo.volumen_litros,
+          volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: cantidadSugerida,
-          volumen_total_sugerido_m3: volumenTotalSugerido.toFixed(3),
-          eficiencia_porcentaje: parseFloat(eficiencia),
-          precio_alquiler_mes: modelo.precio_alquiler_mes,
-          dimensiones_mm: {
-            largo: modelo.largo_mm,
-            ancho: modelo.ancho_mm,
-            alto: modelo.alto_mm
+          eficiencia: eficiencia, // El frontend espera un decimal (0.85), no porcentaje (85%)
+          dimensiones_internas: {
+            frente: Math.round(modelo.largo_mm / 10), // Convertir mm a cm
+            profundo: Math.round(modelo.ancho_mm / 10),
+            alto: Math.round(modelo.alto_mm / 10)
           }
         };
       });
       
-      return {
-        volumen_requerido_m3: volumenRequerido,
-        sugerencias: sugerencias
-      };
+      return sugerencias; // El frontend espera directamente el array de sugerencias
       
     } catch (error) {
       console.error('Error al calcular sugerencias:', error);
