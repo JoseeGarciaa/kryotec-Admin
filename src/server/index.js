@@ -6,6 +6,7 @@ const userService = require('./userService');
 const authService = require('./authService');
 const credocubeService = require('./credocubeService');
 const tenantService = require('./tenantService');
+const clientesProspectosService = require('./clientesProspectosService');
 
 const app = express();
 const PORT = process.env.PORT || 3002; // Cambiado a 3002 para evitar conflictos
@@ -343,6 +344,74 @@ app.delete('/api/tenants/:id', async (req, res) => {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
     res.status(500).json({ error: 'Error al eliminar empresa' });
+  }
+});
+
+// Rutas para prospectos
+app.get('/api/prospectos', async (req, res) => {
+  try {
+    const prospectos = await clientesProspectosService.getAllProspectos();
+    res.json(prospectos);
+  } catch (error) {
+    console.error('Error en GET /api/prospectos:', error);
+    res.status(500).json({ error: 'Error al obtener prospectos' });
+  }
+});
+
+app.get('/api/prospectos/:id', async (req, res) => {
+  try {
+    const prospecto = await clientesProspectosService.getProspectoById(parseInt(req.params.id));
+    if (!prospecto) {
+      return res.status(404).json({ error: 'Prospecto no encontrado' });
+    }
+    res.json(prospecto);
+  } catch (error) {
+    console.error(`Error en GET /api/prospectos/${req.params.id}:`, error);
+    res.status(500).json({ error: 'Error al obtener prospecto' });
+  }
+});
+
+app.post('/api/prospectos', async (req, res) => {
+  try {
+    const newProspecto = await clientesProspectosService.createProspecto(req.body);
+    res.status(201).json(newProspecto);
+  } catch (error) {
+    console.error('Error en POST /api/prospectos:', error);
+    if (error.code === '23505') {
+      res.status(409).json({ error: 'Ya existe un prospecto con ese documento o email' });
+    } else {
+      res.status(500).json({ error: 'Error al crear prospecto' });
+    }
+  }
+});
+
+app.put('/api/prospectos/:id', async (req, res) => {
+  try {
+    const updatedProspecto = await clientesProspectosService.updateProspecto(parseInt(req.params.id), req.body);
+    if (!updatedProspecto) {
+      return res.status(404).json({ error: 'Prospecto no encontrado' });
+    }
+    res.json(updatedProspecto);
+  } catch (error) {
+    console.error(`Error en PUT /api/prospectos/${req.params.id}:`, error);
+    if (error.code === '23505') {
+      res.status(409).json({ error: 'Ya existe un prospecto con ese documento o email' });
+    } else {
+      res.status(500).json({ error: 'Error al actualizar prospecto' });
+    }
+  }
+});
+
+app.delete('/api/prospectos/:id', async (req, res) => {
+  try {
+    const success = await clientesProspectosService.deleteProspecto(parseInt(req.params.id));
+    if (!success) {
+      return res.status(404).json({ error: 'Prospecto no encontrado' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`Error en DELETE /api/prospectos/${req.params.id}:`, error);
+    res.status(500).json({ error: 'Error al eliminar prospecto' });
   }
 });
 
