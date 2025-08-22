@@ -274,7 +274,7 @@ const SugerenciasView: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <div className="bg-green-600 text-white px-2 py-1 rounded text-sm">
-                        {(resultado.eficiencia * 100).toFixed(1)}% eficiencia
+                        {resultado.eficiencia.toFixed(1)}% eficiencia
                       </div>
                     </div>
                   </div>
