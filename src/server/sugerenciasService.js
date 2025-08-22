@@ -76,7 +76,8 @@ const sugerenciasService = {
           modelo_id, nombre_modelo, volumen_litros,
           dim_int_frente, dim_int_profundo, dim_int_alto
         FROM admin_platform.modelos
-        WHERE volumen_litros >= $1
+        WHERE volumen_litros >= $1 
+          AND tipo = 'Cube'
         ORDER BY volumen_litros ASC
         LIMIT 10
       `;
