@@ -98,14 +98,14 @@ const sugerenciasService = {
         const volumenModeloM3 = modelo.volumen_litros / 1000;
         const cantidadSugerida = Math.ceil(volumenRequerido / volumenModeloM3);
         const volumenTotalSugerido = cantidadSugerida * volumenModeloM3;
-        const eficiencia = (volumenRequerido / volumenTotalSugerido);
+        const eficiencia = (volumenRequerido / volumenTotalSugerido) * 100; // Convertir a porcentaje
         
         return {
           modelo_id: modelo.modelo_id,
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: cantidadSugerida,
-          eficiencia: eficiencia,
+          eficiencia: Math.round(eficiencia * 10) / 10, // Redondear a 1 decimal
           dimensiones_internas: {
             frente: Math.round(modelo.dim_int_frente / 10), // Convertir mm a cm
             profundo: Math.round(modelo.dim_int_profundo / 10),
@@ -114,7 +114,23 @@ const sugerenciasService = {
         };
       });
       
-      return sugerencias; // El frontend espera directamente el array de sugerencias
+      // Filtrar solo los modelos que realmente se ajusten a las dimensiones requeridas
+      const sugerenciasFiltradas = sugerencias.filter(sugerencia => {
+        const { frente, profundo, alto } = sugerencia.dimensiones_internas;
+        const frenteRequerido = Math.ceil(frente_m * 100); // Convertir m a cm
+        const profundoRequerido = Math.ceil(profundo_m * 100);
+        const altoRequerido = Math.ceil(alto_m * 100);
+        
+        // El modelo debe poder contener las dimensiones requeridas
+        return frente >= frenteRequerido && 
+               profundo >= profundoRequerido && 
+               alto >= altoRequerido;
+      });
+      
+      // Ordenar por eficiencia descendente (mejor eficiencia primero)
+      sugerenciasFiltradas.sort((a, b) => b.eficiencia - a.eficiencia);
+      
+      return sugerenciasFiltradas; // El frontend espera directamente el array de sugerencias
       
     } catch (error) {
       console.error('Error al calcular sugerencias:', error);
