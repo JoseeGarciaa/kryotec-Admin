@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ClienteProspecto, CreateClienteProspectoData } from '../../../../models/ClienteProspectoModel';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, UserCheck, UserPlus, Calendar } from 'lucide-react';
 
 const ClientesView: React.FC = () => {
   const { clientes, loading, error, createCliente, updateCliente, deleteCliente } = useClienteProspectoController();
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [typeFilter, setTypeFilter] = useState('todos');
   const [showModal, setShowModal] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<ClienteProspecto | null>(null);
 
@@ -20,6 +22,26 @@ const ClientesView: React.FC = () => {
     telefono: '',
     estado: 'Activo'
   });
+
+  // Calcular estadísticas
+  const stats = useMemo(() => {
+    const total = clientes.length;
+    const activos = clientes.filter(c => c.estado === 'Activo').length;
+    const prospectos = clientes.filter(c => c.estado === 'Pendiente').length;
+    
+    // Clientes de este mes (asumiendo que tienes fecha_registro)
+    const thisMonth = new Date();
+    const esteMes = clientes.filter(c => {
+      if (c.fecha_registro) {
+        const clienteDate = new Date(c.fecha_registro);
+        return clienteDate.getMonth() === thisMonth.getMonth() && 
+               clienteDate.getFullYear() === thisMonth.getFullYear();
+      }
+      return false;
+    }).length;
+
+    return { total, activos, prospectos, esteMes };
+  }, [clientes]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,36 +97,110 @@ const ClientesView: React.FC = () => {
     });
   };
 
-  const filteredClientes = clientes.filter(cliente =>
-    cliente.nombre_cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.numero_identificacion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.correo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredClientes = clientes.filter(cliente => {
+    const matchesSearch = cliente.nombre_cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cliente.numero_identificacion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cliente.correo?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'todos' || cliente.estado === statusFilter;
+    const matchesType = typeFilter === 'todos' || cliente.tipo_cliente === typeFilter;
+    
+    return matchesSearch && matchesStatus && matchesType;
+  });
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Clientes Prospectos</h1>
+        <p className="text-gray-400 mb-6">Gestiona los clientes potenciales y existentes</p>
+        
         <button
           onClick={() => { resetForm(); setShowModal(true); }}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+          className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto"
         >
           <Plus size={20} />
           Nuevo Cliente
         </button>
       </div>
 
-      {/* Barra de búsqueda */}
-      <div className="mb-4 relative">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-blue-500 rounded-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-100 text-sm">Total Clientes</p>
+              <p className="text-2xl font-bold">{stats.total}</p>
+            </div>
+            <Users size={40} className="text-blue-200" />
+          </div>
+        </div>
+        
+        <div className="bg-green-500 rounded-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-100 text-sm">Activos</p>
+              <p className="text-2xl font-bold">{stats.activos}</p>
+            </div>
+            <UserCheck size={40} className="text-green-200" />
+          </div>
+        </div>
+        
+        <div className="bg-purple-500 rounded-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-purple-100 text-sm">Prospectos</p>
+              <p className="text-2xl font-bold">{stats.prospectos}</p>
+            </div>
+            <UserPlus size={40} className="text-purple-200" />
+          </div>
+        </div>
+        
+        <div className="bg-orange-500 rounded-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-orange-100 text-sm">Este Mes</p>
+              <p className="text-2xl font-bold">{stats.esteMes}</p>
+            </div>
+            <Calendar size={40} className="text-orange-200" />
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="relative">
           <input
             type="text"
             placeholder="Buscar clientes..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-2 pl-10 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            className="w-full p-3 pl-10 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white bg-gray-800 border-gray-600 text-white"
           />
-          <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+          <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
         </div>
+        
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white bg-gray-800 border-gray-600 text-white"
+        >
+          <option value="todos">Todos los estados</option>
+          <option value="Activo">Activo</option>
+          <option value="Inactivo">Inactivo</option>
+          <option value="Pendiente">Pendiente</option>
+        </select>
+        
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white bg-gray-800 border-gray-600 text-white"
+        >
+          <option value="todos">Todos los tipos</option>
+          <option value="Empresa">Empresa</option>
+          <option value="Personal">Personal</option>
+          <option value="Gobierno">Gobierno</option>
+        </select>
       </div>
 
       {error && (
@@ -113,22 +209,24 @@ const ClientesView: React.FC = () => {
         </div>
       )}
 
-      {/* Indicador de carga */}
+      {/* Loading indicator */}
       {loading === 'loading' ? (
         <div className="flex items-center justify-center p-8">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       ) : (
-        /* Tabla de clientes */
+        /* Table */
         <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cliente</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Identificación</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contacto</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">CLIENTE</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IDENTIFICACIÓN</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">CONTACTO</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">TIPO</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ESTADO</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">FECHA REGISTRO</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ACCIONES</th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -136,22 +234,29 @@ const ClientesView: React.FC = () => {
                 <tr key={cliente.cliente_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900 dark:text-white">{cliente.nombre_cliente}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.tipo_cliente}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.contacto}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_identificacion}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.numero_identificacion}</div>
+                    <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_identificacion}: {cliente.numero_identificacion}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900 dark:text-white">{cliente.correo}</div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.telefono}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_cliente}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      cliente.estado === 'Activo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      cliente.estado === 'Activo' ? 'bg-green-100 text-green-800' : 
+                      cliente.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
                     }`}>
                       {cliente.estado}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    {cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString() : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
