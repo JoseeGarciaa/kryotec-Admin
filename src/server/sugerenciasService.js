@@ -126,25 +126,21 @@ const sugerenciasService = {
           // Si no cabe ni una caja, calculamos cuántos modelos necesitamos
           modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
           cajasQueSeGuardan = cantidadCajas;
-          // Eficiencia limitada: nunca más del 100%
-          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-          eficiencia = Math.min((volumenTotalRequeridoM3 / volumenTotalDisponible) * 100, 100);
+          // Eficiencia baja cuando necesitas muchos modelos para pocas cajas
+          eficiencia = Math.max(20, 100 - (modelosNecesarios * 10));
         } else {
           // Lógica normal cuando sí caben cajas
           modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
           cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
           
-          // NUEVA LÓGICA DE EFICIENCIA LIMITADA:
-          // Calcular qué porcentaje del espacio total se va a usar realmente
-          const espacioUsado = cantidadCajas * volumenUnaCaja;
-          const espacioTotal = modelosNecesarios * volumenModeloM3;
-          eficiencia = Math.min((espacioUsado / espacioTotal) * 100, 100);
-          
-          // Si la eficiencia es muy baja (menos del 10%), ajustarla para que sea más realista
-          if (eficiencia < 10) {
-            eficiencia = Math.min(eficiencia * 5, 100); // Multiplicar por 5 pero nunca exceder 100%
-          }
+          // EFICIENCIA SIMPLIFICADA:
+          // Basada en qué tan bien se aprovechan las cajas que caben
+          const aprovechamiento = (cantidadCajas / (modelosNecesarios * cajasPorModelo)) * 100;
+          eficiencia = Math.min(Math.max(aprovechamiento, 20), 100);
         }
+        
+        // Asegurar que la eficiencia esté siempre entre 20% y 100%
+        eficiencia = Math.round(Math.min(Math.max(eficiencia, 20), 100));
         
         return {
           modelo_id: modelo.modelo_id,
@@ -153,7 +149,7 @@ const sugerenciasService = {
           cantidad_sugerida: modelosNecesarios,
           cajas_por_modelo: Math.max(cajasPorModelo, 0),
           total_cajas_guardadas: cajasQueSeGuardan,
-          eficiencia: Math.round(eficiencia * 10) / 10,
+          eficiencia: eficiencia,
           dimensiones_internas: {
             frente: frenteModelo, // Mantener en mm
             profundo: profundoModelo, // Mantener en mm
