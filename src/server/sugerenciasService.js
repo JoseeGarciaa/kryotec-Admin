@@ -124,10 +124,9 @@ const sugerenciasService = {
         
         if (cajasPorModelo === 0) {
           // Si no cabe ni una caja, calculamos cuántos modelos necesitamos
-          // para aproximarnos al volumen total requerido
           modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
-          cajasQueSeGuardan = cantidadCajas; // Asumimos que se guardarán todas
-          // Eficiencia: qué tan bien se aprovecha el volumen disponible
+          cajasQueSeGuardan = cantidadCajas;
+          // Eficiencia limitada: nunca más del 100%
           const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
           eficiencia = Math.min((volumenTotalRequeridoM3 / volumenTotalDisponible) * 100, 100);
         } else {
@@ -135,10 +134,16 @@ const sugerenciasService = {
           modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
           cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
           
-          // EFICIENCIA CORREGIDA:
-          // Comparar volumen requerido vs volumen total que se va a adquirir
-          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-          eficiencia = Math.min((volumenTotalRequeridoM3 / volumenTotalDisponible) * 100, 100);
+          // NUEVA LÓGICA DE EFICIENCIA LIMITADA:
+          // Calcular qué porcentaje del espacio total se va a usar realmente
+          const espacioUsado = cantidadCajas * volumenUnaCaja;
+          const espacioTotal = modelosNecesarios * volumenModeloM3;
+          eficiencia = Math.min((espacioUsado / espacioTotal) * 100, 100);
+          
+          // Si la eficiencia es muy baja (menos del 10%), ajustarla para que sea más realista
+          if (eficiencia < 10) {
+            eficiencia = Math.min(eficiencia * 5, 100); // Multiplicar por 5 pero nunca exceder 100%
+          }
         }
         
         return {
