@@ -456,42 +456,22 @@ app.put('/api/inventario-prospectos/:id', async (req, res) => {
   }
 });
 
+// Eliminar sugerencia
 app.delete('/api/inventario-prospectos/:id', async (req, res) => {
   try {
-    const eliminado = await inventarioProspectosService.deleteInventario(req.params.id);
-    if (eliminado) {
-      res.json({ message: 'Item eliminado exitosamente' });
+    const inventarioEliminado = await inventarioProspectosService.deleteInventario(req.params.id);
+    if (inventarioEliminado) {
+      res.json({ message: 'Inventario eliminado exitosamente' });
     } else {
-      res.status(404).json({ error: 'Item no encontrado' });
+      res.status(404).json({ error: 'Inventario no encontrado' });
     }
   } catch (error) {
-    console.error('Error al eliminar item de inventario:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('Error en DELETE /api/inventario-prospectos/:id:', error);
+    res.status(500).json({ error: 'Error al eliminar inventario' });
   }
 });
 
-// Servir archivos estáticos en producción
-if (process.env.NODE_ENV === 'production') {
-  const path = require('path');
-  // Asumiendo que los archivos de construcción estarán en la carpeta dist
-  app.use(express.static(path.join(__dirname, '../../dist')));
-  
-  // Manejar rutas SPA
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.resolve(__dirname, '../../dist/index.html'));
-    }
-  });
-}
-
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`Servidor API corriendo en puerto ${PORT}`);
-});
-
-module.exports = app;
-
-// Rutas para sugerencias
+// Rutas para sugerencias - MOVER AQUÍ ANTES DEL app.listen()
 app.get('/api/sugerencias', async (req, res) => {
   try {
     const sugerencias = await sugerenciasService.getAllSugerencias();
@@ -535,3 +515,24 @@ app.delete('/api/sugerencias/:id', async (req, res) => {
     res.status(500).json({ error: 'Error al eliminar sugerencia' });
   }
 });
+
+// Servir archivos estáticos en producción
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  
+  app.use(express.static(path.join(__dirname, '../../dist')));
+  
+  // Catch all handler: send back React's index.html file.
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../dist/index.html'));
+  });
+}
+
+// Iniciar servidor
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+});
+
+module.exports = app;
+
+// ELIMINAR ESTAS LÍNEAS QUE ESTÁN DESPUÉS DEL app.listen() - YA NO SON NECESARIAS
