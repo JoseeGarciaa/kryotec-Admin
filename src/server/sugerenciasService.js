@@ -54,83 +54,94 @@ const sugerenciasService = {
     try {
       console.log('Datos recibidos:', datos);
       
-      // Extraer dimensiones del objeto recibido
-      const { dimensiones_requeridas } = datos;
+      // Extraer dimensiones y cantidad del objeto recibido
+      const { dimensiones_requeridas, cantidad } = datos;
       
       if (!dimensiones_requeridas || !dimensiones_requeridas.frente || !dimensiones_requeridas.profundo || !dimensiones_requeridas.alto) {
         throw new Error('Faltan dimensiones requeridas: frente, profundo, alto');
       }
       
-      // Convertir centímetros a metros
+      const cantidadCajas = cantidad || 1; // Cantidad de cajas del cliente
+      
+      // Convertir centímetros a metros para las dimensiones de UNA caja
       const frente_m = parseFloat(dimensiones_requeridas.frente) / 100;
       const profundo_m = parseFloat(dimensiones_requeridas.profundo) / 100;
       const alto_m = parseFloat(dimensiones_requeridas.alto) / 100;
       
-      // Calcular volumen requerido en metros cúbicos
-      const volumenRequerido = frente_m * profundo_m * alto_m;
-      console.log('Volumen requerido calculado:', volumenRequerido, 'm³');
+      // Calcular volumen de UNA caja en metros cúbicos
+      const volumenUnaCaja = frente_m * profundo_m * alto_m;
+      console.log('Volumen de una caja:', volumenUnaCaja, 'm³');
+      console.log('Cantidad de cajas:', cantidadCajas);
       
-      // Buscar modelos que puedan satisfacer el volumen requerido
+      // Buscar TODOS los modelos Cube disponibles
       const query = `
         SELECT 
           modelo_id, nombre_modelo, volumen_litros,
           dim_int_frente, dim_int_profundo, dim_int_alto
         FROM admin_platform.modelos
-        WHERE volumen_litros >= $1 
-          AND tipo = 'Cube'
+        WHERE tipo = 'Cube'
         ORDER BY volumen_litros ASC
-        LIMIT 10
       `;
       
-      const volumenRequeridoLitros = volumenRequerido * 1000; // Convertir m³ a litros
-      const { rows: modelos } = await pool.query(query, [volumenRequeridoLitros]);
+      const { rows: modelos } = await pool.query(query);
       
       if (modelos.length === 0) {
-        return {
-          volumen_requerido_m3: volumenRequerido,
-          sugerencias: [],
-          mensaje: 'No se encontraron modelos que satisfagan el volumen requerido'
-        };
+        return [];
       }
       
       // Calcular sugerencias para cada modelo
       const sugerencias = modelos.map(modelo => {
+        // Convertir dimensiones internas del modelo de mm a cm
+        const frenteModelo = modelo.dim_int_frente / 10;
+        const profundoModelo = modelo.dim_int_profundo / 10;
+        const altoModelo = modelo.dim_int_alto / 10;
+        
+        // Verificar si UNA caja cabe físicamente en el modelo
+        const frenteRequerido = dimensiones_requeridas.frente;
+        const profundoRequerido = dimensiones_requeridas.profundo;
+        const altoRequerido = dimensiones_requeridas.alto;
+        
+        const cabeEnDimensiones = frenteModelo >= frenteRequerido && 
+                                 profundoModelo >= profundoRequerido && 
+                                 altoModelo >= altoRequerido;
+        
+        if (!cabeEnDimensiones) {
+          return null; // No cabe, excluir este modelo
+        }
+        
+        // Calcular cuántas cajas caben en un modelo (por volumen)
         const volumenModeloM3 = modelo.volumen_litros / 1000;
-        const cantidadSugerida = Math.ceil(volumenRequerido / volumenModeloM3);
-        const volumenTotalSugerido = cantidadSugerida * volumenModeloM3;
-        const eficiencia = (volumenRequerido / volumenTotalSugerido) * 100; // Convertir a porcentaje
+        const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
+        
+        if (cajasPorModelo === 0) {
+          return null; // No cabe ni una caja
+        }
+        
+        // Calcular cuántos modelos se necesitan para todas las cajas
+        const modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
+        const cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
+        const eficiencia = (cantidadCajas / cajasQueSeGuardan) * 100;
         
         return {
           modelo_id: modelo.modelo_id,
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
-          cantidad_sugerida: cantidadSugerida,
-          eficiencia: Math.round(eficiencia * 10) / 10, // Redondear a 1 decimal
+          cantidad_sugerida: modelosNecesarios,
+          cajas_por_modelo: cajasPorModelo,
+          total_cajas_guardadas: cajasQueSeGuardan,
+          eficiencia: Math.round(eficiencia * 10) / 10,
           dimensiones_internas: {
-            frente: Math.round(modelo.dim_int_frente / 10), // Convertir mm a cm
-            profundo: Math.round(modelo.dim_int_profundo / 10),
-            alto: Math.round(modelo.dim_int_alto / 10)
+            frente: Math.round(frenteModelo),
+            profundo: Math.round(profundoModelo),
+            alto: Math.round(altoModelo)
           }
         };
-      });
+      }).filter(sugerencia => sugerencia !== null); // Filtrar modelos que no sirven
       
-      // Filtrar solo los modelos que realmente se ajusten a las dimensiones requeridas
-      const sugerenciasFiltradas = sugerencias.filter(sugerencia => {
-        const { frente, profundo, alto } = sugerencia.dimensiones_internas;
-        const frenteRequerido = Math.ceil(frente_m * 100); // Convertir m a cm
-        const profundoRequerido = Math.ceil(profundo_m * 100);
-        const altoRequerido = Math.ceil(alto_m * 100);
-        
-        // El modelo debe poder contener las dimensiones requeridas
-        return frente >= frenteRequerido && 
-               profundo >= profundoRequerido && 
-               alto >= altoRequerido;
-      });
+      // Ordenar por eficiencia descendente
+      sugerencias.sort((a, b) => b.eficiencia - a.eficiencia);
       
-      // Ordenar por eficiencia descendente (mejor eficiencia primero)
-      sugerenciasFiltradas.sort((a, b) => b.eficiencia - a.eficiencia);
-      
-      return sugerenciasFiltradas; // El frontend espera directamente el array de sugerencias
+      return sugerencias;
       
     } catch (error) {
       console.error('Error al calcular sugerencias:', error);
