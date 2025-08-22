@@ -9,6 +9,7 @@ const tenantService = require('./tenantService');
 const clientesProspectosService = require('./clientesProspectosService');
 const clientesProspectosRoutes = require('./routes/clientesProspectosRoutes'); // Agregar esta línea
 const inventarioProspectosService = require('./inventarioProspectosService');
+const sugerenciasService = require('./sugerenciasService');
 
 const app = express();
 const PORT = process.env.PORT || 3002; // Cambiado a 3002 para evitar conflictos
@@ -489,3 +490,48 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
+// Rutas para sugerencias
+app.get('/api/sugerencias', async (req, res) => {
+  try {
+    const sugerencias = await sugerenciasService.getAllSugerencias();
+    res.json(sugerencias);
+  } catch (error) {
+    console.error('Error en GET /api/sugerencias:', error);
+    res.status(500).json({ error: 'Error al obtener sugerencias' });
+  }
+});
+
+app.post('/api/sugerencias/calcular', async (req, res) => {
+  try {
+    const sugerencias = await sugerenciasService.calcularSugerencias(req.body);
+    res.json(sugerencias);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/calcular:', error);
+    res.status(500).json({ error: 'Error al calcular sugerencias' });
+  }
+});
+
+app.post('/api/sugerencias', async (req, res) => {
+  try {
+    const nuevaSugerencia = await sugerenciasService.createSugerencia(req.body);
+    res.status(201).json(nuevaSugerencia);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias:', error);
+    res.status(500).json({ error: 'Error al crear sugerencia' });
+  }
+});
+
+app.delete('/api/sugerencias/:id', async (req, res) => {
+  try {
+    const sugerenciaEliminada = await sugerenciasService.deleteSugerencia(req.params.id);
+    if (sugerenciaEliminada) {
+      res.json({ message: 'Sugerencia eliminada exitosamente' });
+    } else {
+      res.status(404).json({ error: 'Sugerencia no encontrada' });
+    }
+  } catch (error) {
+    console.error('Error en DELETE /api/sugerencias/:id:', error);
+    res.status(500).json({ error: 'Error al eliminar sugerencia' });
+  }
+});
