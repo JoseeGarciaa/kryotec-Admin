@@ -126,26 +126,27 @@ const sugerenciasService = {
           // Si no cabe ni una caja, calculamos cuántos modelos necesitamos
           modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
           cajasQueSeGuardan = cantidadCajas;
-          // Para modelos muy pequeños, la eficiencia será baja (menos de 100%)
-          eficiencia = (volumenModeloM3 / volumenTotalRequeridoM3) * 100;
+          // Para modelos muy pequeños, la eficiencia será baja
+          eficiencia = (volumenTotalRequeridoM3 / (modelosNecesarios * volumenModeloM3)) * 100;
         } else {
           // Lógica normal cuando sí caben cajas
           modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
           cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
           
-          // NUEVA LÓGICA DE EFICIENCIA:
-          // Comparar volumen total disponible vs volumen total requerido
+          // LÓGICA CORREGIDA DE EFICIENCIA:
+          // Eficiencia = qué porcentaje del espacio total se usa realmente
           const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
+          const volumenRealmenteUsado = cantidadCajas * volumenUnaCaja;
           
-          // Eficiencia = (volumen disponible / volumen requerido) * 100
-          // Si es > 100% = hay espacio sobrante (modelo más grande)
-          // Si es < 100% = falta espacio (modelo más pequeño)
-          // Si es = 100% = ajuste perfecto
-          eficiencia = (volumenTotalDisponible / volumenTotalRequeridoM3) * 100;
+          // Eficiencia = (volumen usado / volumen disponible) * 100
+          // 100% = uso perfecto del espacio
+          // < 100% = hay espacio desperdiciado
+          // Nunca debería ser > 100% porque no puede usar más espacio del disponible
+          eficiencia = (volumenRealmenteUsado / volumenTotalDisponible) * 100;
         }
         
-        // Redondear a 1 decimal y limitar valores extremos
-        eficiencia = Math.round(Math.min(Math.max(eficiencia, 10), 500) * 10) / 10;
+        // Redondear a 1 decimal y asegurar que esté en rango válido
+        eficiencia = Math.round(Math.min(Math.max(eficiencia, 1), 100) * 10) / 10;
         
         return {
           modelo_id: modelo.modelo_id,
