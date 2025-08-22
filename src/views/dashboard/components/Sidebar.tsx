@@ -5,12 +5,15 @@ import type { LucideIcon } from 'lucide-react';
 import { User } from '../../../models/types/auth';
 import { ThemeMode } from '../../../models/types/theme';
 
+interface NavigationItem {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  subItems?: NavigationItem[];
+}
+
 interface SidebarProps {
-  navigationItems: Array<{
-    id: string;
-    label: string;
-    icon: LucideIcon;
-  }>;
+  navigationItems: NavigationItem[];
   activeTab: string;
   setActiveTab: (tab: string) => void;
   sidebarOpen: boolean;
@@ -34,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<string[]>(['prospectos']);
   
   useEffect(() => {
     // Verificar si la pantalla es grande (lg)
@@ -89,20 +93,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <nav className="space-y-2">
           {navigationItems.map((item) => {
             const IconComponent = item.icon;
+            const isExpanded = expandedItems.includes(item.id);
+            const isActive = activeTab === item.id || activeTab.startsWith(`${item.id}-`);
+
             return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center ${sidebarOpen ? 'gap-3 px-4' : 'lg:justify-center px-2'} py-3 rounded-lg transition-all duration-200 ${
-                  activeTab === item.id
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-                title={!sidebarOpen ? item.label : undefined}
-              >
-                <IconComponent className="w-5 h-5" />
-                {sidebarOpen && <span className="font-medium">{item.label}</span>}
-              </button>
+              <div key={item.id}>
+                <button
+                  onClick={() => {
+                    if (item.subItems) {
+                      setExpandedItems(prev => 
+                        prev.includes(item.id) 
+                          ? prev.filter(id => id !== item.id)
+                          : [...prev, item.id]
+                      );
+                    } else {
+                      setActiveTab(item.id);
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between ${sidebarOpen ? 'px-4' : 'lg:justify-center px-2'} py-3 rounded-lg transition-all duration-200 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                  title={!sidebarOpen ? item.label : undefined}
+                >
+                  <div className="flex items-center gap-3">
+                    <IconComponent className="w-5 h-5" />
+                    {sidebarOpen && <span className="font-medium">{item.label}</span>}
+                  </div>
+                  {item.subItems && sidebarOpen && (
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  )}
+                </button>
+
+                {/* SubItems */}
+                {item.subItems && isExpanded && sidebarOpen && (
+                  <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-600 pl-4">
+                    {item.subItems.map(subItem => {
+                      const SubIconComponent = subItem.icon;
+                      const isSubItemActive = activeTab === subItem.id;
+
+                      return (
+                        <button
+                          key={subItem.id}
+                          onClick={() => setActiveTab(subItem.id)}
+                          className={`w-full flex items-center gap-3 p-2 rounded-lg transition-all duration-200 ${
+                            isSubItemActive
+                              ? 'bg-blue-500 text-white'
+                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          <SubIconComponent className="w-4 h-4" />
+                          <span className="text-sm">{subItem.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>

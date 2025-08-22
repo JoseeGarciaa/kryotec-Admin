@@ -4,7 +4,9 @@ import {
   Users, 
   Building2, 
   CreditCard,
-  UserPlus
+  UserPlus,
+  Package,
+  Lightbulb
 } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { useThemeContext } from '../contexts/ThemeContext';
@@ -77,11 +79,36 @@ export const DashboardView: React.FC = () => {
   const { theme, toggleTheme } = useThemeContext();
 
   const navigationItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'usuarios', label: 'Usuarios', icon: Users },
-    { id: 'empresas', label: 'Empresas', icon: Building2 },
-    { id: 'credocubes', label: 'Credocubes', icon: CreditCard },
-    { id: 'prospectos', label: 'Prospectos', icon: UserPlus },
+    { 
+      id: 'dashboard', 
+      label: 'Dashboard', 
+      icon: Home 
+    },
+    { 
+      id: 'usuarios', 
+      label: 'Usuarios', 
+      icon: Users 
+    },
+    { 
+      id: 'empresas', 
+      label: 'Empresas', 
+      icon: Building2 
+    },
+    { 
+      id: 'credocubes', 
+      label: 'Credocubes', 
+      icon: CreditCard 
+    },
+    { 
+      id: 'prospectos', 
+      label: 'Prospectos', 
+      icon: UserPlus,
+      subItems: [
+        { id: 'prospectos-clientes', label: 'Clientes', icon: Users },
+        { id: 'prospectos-inventario', label: 'Inventario', icon: Package },
+        { id: 'prospectos-sugerencias', label: 'Sugerencias', icon: Lightbulb }
+      ]
+    },
   ];
 
   // Ya no necesitamos datos falsos para gráficos y métricas
