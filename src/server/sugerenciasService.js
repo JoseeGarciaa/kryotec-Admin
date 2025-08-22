@@ -74,7 +74,7 @@ const sugerenciasService = {
       const query = `
         SELECT 
           modelo_id, nombre_modelo, volumen_litros,
-          largo_mm, ancho_mm, alto_mm, precio_alquiler_mes
+          dim_int_frente, dim_int_profundo, dim_int_alto
         FROM admin_platform.modelos
         WHERE volumen_litros >= $1
         ORDER BY volumen_litros ASC
@@ -97,18 +97,18 @@ const sugerenciasService = {
         const volumenModeloM3 = modelo.volumen_litros / 1000;
         const cantidadSugerida = Math.ceil(volumenRequerido / volumenModeloM3);
         const volumenTotalSugerido = cantidadSugerida * volumenModeloM3;
-        const eficiencia = (volumenRequerido / volumenTotalSugerido); // Sin multiplicar por 100 ni toFixed
+        const eficiencia = (volumenRequerido / volumenTotalSugerido);
         
         return {
           modelo_id: modelo.modelo_id,
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: cantidadSugerida,
-          eficiencia: eficiencia, // El frontend espera un decimal (0.85), no porcentaje (85%)
+          eficiencia: eficiencia,
           dimensiones_internas: {
-            frente: Math.round(modelo.largo_mm / 10), // Convertir mm a cm
-            profundo: Math.round(modelo.ancho_mm / 10),
-            alto: Math.round(modelo.alto_mm / 10)
+            frente: Math.round(modelo.dim_int_frente / 10), // Convertir mm a cm
+            profundo: Math.round(modelo.dim_int_profundo / 10),
+            alto: Math.round(modelo.dim_int_alto / 10)
           }
         };
       });
