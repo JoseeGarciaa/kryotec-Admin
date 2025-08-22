@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos responsivos globales */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  body {
+    @apply overflow-x-hidden min-h-screen;
+  }
+
+  /* Ajustes para dispositivos móviles */
+  @media (max-width: 640px) {
+    .container {
+      @apply px-4;
+    }
+    
+    h1 {
+      @apply text-2xl;
+    }
+    
+    h2 {
+      @apply text-xl;
+    }
+    
+    button, .btn {
+      @apply py-2 px-3 text-sm;
+    }
+    
+    input, select, textarea {
+      @apply text-sm;
+    }
+    
+    table {
+      @apply text-sm;
+    }
+  }
+}
