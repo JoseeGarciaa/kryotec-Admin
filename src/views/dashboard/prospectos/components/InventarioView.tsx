@@ -88,12 +88,24 @@ const InventarioView: React.FC = () => {
       if (selectedItem) {
         const updated = await InventarioProspectoController.updateInventario(selectedItem.inv_id, formData);
         if (updated) {
-          setInventario(prev => prev.map(item => item.inv_id === selectedItem.inv_id ? updated : item));
+          // Encontrar el nombre del cliente
+          const cliente = clientes.find(c => c.cliente_id === updated.cliente_id);
+          const updatedWithClientName = {
+            ...updated,
+            nombre_cliente: cliente?.nombre_cliente || 'N/A'
+          };
+          setInventario(prev => prev.map(item => item.inv_id === selectedItem.inv_id ? updatedWithClientName : item));
           toast.success('Item actualizado exitosamente');
         }
       } else {
         const newItem = await InventarioProspectoController.createInventario(formData);
-        setInventario(prev => [newItem, ...prev]);
+        // Encontrar el nombre del cliente
+        const cliente = clientes.find(c => c.cliente_id === newItem.cliente_id);
+        const newItemWithClientName = {
+          ...newItem,
+          nombre_cliente: cliente?.nombre_cliente || 'N/A'
+        };
+        setInventario(prev => [newItemWithClientName, ...prev]);
         toast.success('Item creado exitosamente');
       }
       setShowModal(false);
