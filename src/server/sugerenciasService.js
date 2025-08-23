@@ -70,8 +70,6 @@ const sugerenciasService = {
       
       // Calcular volumen de UNA caja en metros cúbicos
       const volumenUnaCaja = frente_m * profundo_m * alto_m;
-      console.log('Volumen de una caja:', volumenUnaCaja, 'm³');
-      console.log('Cantidad de cajas:', cantidadCajas);
       
       // Calcular volumen total requerido
       const volumenTotalRequeridoM3 = volumenUnaCaja * cantidadCajas;

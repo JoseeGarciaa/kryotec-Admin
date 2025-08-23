@@ -23,16 +23,19 @@ const inventarioProspectosService = {
 
   createInventario: async (data) => {
     try {
+      // Calcular volumen total en m³ (misma fórmula que la calculadora)
+      const volumenTotal = (data.largo_mm * data.ancho_mm * data.alto_mm * data.cantidad) / 1000000000;
+      
       const query = `
         INSERT INTO admin_platform.inventario_prospecto (
           cliente_id, descripcion, material, largo_mm, ancho_mm, 
-          alto_mm, cantidad, frecuencia_uso_dia
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          alto_mm, cantidad, frecuencia_uso_dia, volumen_total_m3
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `;
       const values = [data.cliente_id, data.descripcion, data.material, 
                      data.largo_mm, data.ancho_mm, data.alto_mm, 
-                     data.cantidad, data.frecuencia_uso_dia];
+                     data.cantidad, data.frecuencia_uso_dia, volumenTotal];
       const { rows } = await pool.query(query, values);
       return rows[0];
     } catch (error) {
