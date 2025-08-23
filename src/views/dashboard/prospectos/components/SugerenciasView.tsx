@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useSugerenciasController } from '../../../../controllers/hooks/useSugerenciasController';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
 import { useInventarioProspectoController } from '../../../../controllers/hooks/useInventarioProspectoController';
-import { Calculator, Package, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Calculator, Package, CheckCircle, Clock, AlertCircle, Trash2 } from 'lucide-react';
 import { CalculoSugerencia, ResultadoSugerencia } from '../../../../models/SugerenciasModel';
 import { InventarioProspecto } from '../../../../models/InventarioProspectoModel';
 
 const SugerenciasView: React.FC = () => {
-  const { sugerencias, loading, error, calcularSugerencias, createSugerencia } = useSugerenciasController();
+  const { sugerencias, loading, error, calcularSugerencias, createSugerencia, deleteSugerencia } = useSugerenciasController();
   const { clientes } = useClienteProspectoController();
   const { inventario } = useInventarioProspectoController();
   
@@ -109,6 +109,18 @@ const SugerenciasView: React.FC = () => {
     setDimensiones({ frente: '', profundo: '', alto: '' });
     setVolumenRequerido('');
     setResultados([]);
+  };
+
+  const handleDeleteSugerencia = async (id: number) => {
+    if (window.confirm('¿Estás seguro de que deseas eliminar esta sugerencia?')) {
+      try {
+        await deleteSugerencia(id);
+        alert('Sugerencia eliminada exitosamente');
+      } catch (err) {
+        console.error('Error al eliminar sugerencia:', err);
+        alert('Error al eliminar la sugerencia');
+      }
+    }
   };
 
   return (
@@ -377,6 +389,7 @@ const SugerenciasView: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cantidad</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fecha</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
               <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -402,6 +415,15 @@ const SugerenciasView: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                       {sugerencia.fecha_sugerencia ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      <button
+                        onClick={() => handleDeleteSugerencia(sugerencia.sugerencia_id)}
+                        className="text-red-400 hover:text-red-300 transition-colors p-1 rounded"
+                        title="Eliminar sugerencia"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))}
