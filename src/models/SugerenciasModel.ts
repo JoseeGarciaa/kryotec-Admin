@@ -41,6 +41,7 @@ export interface ResultadoSugerencia {
   cajas_por_modelo?: number; // Agregar información adicional
   total_cajas_guardadas?: number;
   eficiencia: number;
+  mensaje_comparacion?: string; // Nuevo campo para el mensaje de comparación
   dimensiones_internas: {
     frente: number;
     profundo: number;

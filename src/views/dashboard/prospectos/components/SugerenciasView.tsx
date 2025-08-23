@@ -271,6 +271,12 @@ const SugerenciasView: React.FC = () => {
                     <div>
                       <h3 className="font-semibold text-lg">{resultado.nombre_modelo}</h3>
                       <p className="text-gray-400 text-sm">Cantidad sugerida: {resultado.cantidad_sugerida} unidades</p>
+                      {/* Agregar el mensaje de comparación */}
+                      {resultado.mensaje_comparacion && (
+                        <p className="text-blue-400 text-sm mt-1 font-medium">
+                          {resultado.mensaje_comparacion}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="bg-green-600 text-white px-2 py-1 rounded text-sm">
