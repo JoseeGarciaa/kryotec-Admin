@@ -252,7 +252,7 @@ const SugerenciasView: React.FC = () => {
     pdf.setFont('helvetica', 'normal');
     pdf.text('Reporte de Sugerencia Individual', 20, 35);
     
-    // Fecha
+    // Fecha - Ajustado el espaciado
     pdf.setTextColor(200, 200, 200);
     pdf.setFontSize(10);
     const fecha = new Date().toLocaleDateString('es-ES', {
@@ -260,7 +260,7 @@ const SugerenciasView: React.FC = () => {
       month: 'long',
       day: 'numeric'
     });
-    pdf.text(`Generado el: ${fecha}`, pageWidth - 60, 25);
+    pdf.text(`Generado el: ${fecha}`, pageWidth - 80, 25);
     
     let yPosition = 60;
     
@@ -278,19 +278,19 @@ const SugerenciasView: React.FC = () => {
     pdf.setFont('helvetica', 'bold');
     pdf.text('Cliente:', 20, yPosition);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(sugerencia.nombre_cliente || 'N/A', 60, yPosition);
+    pdf.text(sugerencia.nombre_cliente || 'N/A', 80, yPosition);
     yPosition += 15;
     
     pdf.setFont('helvetica', 'bold');
     pdf.text('Modelo Sugerido:', 20, yPosition);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(sugerencia.modelo_sugerido || 'N/A', 60, yPosition);
+    pdf.text(sugerencia.modelo_sugerido || 'N/A', 80, yPosition);
     yPosition += 15;
     
     pdf.setFont('helvetica', 'bold');
     pdf.text('Cantidad:', 20, yPosition);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 60, yPosition);
+    pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 80, yPosition);
     yPosition += 15;
     
     pdf.setFont('helvetica', 'bold');
@@ -306,7 +306,7 @@ const SugerenciasView: React.FC = () => {
     } else {
       pdf.setTextColor(239, 68, 68); // text-red-500
     }
-    pdf.text(estado, 60, yPosition);
+    pdf.text(estado, 80, yPosition);
     yPosition += 15;
     
     pdf.setTextColor(0, 0, 0);
@@ -316,7 +316,7 @@ const SugerenciasView: React.FC = () => {
     const fechaSugerencia = sugerencia.fecha_sugerencia 
       ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
       : 'N/A';
-    pdf.text(fechaSugerencia, 60, yPosition);
+    pdf.text(fechaSugerencia, 80, yPosition);
     
     // Footer
     pdf.setFillColor(30, 41, 59);
