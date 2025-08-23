@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useSugerenciasController } from '../../../../controllers/hooks/useSugerenciasController';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
 import { useInventarioProspectoController } from '../../../../controllers/hooks/useInventarioProspectoController';
-import { Calculator, Package, CheckCircle, Clock, AlertCircle, Trash2 } from 'lucide-react';
+import { Calculator, Package, CheckCircle, Clock, AlertCircle, Trash2, Download } from 'lucide-react';
 import { CalculoSugerencia, ResultadoSugerencia } from '../../../../models/SugerenciasModel';
 import { InventarioProspecto } from '../../../../models/InventarioProspectoModel';
+import jsPDF from 'jspdf';
 
 const SugerenciasView: React.FC = () => {
   const { sugerencias, loading, error, calcularSugerencias, createSugerencia, deleteSugerencia } = useSugerenciasController();
@@ -121,6 +122,115 @@ const SugerenciasView: React.FC = () => {
         alert('Error al eliminar la sugerencia');
       }
     }
+  };
+
+  const generatePDF = async () => {
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    let currentPage = 1;
+    
+    // Header con logo de Kryotec
+    pdf.setFillColor(30, 41, 59); // bg-slate-800
+    pdf.rect(0, 0, pageWidth, 40, 'F');
+    
+    // Título principal
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('KRYOTEC', 20, 25);
+    
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Reporte de Sugerencias', 20, 35);
+    
+    // Fecha
+    pdf.setTextColor(200, 200, 200);
+    pdf.setFontSize(10);
+    const fecha = new Date().toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    pdf.text(`Generado el: ${fecha}`, pageWidth - 60, 25);
+    
+    let yPosition = 60;
+    
+    // Título de la sección
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Historial de Sugerencias', 20, yPosition);
+    yPosition += 15;
+    
+    // Headers de la tabla
+    pdf.setFillColor(59, 130, 246); // bg-blue-500
+    pdf.rect(20, yPosition, pageWidth - 40, 10, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Cliente', 25, yPosition + 7);
+    pdf.text('Modelo', 70, yPosition + 7);
+    pdf.text('Cantidad', 120, yPosition + 7);
+    pdf.text('Estado', 145, yPosition + 7);
+    pdf.text('Fecha', 170, yPosition + 7);
+    
+    yPosition += 15;
+    
+    // Datos de las sugerencias
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont('helvetica', 'normal');
+    
+    sugerencias.forEach((sugerencia, index) => {
+      // Alternar colores de fila
+      if (index % 2 === 0) {
+        pdf.setFillColor(248, 250, 252); // bg-slate-50
+        pdf.rect(20, yPosition - 5, pageWidth - 40, 10, 'F');
+      }
+      
+      pdf.text(sugerencia.nombre_cliente || 'N/A', 25, yPosition + 2);
+      pdf.text(sugerencia.modelo_sugerido || 'N/A', 70, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 120, yPosition + 2);
+      
+      // Estado con color
+      const estado = sugerencia.estado || 'pendiente';
+      if (estado === 'completado') {
+        pdf.setTextColor(34, 197, 94); // text-green-500
+      } else if (estado === 'pendiente') {
+        pdf.setTextColor(251, 191, 36); // text-yellow-500
+      } else {
+        pdf.setTextColor(239, 68, 68); // text-red-500
+      }
+      pdf.text(estado, 145, yPosition + 2);
+      
+      pdf.setTextColor(0, 0, 0);
+      const fecha = sugerencia.fecha_sugerencia 
+        ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
+        : 'N/A';
+      pdf.text(fecha, 170, yPosition + 2);
+      
+      yPosition += 12;
+      
+      // Nueva página si es necesario
+      if (yPosition > pageHeight - 30) {
+        pdf.addPage();
+        currentPage++;
+        yPosition = 30;
+      }
+    });
+    
+    // Footer
+    pdf.setFillColor(30, 41, 59);
+    pdf.rect(0, pageHeight - 20, pageWidth, 20, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(8);
+    pdf.text('© 2025 Kryotec - Sistema de Gestión de Sugerencias', 20, pageHeight - 10);
+    pdf.text(`Página ${currentPage}`, pageWidth - 40, pageHeight - 10);
+    
+    // Descargar el PDF
+    pdf.save(`Kryotec_Sugerencias_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   return (
@@ -359,12 +469,22 @@ const SugerenciasView: React.FC = () => {
       </div>
 
       {/* Historial de Sugerencias */}
-      <div className="mt-8 bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <Clock className="text-yellow-400" size={24} />
-          <h2 className="text-xl font-semibold">Historial de Sugerencias</h2>
+      <div className="bg-gray-800 rounded-lg p-6">
+        <div className="flex items-center justify-between gap-2 mb-6">
+          <div className="flex items-center gap-2">
+            <Clock className="text-yellow-400" size={24} />
+            <h2 className="text-xl font-semibold">Historial de Sugerencias</h2>
+          </div>
+          <button
+            onClick={generatePDF}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            title="Descargar PDF"
+          >
+            <Download size={16} />
+            Descargar PDF
+          </button>
         </div>
-
+        
         {loading === 'loading' ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
