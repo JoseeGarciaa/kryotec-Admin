@@ -93,12 +93,25 @@ const sugerenciasService = {
       
       // Calcular sugerencias para cada modelo
       const sugerencias = modelos.map(modelo => {
-        // Convertir dimensiones internas del modelo de mm a mm (mantener)
-        const frenteModelo = modelo.dim_int_frente; // Ya en mm
-        const profundoModelo = modelo.dim_int_profundo; // Ya en mm
-        const altoModelo = modelo.dim_int_alto; // Ya en mm
+        // Verificar que el modelo tenga dimensiones internas válidas
+        if (!modelo.dim_int_frente || !modelo.dim_int_profundo || !modelo.dim_int_alto) {
+          return null; // Saltar modelos sin dimensiones internas
+        }
         
-        const volumenModeloM3 = modelo.volumen_litros / 1000;
+        // Convertir dimensiones internas del modelo de mm a metros
+        const frenteModelo = modelo.dim_int_frente; // En mm
+        const profundoModelo = modelo.dim_int_profundo; // En mm
+        const altoModelo = modelo.dim_int_alto; // En mm
+        
+        // CALCULAR VOLUMEN DEL MODELO USANDO SUS DIMENSIONES INTERNAS
+        const volumenModeloM3 = (frenteModelo * profundoModelo * altoModelo) / 1000000000; // mm³ a m³
+        
+        // Verificar si las dimensiones de la caja coinciden exactamente con el modelo
+        const dimensionesExactas = (
+          frenteModelo === parseInt(dimensiones_requeridas.frente) &&
+          profundoModelo === parseInt(dimensiones_requeridas.profundo) &&
+          altoModelo === parseInt(dimensiones_requeridas.alto)
+        );
         
         // NUEVA LÓGICA: Filtrar modelos demasiado grandes para volúmenes pequeños
         const factorProporcion = volumenModeloM3 / volumenTotalRequeridoM3;
@@ -118,12 +131,12 @@ const sugerenciasService = {
         // Calcular cuántas cajas caben en un modelo (por volumen)
         const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
         
-        // Verificar si las dimensiones de la caja coinciden exactamente con el modelo
-        const dimensionesExactas = (
-          frenteModelo === dimensiones_requeridas.frente &&
-          profundoModelo === dimensiones_requeridas.profundo &&
-          altoModelo === dimensiones_requeridas.alto
-        );
+        // ELIMINAR ESTA LÍNEA DUPLICADA (línea 135):
+        // const dimensionesExactas = (
+        //   frenteModelo === dimensiones_requeridas.frente &&
+        //   profundoModelo === dimensiones_requeridas.profundo &&
+        //   altoModelo === dimensiones_requeridas.alto
+        // );
         
         let modelosNecesarios, cajasQueSeGuardan, eficiencia;
         
