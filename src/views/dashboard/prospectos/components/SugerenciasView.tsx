@@ -233,6 +233,106 @@ const SugerenciasView: React.FC = () => {
     pdf.save(`Kryotec_Sugerencias_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
+  const generateIndividualPDF = async (sugerencia: any) => {
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    
+    // Header con logo de Kryotec
+    pdf.setFillColor(30, 41, 59); // bg-slate-800
+    pdf.rect(0, 0, pageWidth, 40, 'F');
+    
+    // Título principal
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('KRYOTEC', 20, 25);
+    
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Reporte de Sugerencia Individual', 20, 35);
+    
+    // Fecha
+    pdf.setTextColor(200, 200, 200);
+    pdf.setFontSize(10);
+    const fecha = new Date().toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    pdf.text(`Generado el: ${fecha}`, pageWidth - 60, 25);
+    
+    let yPosition = 60;
+    
+    // Información de la sugerencia
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Detalle de Sugerencia', 20, yPosition);
+    yPosition += 20;
+    
+    // Datos de la sugerencia
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Cliente:', 20, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(sugerencia.nombre_cliente || 'N/A', 60, yPosition);
+    yPosition += 15;
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Modelo Sugerido:', 20, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(sugerencia.modelo_sugerido || 'N/A', 60, yPosition);
+    yPosition += 15;
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Cantidad:', 20, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 60, yPosition);
+    yPosition += 15;
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Estado:', 20, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Estado con color
+    const estado = sugerencia.estado || 'pendiente';
+    if (estado === 'completado') {
+      pdf.setTextColor(34, 197, 94); // text-green-500
+    } else if (estado === 'pendiente') {
+      pdf.setTextColor(251, 191, 36); // text-yellow-500
+    } else {
+      pdf.setTextColor(239, 68, 68); // text-red-500
+    }
+    pdf.text(estado, 60, yPosition);
+    yPosition += 15;
+    
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Fecha de Sugerencia:', 20, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    const fechaSugerencia = sugerencia.fecha_sugerencia 
+      ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
+      : 'N/A';
+    pdf.text(fechaSugerencia, 60, yPosition);
+    
+    // Footer
+    pdf.setFillColor(30, 41, 59);
+    pdf.rect(0, pageHeight - 20, pageWidth, 20, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(8);
+    pdf.text('© 2025 Kryotec - Sistema de Gestión de Sugerencias', 20, pageHeight - 10);
+    pdf.text('Página 1', pageWidth - 40, pageHeight - 10);
+    
+    // Descargar el PDF
+    const nombreCliente = sugerencia.nombre_cliente?.replace(/\s+/g, '_') || 'Cliente';
+    const fechaArchivo = new Date().toISOString().split('T')[0];
+    pdf.save(`Kryotec_Sugerencia_${nombreCliente}_${fechaArchivo}.pdf`);
+  };
+
   return (
     <div className="p-6 bg-gray-900 min-h-screen text-white">
       {/* Header */}
@@ -537,13 +637,22 @@ const SugerenciasView: React.FC = () => {
                       {sugerencia.fecha_sugerencia ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                      <button
-                        onClick={() => handleDeleteSugerencia(sugerencia.sugerencia_id)}
-                        className="text-red-400 hover:text-red-300 transition-colors p-1 rounded"
-                        title="Eliminar sugerencia"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => generateIndividualPDF(sugerencia)}
+                          className="text-blue-400 hover:text-blue-300 transition-colors p-1 rounded"
+                          title="Descargar PDF"
+                        >
+                          <Download size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSugerencia(sugerencia.sugerencia_id)}
+                          className="text-red-400 hover:text-red-300 transition-colors p-1 rounded"
+                          title="Eliminar sugerencia"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
