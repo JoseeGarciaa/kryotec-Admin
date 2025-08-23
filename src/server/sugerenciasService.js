@@ -133,25 +133,34 @@ const sugerenciasService = {
           // Si no cabe ni una caja por volumen, calculamos cuántos modelos necesitamos
           modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
           cajasQueSeGuardan = cantidadCajas;
-          eficiencia = (volumenTotalRequeridoM3 / (modelosNecesarios * volumenModeloM3)) * 100;
+          
+          // Calcular proximidad al volumen requerido
+          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
+          const diferencia = Math.abs(volumenTotalDisponible - volumenTotalRequeridoM3);
+          const volumenMayor = Math.max(volumenTotalDisponible, volumenTotalRequeridoM3);
+          eficiencia = Math.max(10, 100 - (diferencia / volumenMayor) * 100);
         } else {
           // Lógica normal cuando sí caben cajas
           modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
           cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
           
-          // LÓGICA DE EFICIENCIA AJUSTADA:
-          if (dimensionesExactas && cajasPorModelo === 1) {
-            // Dimensiones exactamente iguales = 100%
+          // NUEVA LÓGICA DE EFICIENCIA BASADA EN PROXIMIDAD AL VOLUMEN:
+          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
+          
+          if (dimensionesExactas && Math.abs(volumenTotalDisponible - volumenTotalRequeridoM3) < 0.001) {
+            // Volumen exactamente igual = 100%
             eficiencia = 100;
           } else {
-            // Calcular eficiencia basada en aprovechamiento del volumen
-            const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-            const volumenRealmenteUsado = cantidadCajas * volumenUnaCaja;
-            eficiencia = (volumenRealmenteUsado / volumenTotalDisponible) * 100;
+            // Calcular proximidad: entre más cerca del volumen requerido, mayor eficiencia
+            const diferencia = Math.abs(volumenTotalDisponible - volumenTotalRequeridoM3);
+            const volumenMayor = Math.max(volumenTotalDisponible, volumenTotalRequeridoM3);
             
-            // Si la eficiencia es muy alta (95% o más), aproximarla hacia 100%
-            if (eficiencia >= 95) {
-              eficiencia = Math.min(99, eficiencia + (100 - eficiencia) * 0.5);
+            // Fórmula de proximidad: 100% - (diferencia relativa * 100)
+            eficiencia = Math.max(10, 100 - (diferencia / volumenMayor) * 100);
+            
+            // Bonificación por ajuste dimensional perfecto
+            if (dimensionesExactas) {
+              eficiencia = Math.min(100, eficiencia + 10);
             }
           }
         }
@@ -161,19 +170,17 @@ const sugerenciasService = {
         
         // Determinar mensaje de comparación de tamaño
         let mensajeComparacion;
-        if (dimensionesExactas) {
+        const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
+        const diferenciaVolumen = ((volumenTotalDisponible - volumenTotalRequeridoM3) / volumenTotalRequeridoM3) * 100;
+        
+        if (dimensionesExactas && Math.abs(diferenciaVolumen) < 1) {
           mensajeComparacion = "✅ Ajuste perfecto";
-        } else if (frenteModelo >= dimensiones_requeridas.frente && 
-                   profundoModelo >= dimensiones_requeridas.profundo && 
-                   altoModelo >= dimensiones_requeridas.alto) {
-          // El modelo es más grande en todas las dimensiones
-          const volumenModelo = (frenteModelo * profundoModelo * altoModelo) / 1000000000; // mm³ a m³
-          const volumenRequerido = volumenUnaCaja;
-          if (volumenModelo > volumenRequerido * 1.5) {
-            mensajeComparacion = "📦 Modelo más grande (mucho espacio extra)";
-          } else {
-            mensajeComparacion = "📦 Modelo más grande (espacio extra)";
-          }
+        } else if (diferenciaVolumen > 50) {
+          mensajeComparacion = "📦 Modelo más grande (mucho espacio extra)";
+        } else if (diferenciaVolumen > 10) {
+          mensajeComparacion = "📦 Modelo más grande (espacio extra)";
+        } else if (diferenciaVolumen > -10) {
+          mensajeComparacion = "🎯 Muy buena aproximación";
         } else {
           mensajeComparacion = "⚠️ Modelo más pequeño (aproximación por volumen)";
         }
