@@ -34,7 +34,7 @@ const sugerenciasService = {
           cliente_id, inv_id, modelo_sugerido, cantidad_sugerida, 
           modalidad, modelo_id, estado
         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *
+        RETURNING sugerencia_id
       `;
       const values = [
         data.cliente_id, data.inv_id, data.modelo_sugerido,
@@ -42,7 +42,26 @@ const sugerenciasService = {
         data.modelo_id, data.estado || 'pendiente'
       ];
       const { rows } = await pool.query(query, values);
-      return rows[0];
+      const sugerenciaId = rows[0].sugerencia_id;
+      
+      // Ahora obtener la sugerencia completa con todos los JOINs
+      const selectQuery = `
+        SELECT 
+          s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
+          s.cantidad_sugerida, s.modalidad, s.fecha_sugerencia, 
+          s.modelo_id, s.estado,
+          c.nombre_cliente,
+          m.nombre_modelo, m.volumen_litros,
+          i.descripcion as item_descripcion, i.largo_mm, i.ancho_mm, i.alto_mm
+        FROM admin_platform.sugerencias_reemplazo s
+        LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
+        LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
+        LEFT JOIN admin_platform.inventario_prospecto i ON s.inv_id = i.inv_id
+        WHERE s.sugerencia_id = $1
+      `;
+      
+      const { rows: completeRows } = await pool.query(selectQuery, [sugerenciaId]);
+      return completeRows[0];
     } catch (error) {
       console.error('Error al crear sugerencia:', error);
       throw error;
