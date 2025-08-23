@@ -177,7 +177,12 @@ const SugerenciasView: React.FC = () => {
                   type="number"
                   value={dimensiones.frente}
                   onChange={(e) => setDimensiones(prev => ({ ...prev, frente: e.target.value }))}
-                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                  readOnly={!!selectedInventario}
+                  className={`w-full p-3 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 ${
+                    selectedInventario 
+                      ? 'bg-gray-600 cursor-not-allowed' 
+                      : 'bg-gray-700'
+                  }`}
                   placeholder="0"
                 />
               </div>
@@ -189,7 +194,12 @@ const SugerenciasView: React.FC = () => {
                   type="number"
                   value={dimensiones.profundo}
                   onChange={(e) => setDimensiones(prev => ({ ...prev, profundo: e.target.value }))}
-                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                  readOnly={!!selectedInventario}
+                  className={`w-full p-3 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 ${
+                    selectedInventario 
+                      ? 'bg-gray-600 cursor-not-allowed' 
+                      : 'bg-gray-700'
+                  }`}
                   placeholder="0"
                 />
               </div>
@@ -201,10 +211,29 @@ const SugerenciasView: React.FC = () => {
                   type="number"
                   value={dimensiones.alto}
                   onChange={(e) => setDimensiones(prev => ({ ...prev, alto: e.target.value }))}
-                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                  readOnly={!!selectedInventario}
+                  className={`w-full p-3 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 ${
+                    selectedInventario 
+                      ? 'bg-gray-600 cursor-not-allowed' 
+                      : 'bg-gray-700'
+                  }`}
                   placeholder="0"
                 />
               </div>
+            </div>
+
+            {/* Cantidad */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Cantidad
+              </label>
+              <input
+                type="number"
+                value={selectedInventario ? (inventario.find(inv => inv.inv_id === Number(selectedInventario))?.cantidad || 0) : ''}
+                readOnly
+                className="w-full p-3 bg-gray-600 border border-gray-600 rounded-lg text-white cursor-not-allowed"
+                placeholder="Seleccione un item del inventario"
+              />
             </div>
 
             {/* Volumen Requerido */}
@@ -217,7 +246,12 @@ const SugerenciasView: React.FC = () => {
                 step="0.001"
                 value={volumenRequerido}
                 onChange={(e) => setVolumenRequerido(e.target.value)}
-                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                readOnly={!!selectedInventario}
+                className={`w-full p-3 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 ${
+                  selectedInventario 
+                    ? 'bg-gray-600 cursor-not-allowed' 
+                    : 'bg-gray-700'
+                }`}
                 placeholder="0.000"
               />
             </div>
