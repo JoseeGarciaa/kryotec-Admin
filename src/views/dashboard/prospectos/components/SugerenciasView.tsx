@@ -203,7 +203,7 @@ const SugerenciasView: React.FC = () => {
       const clienteTruncado = cliente.length > 15 ? cliente.substring(0, 12) + '...' : cliente;
       pdf.text(clienteTruncado, 25, yPosition + 2);
       
-      const producto = sugerencia.descripcion_inventario || 'N/A';
+      const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
       const productoTruncado = producto.length > 15 ? producto.substring(0, 12) + '...' : producto;
       pdf.text(productoTruncado, 65, yPosition + 2);
       
@@ -350,7 +350,7 @@ const SugerenciasView: React.FC = () => {
       
       pdf.setFontSize(8);
       // Truncar texto del producto si es muy largo
-      const producto = sugerencia.descripcion_inventario || 'N/A';
+      const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
       const productoTruncado = producto.length > 20 ? producto.substring(0, 17) + '...' : producto;
       pdf.text(productoTruncado, 25, yPosition + 2);
       
@@ -452,7 +452,7 @@ const SugerenciasView: React.FC = () => {
     pdf.setFont('helvetica', 'bold');
     pdf.text('Nombre del Producto:', 20, yPosition);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(sugerencia.descripcion_inventario || 'N/A', 80, yPosition);
+    pdf.text(sugerencia.producto || sugerencia.descripcion_inventario || 'N/A', 80, yPosition);
     yPosition += 15;
     
     pdf.setFont('helvetica', 'bold');
@@ -865,7 +865,7 @@ const SugerenciasView: React.FC = () => {
                     {sugerencia.nombre_cliente || 'N/A'}
                   </p>
                   <p className="text-blue-100 text-xs opacity-90 truncate">
-                    Producto: {sugerencia.descripcion_inventario || 'N/A'}
+                    Producto: {sugerencia.producto || sugerencia.descripcion_inventario || 'N/A'}
                   </p>
                 </div>
                 
@@ -942,7 +942,7 @@ const SugerenciasView: React.FC = () => {
                       {sugerencia.nombre_cliente || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                      {sugerencia.descripcion_inventario || 'N/A'}
+                      {sugerencia.producto || sugerencia.descripcion_inventario || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                       {sugerencia.modelo_sugerido}

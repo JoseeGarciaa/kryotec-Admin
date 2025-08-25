@@ -14,6 +14,7 @@ export interface SugerenciaReemplazo {
   // Campos adicionales para joins
   nombre_cliente?: string;
   descripcion_inventario?: string;
+  producto?: string;
   nombre_modelo?: string;
 }
 
