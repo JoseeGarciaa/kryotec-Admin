@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSugerenciasController } from '../../../../controllers/hooks/useSugerenciasController';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
 import { useInventarioProspectoController } from '../../../../controllers/hooks/useInventarioProspectoController';
-import { Calculator, Package, CheckCircle, Clock, AlertCircle, Trash2, Download } from 'lucide-react';
+import { Calculator, Package, CheckCircle, Clock, AlertCircle, Trash2, Download, Filter, Users } from 'lucide-react';
 import { CalculoSugerencia, ResultadoSugerencia } from '../../../../models/SugerenciasModel';
 import { InventarioProspecto } from '../../../../models/InventarioProspectoModel';
 import jsPDF from 'jspdf';
@@ -23,6 +23,12 @@ const SugerenciasView: React.FC = () => {
   const [resultados, setResultados] = useState<ResultadoSugerencia[]>([]);
   const [calculando, setCalculando] = useState(false);
   const [filteredInventario, setFilteredInventario] = useState<InventarioProspecto[]>([]);
+  const [clienteHistorialFilter, setClienteHistorialFilter] = useState<number | ''>('');
+
+  // Filtrar sugerencias por cliente seleccionado
+  const filteredSugerencias = clienteHistorialFilter 
+    ? sugerencias.filter(s => s.cliente_id === Number(clienteHistorialFilter))
+    : sugerencias;
 
   // Filtrar inventario por cliente seleccionado
   useEffect(() => {
@@ -231,6 +237,144 @@ const SugerenciasView: React.FC = () => {
     
     // Descargar el PDF
     pdf.save(`Kryotec_Sugerencias_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const generateClientePDF = async () => {
+    if (!clienteHistorialFilter) {
+      alert('Por favor selecciona un cliente para generar el PDF');
+      return;
+    }
+
+    const clienteSeleccionado = clientes.find(c => c.cliente_id === Number(clienteHistorialFilter));
+    const sugerenciasCliente = filteredSugerencias;
+
+    if (sugerenciasCliente.length === 0) {
+      alert('Este cliente no tiene sugerencias guardadas');
+      return;
+    }
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    let currentPage = 1;
+    
+    // Header con logo de Kryotec
+    pdf.setFillColor(30, 41, 59); // bg-slate-800
+    pdf.rect(0, 0, pageWidth, 40, 'F');
+    
+    // Título principal
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('KRYOTEC', 20, 25);
+    
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Reporte de Cliente: ${clienteSeleccionado?.nombre_cliente}`, 20, 35);
+    
+    // Fecha
+    pdf.setTextColor(200, 200, 200);
+    pdf.setFontSize(10);
+    const fecha = new Date().toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    pdf.text(`Generado el: ${fecha}`, pageWidth - 60, 25);
+    
+    let yPosition = 60;
+    
+    // Información del cliente
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(16);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Información del Cliente', 20, yPosition);
+    yPosition += 15;
+    
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Nombre: ${clienteSeleccionado?.nombre_cliente}`, 20, yPosition);
+    yPosition += 10;
+    pdf.text(`Contacto: ${clienteSeleccionado?.contacto || 'N/A'}`, 20, yPosition);
+    yPosition += 10;
+    pdf.text(`Email: ${clienteSeleccionado?.correo || 'N/A'}`, 20, yPosition);
+    yPosition += 10;
+    pdf.text(`Teléfono: ${clienteSeleccionado?.telefono || 'N/A'}`, 20, yPosition);
+    yPosition += 20;
+    
+    // Título de sugerencias
+    pdf.setFontSize(16);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Sugerencias (${sugerenciasCliente.length} registros)`, 20, yPosition);
+    yPosition += 15;
+    
+    // Headers de la tabla
+    pdf.setFillColor(59, 130, 246); // bg-blue-500
+    pdf.rect(20, yPosition, pageWidth - 40, 10, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Modelo', 25, yPosition + 7);
+    pdf.text('Cantidad', 80, yPosition + 7);
+    pdf.text('Estado', 120, yPosition + 7);
+    pdf.text('Fecha', 150, yPosition + 7);
+    
+    yPosition += 15;
+    
+    // Datos de las sugerencias del cliente
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont('helvetica', 'normal');
+    
+    sugerenciasCliente.forEach((sugerencia, index) => {
+      // Alternar colores de fila
+      if (index % 2 === 0) {
+        pdf.setFillColor(248, 250, 252); // bg-slate-50
+        pdf.rect(20, yPosition - 5, pageWidth - 40, 10, 'F');
+      }
+      
+      pdf.text(sugerencia.modelo_sugerido || 'N/A', 25, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 80, yPosition + 2);
+      
+      // Estado con color
+      const estado = sugerencia.estado || 'pendiente';
+      if (estado === 'completado') {
+        pdf.setTextColor(34, 197, 94); // text-green-500
+      } else if (estado === 'pendiente') {
+        pdf.setTextColor(251, 191, 36); // text-yellow-500
+      } else {
+        pdf.setTextColor(239, 68, 68); // text-red-500
+      }
+      pdf.text(estado, 120, yPosition + 2);
+      
+      pdf.setTextColor(0, 0, 0);
+      const fecha = sugerencia.fecha_sugerencia 
+        ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
+        : 'N/A';
+      pdf.text(fecha, 150, yPosition + 2);
+      
+      yPosition += 12;
+      
+      // Nueva página si es necesario
+      if (yPosition > pageHeight - 30) {
+        pdf.addPage();
+        currentPage++;
+        yPosition = 30;
+      }
+    });
+    
+    // Footer
+    pdf.setFillColor(30, 41, 59);
+    pdf.rect(0, pageHeight - 20, pageWidth, 20, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(8);
+    pdf.text('© 2025 Kryotec - Sistema de Gestión de Sugerencias', 20, pageHeight - 10);
+    pdf.text(`Página ${currentPage}`, pageWidth - 40, pageHeight - 10);
+    
+    // Descargar el PDF
+    const nombreCliente = clienteSeleccionado?.nombre_cliente.replace(/\s+/g, '_') || 'Cliente';
+    pdf.save(`Kryotec_Cliente_${nombreCliente}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const generateIndividualPDF = async (sugerencia: any) => {
@@ -575,15 +719,70 @@ const SugerenciasView: React.FC = () => {
             <Clock className="text-yellow-400" size={24} />
             <h2 className="text-xl font-semibold">Historial de Sugerencias</h2>
           </div>
-          <button
-            onClick={generatePDF}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-            title="Descargar PDF"
-          >
-            <Download size={16} />
-            Descargar PDF
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Filtro por cliente */}
+            <div className="flex items-center gap-2">
+              <Users className="text-gray-400" size={16} />
+              <select
+                value={clienteHistorialFilter}
+                onChange={(e) => setClienteHistorialFilter(e.target.value as any)}
+                className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Todos los clientes</option>
+                {clientes.map(cliente => (
+                  <option key={cliente.cliente_id} value={cliente.cliente_id}>
+                    {cliente.nombre_cliente}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Botones de descarga */}
+            <div className="flex gap-2">
+              {clienteHistorialFilter && (
+                <button
+                  onClick={generateClientePDF}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+                  title="Descargar PDF del cliente seleccionado"
+                >
+                  <Users size={16} />
+                  PDF Cliente
+                </button>
+              )}
+              <button
+                onClick={generatePDF}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+                title="Descargar PDF completo"
+              >
+                <Download size={16} />
+                PDF Completo
+              </button>
+            </div>
+          </div>
         </div>
+
+        {/* Mostrar información del filtro activo */}
+        {clienteHistorialFilter && (
+          <div className="mb-4 p-3 bg-blue-900/50 border border-blue-700 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Filter className="text-blue-400" size={16} />
+                <span className="text-blue-300 text-sm">
+                  Mostrando sugerencias de: <strong>{clientes.find(c => c.cliente_id === Number(clienteHistorialFilter))?.nombre_cliente}</strong>
+                </span>
+                <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
+                  {filteredSugerencias.length} registros
+                </span>
+              </div>
+              <button
+                onClick={() => setClienteHistorialFilter('')}
+                className="text-blue-400 hover:text-blue-300 text-sm underline"
+              >
+                Limpiar filtro
+              </button>
+            </div>
+          </div>
+        )}
         
         {loading === 'loading' ? (
           <div className="flex items-center justify-center py-8">
@@ -594,10 +793,10 @@ const SugerenciasView: React.FC = () => {
             <AlertCircle size={48} className="mx-auto mb-4" />
             <p>{error}</p>
           </div>
-        ) : sugerencias.length === 0 ? (
+        ) : filteredSugerencias.length === 0 ? (
           <div className="text-center text-gray-400 py-8">
             <Clock size={48} className="mx-auto mb-4 opacity-50" />
-            <p>No hay sugerencias guardadas</p>
+            <p>{clienteHistorialFilter ? 'Este cliente no tiene sugerencias guardadas' : 'No hay sugerencias guardadas'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -613,7 +812,7 @@ const SugerenciasView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-gray-800 divide-y divide-gray-700">
-                {sugerencias.map((sugerencia) => (
+                {filteredSugerencias.map((sugerencia) => (
                   <tr key={sugerencia.sugerencia_id} className="hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                       {sugerencia.nombre_cliente || 'N/A'}
