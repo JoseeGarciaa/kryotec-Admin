@@ -175,13 +175,14 @@ const SugerenciasView: React.FC = () => {
     pdf.rect(20, yPosition, pageWidth - 40, 10, 'F');
     
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(10);
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
     pdf.text('Cliente', 25, yPosition + 7);
-    pdf.text('Modelo', 70, yPosition + 7);
-    pdf.text('Cantidad', 120, yPosition + 7);
-    pdf.text('Estado', 145, yPosition + 7);
-    pdf.text('Fecha', 170, yPosition + 7);
+    pdf.text('Producto', 65, yPosition + 7);
+    pdf.text('Modelo', 105, yPosition + 7);
+    pdf.text('Cant.', 135, yPosition + 7);
+    pdf.text('Estado', 150, yPosition + 7);
+    pdf.text('Fecha', 175, yPosition + 7);
     
     yPosition += 15;
     
@@ -196,9 +197,21 @@ const SugerenciasView: React.FC = () => {
         pdf.rect(20, yPosition - 5, pageWidth - 40, 10, 'F');
       }
       
-      pdf.text(sugerencia.nombre_cliente || 'N/A', 25, yPosition + 2);
-      pdf.text(sugerencia.modelo_sugerido || 'N/A', 70, yPosition + 2);
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 120, yPosition + 2);
+      pdf.setFontSize(8);
+      // Truncar textos si son muy largos
+      const cliente = sugerencia.nombre_cliente || 'N/A';
+      const clienteTruncado = cliente.length > 15 ? cliente.substring(0, 12) + '...' : cliente;
+      pdf.text(clienteTruncado, 25, yPosition + 2);
+      
+      const producto = sugerencia.descripcion_inventario || 'N/A';
+      const productoTruncado = producto.length > 15 ? producto.substring(0, 12) + '...' : producto;
+      pdf.text(productoTruncado, 65, yPosition + 2);
+      
+      const modelo = sugerencia.modelo_sugerido || 'N/A';
+      const modeloTruncado = modelo.length > 12 ? modelo.substring(0, 9) + '...' : modelo;
+      pdf.text(modeloTruncado, 105, yPosition + 2);
+      
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 135, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -209,13 +222,13 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 145, yPosition + 2);
+      pdf.text(estado, 150, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       const fecha = sugerencia.fecha_sugerencia 
         ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
         : 'N/A';
-      pdf.text(fecha, 170, yPosition + 2);
+      pdf.text(fecha, 175, yPosition + 2);
       
       yPosition += 12;
       
@@ -314,12 +327,13 @@ const SugerenciasView: React.FC = () => {
     pdf.rect(20, yPosition, pageWidth - 40, 10, 'F');
     
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(10);
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Modelo', 25, yPosition + 7);
-    pdf.text('Cantidad', 80, yPosition + 7);
-    pdf.text('Estado', 120, yPosition + 7);
-    pdf.text('Fecha', 150, yPosition + 7);
+    pdf.text('Producto', 25, yPosition + 7);
+    pdf.text('Modelo', 75, yPosition + 7);
+    pdf.text('Cant.', 115, yPosition + 7);
+    pdf.text('Estado', 135, yPosition + 7);
+    pdf.text('Fecha', 165, yPosition + 7);
     
     yPosition += 15;
     
@@ -334,8 +348,17 @@ const SugerenciasView: React.FC = () => {
         pdf.rect(20, yPosition - 5, pageWidth - 40, 10, 'F');
       }
       
-      pdf.text(sugerencia.modelo_sugerido || 'N/A', 25, yPosition + 2);
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 80, yPosition + 2);
+      pdf.setFontSize(8);
+      // Truncar texto del producto si es muy largo
+      const producto = sugerencia.descripcion_inventario || 'N/A';
+      const productoTruncado = producto.length > 20 ? producto.substring(0, 17) + '...' : producto;
+      pdf.text(productoTruncado, 25, yPosition + 2);
+      
+      const modelo = sugerencia.modelo_sugerido || 'N/A';
+      const modeloTruncado = modelo.length > 15 ? modelo.substring(0, 12) + '...' : modelo;
+      pdf.text(modeloTruncado, 75, yPosition + 2);
+      
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 115, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -346,13 +369,13 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 120, yPosition + 2);
+      pdf.text(estado, 135, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       const fecha = sugerencia.fecha_sugerencia 
         ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
         : 'N/A';
-      pdf.text(fecha, 150, yPosition + 2);
+      pdf.text(fecha, 165, yPosition + 2);
       
       yPosition += 12;
       
@@ -424,6 +447,12 @@ const SugerenciasView: React.FC = () => {
     pdf.text('Cliente:', 20, yPosition);
     pdf.setFont('helvetica', 'normal');
     pdf.text(sugerencia.nombre_cliente || 'N/A', 80, yPosition);
+    yPosition += 15;
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Nombre del Producto:', 20, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(sugerencia.descripcion_inventario || 'N/A', 80, yPosition);
     yPosition += 15;
     
     pdf.setFont('helvetica', 'bold');
@@ -831,9 +860,12 @@ const SugerenciasView: React.FC = () => {
                     <Package size={20} className="text-white" />
                   </div>
                   <h3 className="text-lg font-bold text-white truncate pr-8">{sugerencia.modelo_sugerido || 'Sin modelo'}</h3>
-                  <p className="text-blue-100 text-sm flex items-center gap-1">
+                  <p className="text-blue-100 text-sm flex items-center gap-1 mb-1">
                     <Users size={14} />
                     {sugerencia.nombre_cliente || 'N/A'}
+                  </p>
+                  <p className="text-blue-100 text-xs opacity-90 truncate">
+                    Producto: {sugerencia.descripcion_inventario || 'N/A'}
                   </p>
                 </div>
                 
@@ -895,6 +927,7 @@ const SugerenciasView: React.FC = () => {
               <thead className="bg-gray-700">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cliente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Producto</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Modelo Sugerido</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cantidad</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado</th>
@@ -907,6 +940,9 @@ const SugerenciasView: React.FC = () => {
                   <tr key={sugerencia.sugerencia_id} className="hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                       {sugerencia.nombre_cliente || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                      {sugerencia.descripcion_inventario || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                       {sugerencia.modelo_sugerido}
