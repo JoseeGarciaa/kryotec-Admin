@@ -714,7 +714,7 @@ const SugerenciasView: React.FC = () => {
       </div>
 
       {/* Historial de Sugerencias */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-gray-800 rounded-lg p-6 mt-8">
         <div className="flex items-center justify-between gap-2 mb-6">
           <div className="flex items-center gap-2">
             <Clock className="text-yellow-400" size={24} />
