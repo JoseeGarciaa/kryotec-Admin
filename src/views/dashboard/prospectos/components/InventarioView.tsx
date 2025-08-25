@@ -3,7 +3,7 @@ import { InventarioProspecto, CreateInventarioProspectoData } from '../../../../
 import { InventarioProspectoController } from '../../../../controllers/InventarioProspectoController';
 import { ClienteProspectoController } from '../../../../controllers/ClienteProspectoController';
 import { ClienteProspecto } from '../../../../models/ClienteProspectoModel';
-import { Plus, Edit2, Trash2, Search, Package, Box, Thermometer, Save, ShoppingCart, User } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, Box, Thermometer, Save, ShoppingCart, User, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 // Interface para productos pendientes (locales)
@@ -23,6 +23,7 @@ const InventarioView: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventarioProspecto | null>(null);
   const [selectedPendingItem, setSelectedPendingItem] = useState<PendingProduct | null>(null);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // Form state
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
@@ -300,11 +301,31 @@ const InventarioView: React.FC = () => {
   return (
     <div className="p-6 bg-gray-900 min-h-screen text-white">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-center mb-2">Inventario de Productos</h1>
-        <p className="text-gray-400 text-center mb-6">Gestiona el inventario de productos de los clientes prospectos</p>
+      <div className="flex justify-between items-center mb-8">
+        <div className="text-center flex-1">
+          <h1 className="text-3xl font-bold mb-2">Inventario de Productos</h1>
+          <p className="text-gray-400 mb-6">Gestiona el inventario de productos de los clientes prospectos</p>
+        </div>
         
-        <div className="flex justify-center mb-6">
+        <div className="flex items-center gap-4">
+          {/* Botones para cambiar el modo de vista */}
+          <div className="flex bg-gray-700 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+              title="Vista de tarjetas"
+            >
+              <LayoutGrid size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+              title="Vista de tabla"
+            >
+              <List size={18} />
+            </button>
+          </div>
+          
           <button
             onClick={openCreateModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
@@ -512,7 +533,7 @@ const InventarioView: React.FC = () => {
           <div className="text-center py-8">
             <p className="text-gray-400">No se encontraron productos guardados</p>
           </div>
-        ) : (
+        ) : viewMode === 'cards' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredInventario.map((item: any) => (
               <div 
@@ -583,6 +604,66 @@ const InventarioView: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        ) : (
+          /* Vista de tabla */
+          <div className="overflow-x-auto bg-gray-800 rounded-lg shadow">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">DESCRIPCIÓN</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">CLIENTE</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">MATERIAL</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">DIMENSIONES</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">CANTIDAD</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">VOLUMEN</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">ACCIONES</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {filteredInventario.map((item: any) => (
+                  <tr key={item.inv_id} className="hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-white">{item.descripcion || 'Sin descripción'}</div>
+                      {item.frecuencia_uso_dia && (
+                        <div className="text-sm text-gray-400">Frecuencia: {item.frecuencia_uso_dia}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">{item.nombre_cliente || 'N/A'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">{item.material || 'No especificado'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">
+                        {Number(item.largo_mm || 0)} × {Number(item.ancho_mm || 0)} × {Number(item.alto_mm || 0)} mm
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">{Number(item.cantidad || 0)}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">{(Number(item.volumen_total_m3) || 0).toFixed(6)} m³</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button
+                        onClick={() => handleEdit(item)}
+                        className="text-yellow-400 hover:text-yellow-300 mr-4"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item.inv_id)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

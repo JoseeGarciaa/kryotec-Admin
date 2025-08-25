@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ClienteProspecto, CreateClienteProspectoData } from '../../../../models/ClienteProspectoModel';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
-import { Plus, Edit2, Trash2, Search, Users, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, Calendar, LayoutGrid, List, User, Mail, Phone, CreditCard } from 'lucide-react';
 
 const ClientesView: React.FC = () => {
   const { clientes, loading, error, createCliente, updateCliente, deleteCliente } = useClienteProspectoController();
@@ -10,6 +10,7 @@ const ClientesView: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('todos');
   const [showModal, setShowModal] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<ClienteProspecto | null>(null);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // Form state
   const [formData, setFormData] = useState<CreateClienteProspectoData>({
@@ -109,17 +110,39 @@ const ClientesView: React.FC = () => {
   return (
     <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Clientes Prospectos</h1>
-        <p className="text-gray-400 mb-6">Gestiona los clientes potenciales y existentes</p>
+      <div className="flex justify-between items-center mb-8">
+        <div className="text-center flex-1">
+          <h1 className="text-3xl font-bold text-white mb-2">Clientes Prospectos</h1>
+          <p className="text-gray-400 mb-6">Gestiona los clientes potenciales y existentes</p>
+        </div>
         
-        <button
-          onClick={() => { resetForm(); setShowModal(true); }}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto"
-        >
-          <Plus size={20} />
-          Nuevo Cliente
-        </button>
+        <div className="flex items-center gap-4">
+          {/* Botones para cambiar el modo de vista */}
+          <div className="flex bg-gray-700 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+              title="Vista de tarjetas"
+            >
+              <LayoutGrid size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+              title="Vista de tabla"
+            >
+              <List size={18} />
+            </button>
+          </div>
+          
+          <button
+            onClick={() => { resetForm(); setShowModal(true); }}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center gap-2"
+          >
+            <Plus size={20} />
+            Nuevo Cliente
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -195,68 +218,156 @@ const ClientesView: React.FC = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       ) : (
-        /* Table */
-        <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">CLIENTE</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IDENTIFICACIÓN</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">CONTACTO</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">TIPO</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ESTADO</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">FECHA REGISTRO</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ACCIONES</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+        <>
+          {filteredClientes.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-400">No se encontraron clientes.</p>
+            </div>
+          ) : viewMode === 'cards' ? (
+            /* Vista de tarjetas */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredClientes.map((cliente) => (
-                <tr key={cliente.cliente_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">{cliente.nombre_cliente}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.contacto}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_identificacion}: {cliente.numero_identificacion}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-white">{cliente.correo}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.telefono}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_cliente}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      cliente.estado === 'Activo' ? 'bg-green-100 text-green-800' : 
-                      cliente.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {cliente.estado}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <div 
+                  key={cliente.cliente_id} 
+                  className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                >
+                  {/* Cabecera de la tarjeta con gradiente */}
+                  <div className="bg-gradient-to-r from-blue-500 to-green-600 p-4 relative">
+                    <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
+                      <User size={20} className="text-white" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white truncate pr-8">{cliente.nombre_cliente}</h3>
+                    <p className="text-blue-100 text-sm">{cliente.contacto || 'Sin contacto'}</p>
+                  </div>
+                  
+                  {/* Contenido principal */}
+                  <div className="p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
+                        {cliente.tipo_cliente || 'N/A'}
+                      </div>
+                      <div className={`rounded-full px-3 py-1 text-sm font-medium ${
+                        cliente.estado === 'Activo' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
+                        cliente.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                      }`}>
+                        {cliente.estado}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 mb-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Identificación:</span>
+                        <span className="text-white text-sm">
+                          {cliente.tipo_identificacion}: {cliente.numero_identificacion}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Email:</span>
+                        <span className="text-white text-sm truncate">
+                          {cliente.correo || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Teléfono:</span>
+                        <span className="text-white text-sm">
+                          {cliente.telefono || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Registro:</span>
+                        <span className="text-white text-sm">
+                          {cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString() : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Pie de tarjeta con acciones */}
+                  <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
                     <button
                       onClick={() => handleEdit(cliente)}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
+                      className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
+                      title="Editar"
                     >
-                      <Edit2 size={18} />
+                      <Edit2 size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(cliente.cliente_id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="p-2 rounded-full bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 transition-colors"
+                      title="Eliminar"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={16} />
                     </button>
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          ) : (
+            /* Vista de tabla */
+            <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">CLIENTE</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IDENTIFICACIÓN</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">CONTACTO</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">TIPO</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ESTADO</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">FECHA REGISTRO</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ACCIONES</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {filteredClientes.map((cliente) => (
+                    <tr key={cliente.cliente_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{cliente.nombre_cliente}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.contacto}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_identificacion}: {cliente.numero_identificacion}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-white">{cliente.correo}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.telefono}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_cliente}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          cliente.estado === 'Activo' ? 'bg-green-100 text-green-800' : 
+                          cliente.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {cliente.estado}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => handleEdit(cliente)}
+                          className="text-blue-600 hover:text-blue-900 mr-4"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(cliente.cliente_id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {/* Modal de creación/edición */}
