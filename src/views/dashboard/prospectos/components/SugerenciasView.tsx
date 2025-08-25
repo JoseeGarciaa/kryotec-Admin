@@ -557,7 +557,7 @@ const SugerenciasView: React.FC = () => {
                 <option value="">Seleccionar item...</option>
                 {filteredInventario.map(item => (
                   <option key={item.inv_id} value={item.inv_id}>
-                    {item.descripcion} - {item.material}
+                    {item.descripcion} - {item.producto}
                   </option>
                 ))}
               </select>

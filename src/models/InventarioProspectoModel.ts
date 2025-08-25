@@ -4,7 +4,7 @@ export interface InventarioProspecto {
   inv_id: number;
   cliente_id: number;
   descripcion?: string;
-  material: string;
+  producto: string;
   largo_mm: number;
   ancho_mm: number;
   alto_mm: number;
@@ -19,7 +19,7 @@ export interface InventarioProspecto {
 export type CreateInventarioProspectoData = {
   cliente_id: number;
   descripcion?: string;
-  material: string;
+  producto: string;
   largo_mm: number;
   ancho_mm: number;
   alto_mm: number;

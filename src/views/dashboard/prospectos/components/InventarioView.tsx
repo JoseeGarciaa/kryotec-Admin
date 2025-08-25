@@ -3,7 +3,7 @@ import { InventarioProspecto, CreateInventarioProspectoData } from '../../../../
 import { InventarioProspectoController } from '../../../../controllers/InventarioProspectoController';
 import { ClienteProspectoController } from '../../../../controllers/ClienteProspectoController';
 import { ClienteProspecto } from '../../../../models/ClienteProspectoModel';
-import { Plus, Edit2, Trash2, Search, Package, Box, Thermometer, Save, ShoppingCart, User, LayoutGrid, List } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, Box, Save, ShoppingCart, User, LayoutGrid, List, Thermometer } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 // Interface para productos pendientes (locales)
@@ -19,7 +19,7 @@ const InventarioView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [clienteFilter, setClienteFilter] = useState('todos');
-  const [materialFilter, setMaterialFilter] = useState('todos');
+  const [productoFilter, setProductoFilter] = useState('todos');
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventarioProspecto | null>(null);
   const [selectedPendingItem, setSelectedPendingItem] = useState<PendingProduct | null>(null);
@@ -29,7 +29,7 @@ const InventarioView: React.FC = () => {
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
     cliente_id: 0,
     descripcion: '',
-    material: '',
+    producto: '',
     largo_mm: 0,
     ancho_mm: 0,
     alto_mm: 0,
@@ -81,23 +81,23 @@ const InventarioView: React.FC = () => {
       return sum + volumen;
     }, 0);
     
-    // Agrupar por material (inventario + pendientes)
-    const materialsCount: {[key: string]: number} = {};
+    // Agrupar por producto (inventario + pendientes)
+    const productosCount: {[key: string]: number} = {};
     
     inventario.forEach((item: any) => {
-      const material = item.material || 'Sin especificar';
-      materialsCount[material] = (materialsCount[material] || 0) + Number(item.cantidad || 0);
+      const producto = item.producto || 'Sin especificar';
+      productosCount[producto] = (productosCount[producto] || 0) + Number(item.cantidad || 0);
     });
     
     pendingProducts.forEach((item: any) => {
-      const material = item.material || 'Sin especificar';
-      materialsCount[material] = (materialsCount[material] || 0) + Number(item.cantidad || 0);
+      const producto = item.producto || 'Sin especificar';
+      productosCount[producto] = (productosCount[producto] || 0) + Number(item.cantidad || 0);
     });
   
     return { 
       totalItems: totalItems + pendingItems,
       volumenTotal: volumenTotal + pendingVolumen,
-      materialsCount,
+      productosCount,
       pendingItems,
       pendingVolumen
     };
@@ -109,11 +109,11 @@ const InventarioView: React.FC = () => {
       const matchesSearch = item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            item.nombre_cliente?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCliente = clienteFilter === 'todos' || item.cliente_id.toString() === clienteFilter;
-      const matchesMaterial = materialFilter === 'todos' || item.material === materialFilter;
+      const matchesProducto = productoFilter === 'todos' || item.producto === productoFilter;
       
-      return matchesSearch && matchesCliente && matchesMaterial;
+      return matchesSearch && matchesCliente && matchesProducto;
     });
-  }, [inventario, searchTerm, clienteFilter, materialFilter]);
+  }, [inventario, searchTerm, clienteFilter, productoFilter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +172,7 @@ const InventarioView: React.FC = () => {
       setFormData({
         ...formData,
         descripcion: '',
-        material: '',
+        producto: '',
         largo_mm: 0,
         ancho_mm: 0,
         alto_mm: 0,
@@ -205,7 +205,7 @@ const InventarioView: React.FC = () => {
     setFormData({
       cliente_id: item.cliente_id,
       descripcion: item.descripcion || '',
-      material: item.material,
+      producto: item.producto,
       largo_mm: item.largo_mm,
       ancho_mm: item.ancho_mm,
       alto_mm: item.alto_mm,
@@ -221,7 +221,7 @@ const InventarioView: React.FC = () => {
     setFormData({
       cliente_id: item.cliente_id,
       descripcion: item.descripcion || '',
-      material: item.material,
+      producto: item.producto,
       largo_mm: item.largo_mm,
       ancho_mm: item.ancho_mm,
       alto_mm: item.alto_mm,
@@ -284,7 +284,7 @@ const InventarioView: React.FC = () => {
     setFormData({
       cliente_id: 0,
       descripcion: '',
-      material: '',
+      producto: '',
       largo_mm: 0,
       ancho_mm: 0,
       alto_mm: 0,
@@ -364,8 +364,8 @@ const InventarioView: React.FC = () => {
             <Thermometer size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Tipos de Material</p>
-            <p className="text-2xl font-bold">{Object.keys(stats.materialsCount).length}</p>
+            <p className="text-gray-400 text-sm">Tipos de Producto</p>
+            <p className="text-2xl font-bold">{Object.keys(stats.productosCount).length}</p>
           </div>
         </div>
 
@@ -426,7 +426,7 @@ const InventarioView: React.FC = () => {
                 <div className="p-4">
                   <div className="flex justify-between items-center mb-3">
                     <div className="bg-purple-100 dark:bg-purple-900 rounded-full px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
-                      {product.material}
+                      {product.producto}
                     </div>
                     <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
                       x{Number(product.cantidad || 0)}
@@ -505,14 +505,14 @@ const InventarioView: React.FC = () => {
         </select>
         
         <select
-          value={materialFilter}
-          onChange={(e: any) => setMaterialFilter(e.target.value)}
+          value={productoFilter}
+          onChange={(e: any) => setProductoFilter(e.target.value)}
           className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
         >
-          <option value="todos">Todos los materiales</option>
-          {Object.keys(stats.materialsCount).map((material: any) => (
-            <option key={material} value={material}>
-              {material} ({stats.materialsCount[material]})
+          <option value="todos">Todos los productos</option>
+          {Object.keys(stats.productosCount).map((producto: any) => (
+            <option key={producto} value={producto}>
+              {producto} ({stats.productosCount[producto]})
             </option>
           ))}
         </select>
@@ -556,7 +556,7 @@ const InventarioView: React.FC = () => {
                 <div className="p-4">
                   <div className="flex justify-between items-center mb-3">
                     <div className="bg-purple-100 dark:bg-purple-900 rounded-full px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
-                      {item.material || 'No especificado'}
+                      {item.producto || 'No especificado'}
                     </div>
                     <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
                       x{Number(item.cantidad || 0)}
@@ -613,7 +613,7 @@ const InventarioView: React.FC = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">DESCRIPCIÓN</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">CLIENTE</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">MATERIAL</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">PRODUCTO</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">DIMENSIONES</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">CANTIDAD</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">VOLUMEN</th>
@@ -633,7 +633,7 @@ const InventarioView: React.FC = () => {
                       <div className="text-sm text-white">{item.nombre_cliente || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{item.material || 'No especificado'}</div>
+                      <div className="text-sm text-white">{item.producto || 'No especificado'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-white">
@@ -708,11 +708,11 @@ const InventarioView: React.FC = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Material</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Producto</label>
                 <input
                   type="text"
-                  value={formData.material}
-                  onChange={(e: any) => setFormData({...formData, material: e.target.value})}
+                  value={formData.producto}
+                  onChange={(e: any) => setFormData({...formData, producto: e.target.value})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                   placeholder="Ej: Pastillas, Jeringas, ICOPOR, TÉRMICO, etc."
                   required
