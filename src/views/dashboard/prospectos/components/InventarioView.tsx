@@ -66,8 +66,8 @@ const InventarioView: React.FC = () => {
 
   // Calcular estadísticas incluyendo productos pendientes
   const stats = useMemo(() => {
-    const totalItems = inventario.reduce((sum: number, item: any) => sum + item.cantidad, 0);
-    const pendingItems = pendingProducts.reduce((sum: number, item: any) => sum + item.cantidad, 0);
+    const totalItems = inventario.reduce((sum: number, item: any) => sum + Number(item.cantidad || 0), 0);
+    const pendingItems = pendingProducts.reduce((sum: number, item: any) => sum + Number(item.cantidad || 0), 0);
     
     const volumenTotal = inventario.reduce((sum: number, item: any) => {
       const volumen = Number(item.volumen_total_m3) || 0;
@@ -76,7 +76,7 @@ const InventarioView: React.FC = () => {
     
     // Calcular volumen de productos pendientes
     const pendingVolumen = pendingProducts.reduce((sum: number, item: any) => {
-      const volumen = (item.largo_mm * item.ancho_mm * item.alto_mm * item.cantidad) / 1000000000;
+      const volumen = (Number(item.largo_mm || 0) * Number(item.ancho_mm || 0) * Number(item.alto_mm || 0) * Number(item.cantidad || 0)) / 1000000000;
       return sum + volumen;
     }, 0);
     
@@ -85,12 +85,12 @@ const InventarioView: React.FC = () => {
     
     inventario.forEach((item: any) => {
       const material = item.material || 'Sin especificar';
-      materialsCount[material] = (materialsCount[material] || 0) + item.cantidad;
+      materialsCount[material] = (materialsCount[material] || 0) + Number(item.cantidad || 0);
     });
     
     pendingProducts.forEach((item: any) => {
       const material = item.material || 'Sin especificar';
-      materialsCount[material] = (materialsCount[material] || 0) + item.cantidad;
+      materialsCount[material] = (materialsCount[material] || 0) + Number(item.cantidad || 0);
     });
   
     return { 
@@ -408,7 +408,7 @@ const InventarioView: React.FC = () => {
                       {product.material}
                     </div>
                     <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
-                      x{product.cantidad}
+                      x{Number(product.cantidad || 0)}
                     </div>
                   </div>
                   
@@ -416,13 +416,13 @@ const InventarioView: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Dimensiones:</span>
                       <span className="text-white text-sm">
-                        {product.largo_mm} × {product.ancho_mm} × {product.alto_mm} mm
+                        {Number(product.largo_mm || 0)} × {Number(product.ancho_mm || 0)} × {Number(product.alto_mm || 0)} mm
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Volumen:</span>
                       <span className="text-white text-sm">
-                        {((product.largo_mm * product.ancho_mm * product.alto_mm * product.cantidad) / 1000000000).toFixed(6)} m³
+                        {((Number(product.largo_mm || 0) * Number(product.ancho_mm || 0) * Number(product.alto_mm || 0) * Number(product.cantidad || 0)) / 1000000000).toFixed(6)} m³
                       </span>
                     </div>
                     {product.frecuencia_uso_dia && (
@@ -538,7 +538,7 @@ const InventarioView: React.FC = () => {
                       {item.material || 'No especificado'}
                     </div>
                     <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
-                      x{item.cantidad}
+                      x{Number(item.cantidad || 0)}
                     </div>
                   </div>
                   
@@ -546,7 +546,7 @@ const InventarioView: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Dimensiones:</span>
                       <span className="text-white text-sm">
-                        {item.largo_mm} × {item.ancho_mm} × {item.alto_mm} mm
+                        {Number(item.largo_mm || 0)} × {Number(item.ancho_mm || 0)} × {Number(item.alto_mm || 0)} mm
                       </span>
                     </div>
                     <div className="flex justify-between items-center">

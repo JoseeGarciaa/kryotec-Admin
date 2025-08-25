@@ -33,6 +33,12 @@ export class InventarioProspectoModel {
       const response = await apiClient.get('/inventario-prospectos');
       return response.data.map((item: any) => ({
         ...item,
+        cliente_id: Number(item.cliente_id),
+        largo_mm: Number(item.largo_mm),
+        ancho_mm: Number(item.ancho_mm),
+        alto_mm: Number(item.alto_mm),
+        cantidad: Number(item.cantidad),
+        volumen_total_m3: Number(item.volumen_total_m3) || 0,
         fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
       }));
     } catch (error) {
@@ -47,6 +53,12 @@ export class InventarioProspectoModel {
       const item = response.data;
       return {
         ...item,
+        cliente_id: Number(item.cliente_id),
+        largo_mm: Number(item.largo_mm),
+        ancho_mm: Number(item.ancho_mm),
+        alto_mm: Number(item.alto_mm),
+        cantidad: Number(item.cantidad),
+        volumen_total_m3: Number(item.volumen_total_m3) || 0,
         fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
       };
     } catch (error) {
@@ -61,6 +73,12 @@ export class InventarioProspectoModel {
       const item = response.data;
       return {
         ...item,
+        cliente_id: Number(item.cliente_id),
+        largo_mm: Number(item.largo_mm),
+        ancho_mm: Number(item.ancho_mm),
+        alto_mm: Number(item.alto_mm),
+        cantidad: Number(item.cantidad),
+        volumen_total_m3: Number(item.volumen_total_m3) || 0,
         fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
       };
     } catch (error) {
@@ -75,6 +93,12 @@ export class InventarioProspectoModel {
       const item = response.data;
       return {
         ...item,
+        cliente_id: Number(item.cliente_id),
+        largo_mm: Number(item.largo_mm),
+        ancho_mm: Number(item.ancho_mm),
+        alto_mm: Number(item.alto_mm),
+        cantidad: Number(item.cantidad),
+        volumen_total_m3: Number(item.volumen_total_m3) || 0,
         fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
       };
     } catch (error) {
@@ -98,6 +122,12 @@ export class InventarioProspectoModel {
       const response = await apiClient.get(`/inventario-prospectos/cliente/${clienteId}`);
       return response.data.map((item: any) => ({
         ...item,
+        cliente_id: Number(item.cliente_id),
+        largo_mm: Number(item.largo_mm),
+        ancho_mm: Number(item.ancho_mm),
+        alto_mm: Number(item.alto_mm),
+        cantidad: Number(item.cantidad),
+        volumen_total_m3: Number(item.volumen_total_m3) || 0,
         fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
       }));
     } catch (error) {
