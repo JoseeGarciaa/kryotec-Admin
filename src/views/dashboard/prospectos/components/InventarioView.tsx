@@ -3,18 +3,26 @@ import { InventarioProspecto, CreateInventarioProspectoData } from '../../../../
 import { InventarioProspectoController } from '../../../../controllers/InventarioProspectoController';
 import { ClienteProspectoController } from '../../../../controllers/ClienteProspectoController';
 import { ClienteProspecto } from '../../../../models/ClienteProspectoModel';
-import { Plus, Edit2, Trash2, Search, Package, Box, Thermometer } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, Box, Thermometer, Save, ShoppingCart, User } from 'lucide-react';
 import { toast } from 'react-toastify';
+
+// Interface para productos pendientes (locales)
+interface PendingProduct extends CreateInventarioProspectoData {
+  tempId: string; // ID temporal para identificar productos locales
+  nombre_cliente?: string; // Para mostrar el nombre del cliente
+}
 
 const InventarioView: React.FC = () => {
   const [inventario, setInventario] = useState<InventarioProspecto[]>([]);
   const [clientes, setClientes] = useState<ClienteProspecto[]>([]);
+  const [pendingProducts, setPendingProducts] = useState<PendingProduct[]>([]); // Productos pendientes de enviar
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [clienteFilter, setClienteFilter] = useState('todos');
   const [materialFilter, setMaterialFilter] = useState('todos');
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventarioProspecto | null>(null);
+  const [selectedPendingItem, setSelectedPendingItem] = useState<PendingProduct | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
@@ -56,23 +64,43 @@ const InventarioView: React.FC = () => {
     }
   };
 
-  // Calcular estadísticas
+  // Calcular estadísticas incluyendo productos pendientes
   const stats = useMemo(() => {
     const totalItems = inventario.reduce((sum: number, item: any) => sum + item.cantidad, 0);
+    const pendingItems = pendingProducts.reduce((sum: number, item: any) => sum + item.cantidad, 0);
+    
     const volumenTotal = inventario.reduce((sum: number, item: any) => {
       const volumen = Number(item.volumen_total_m3) || 0;
       return sum + volumen;
     }, 0);
     
-    // Agrupar por material
+    // Calcular volumen de productos pendientes
+    const pendingVolumen = pendingProducts.reduce((sum: number, item: any) => {
+      const volumen = (item.largo_mm * item.ancho_mm * item.alto_mm * item.cantidad) / 1000000000;
+      return sum + volumen;
+    }, 0);
+    
+    // Agrupar por material (inventario + pendientes)
     const materialsCount: {[key: string]: number} = {};
+    
     inventario.forEach((item: any) => {
       const material = item.material || 'Sin especificar';
       materialsCount[material] = (materialsCount[material] || 0) + item.cantidad;
     });
+    
+    pendingProducts.forEach((item: any) => {
+      const material = item.material || 'Sin especificar';
+      materialsCount[material] = (materialsCount[material] || 0) + item.cantidad;
+    });
   
-    return { totalItems, volumenTotal, materialsCount };
-  }, [inventario]);
+    return { 
+      totalItems: totalItems + pendingItems,
+      volumenTotal: volumenTotal + pendingVolumen,
+      materialsCount,
+      pendingItems,
+      pendingVolumen
+    };
+  }, [inventario, pendingProducts]);
 
   // Filtrar inventario
   const filteredInventario = useMemo(() => {
@@ -88,13 +116,13 @@ const InventarioView: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      setLoading(true);
-      if (selectedItem) {
-        // Editar item existente
+    
+    if (selectedItem) {
+      // Editar item existente en la base de datos
+      try {
+        setLoading(true);
         const updated = await InventarioProspectoController.updateInventario(selectedItem.inv_id, formData);
         if (updated) {
-          // Encontrar el nombre del cliente
           const cliente = clientes.find((c: any) => c.cliente_id === updated.cliente_id);
           const updatedWithClientName = {
             ...updated,
@@ -105,39 +133,53 @@ const InventarioView: React.FC = () => {
         }
         setShowModal(false);
         resetForm();
-      } else {
-        // Crear nuevo item
-        const newItem = await InventarioProspectoController.createInventario(formData);
-        // Encontrar el nombre del cliente
-        const cliente = clientes.find((c: any) => c.cliente_id === newItem.cliente_id);
-        const newItemWithClientName = {
-          ...newItem,
-          nombre_cliente: cliente?.nombre_cliente || 'N/A'
-        };
-        setInventario((prev: any) => [newItemWithClientName, ...prev]);
-        toast.success('Producto creado exitosamente');
-        
-        // Resetear solo los campos del producto pero mantener el cliente seleccionado
-        // para permitir agregar más productos del mismo cliente
-        setFormData({
-          ...formData,
-          descripcion: '',
-          material: '',
-          largo_mm: 0,
-          ancho_mm: 0,
-          alto_mm: 0,
-          cantidad: 0,
-          frecuencia_uso_dia: ''
-        });
-        
-        // No cerrar el modal para permitir agregar otro producto
-        toast.info('¡Puedes agregar otro producto para el mismo cliente!');
+      } catch (error) {
+        console.error('Error al actualizar:', error);
+        toast.error('Error al actualizar el producto');
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error al guardar:', error);
-      toast.error('Error al guardar el producto');
-    } finally {
-      setLoading(false);
+    } else if (selectedPendingItem) {
+      // Editar producto pendiente local
+      const cliente = clientes.find((c: any) => c.cliente_id === formData.cliente_id);
+      const updatedPendingProduct: PendingProduct = {
+        ...formData,
+        tempId: selectedPendingItem.tempId,
+        nombre_cliente: cliente?.nombre_cliente || 'N/A'
+      };
+      
+      setPendingProducts(prev => prev.map(item => 
+        item.tempId === selectedPendingItem.tempId ? updatedPendingProduct : item
+      ));
+      
+      toast.success('Producto pendiente actualizado');
+      setShowModal(false);
+      resetForm();
+    } else {
+      // Agregar nuevo producto a la lista local (pendiente)
+      const cliente = clientes.find((c: any) => c.cliente_id === formData.cliente_id);
+      const newPendingProduct: PendingProduct = {
+        ...formData,
+        tempId: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        nombre_cliente: cliente?.nombre_cliente || 'N/A'
+      };
+      
+      setPendingProducts(prev => [...prev, newPendingProduct]);
+      toast.success('Producto agregado al carrito');
+      
+      // Resetear solo los campos del producto pero mantener el cliente
+      setFormData({
+        ...formData,
+        descripcion: '',
+        material: '',
+        largo_mm: 0,
+        ancho_mm: 0,
+        alto_mm: 0,
+        cantidad: 0,
+        frecuencia_uso_dia: ''
+      });
+      
+      toast.info('¡Puedes agregar otro producto para el mismo cliente!');
     }
   };
 
@@ -158,6 +200,7 @@ const InventarioView: React.FC = () => {
 
   const handleEdit = (item: InventarioProspecto) => {
     setSelectedItem(item);
+    setSelectedPendingItem(null);
     setFormData({
       cliente_id: item.cliente_id,
       descripcion: item.descripcion || '',
@@ -171,8 +214,72 @@ const InventarioView: React.FC = () => {
     setShowModal(true);
   };
 
+  const handleEditPending = (item: PendingProduct) => {
+    setSelectedPendingItem(item);
+    setSelectedItem(null);
+    setFormData({
+      cliente_id: item.cliente_id,
+      descripcion: item.descripcion || '',
+      material: item.material,
+      largo_mm: item.largo_mm,
+      ancho_mm: item.ancho_mm,
+      alto_mm: item.alto_mm,
+      cantidad: item.cantidad,
+      frecuencia_uso_dia: item.frecuencia_uso_dia || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleDeletePending = (tempId: string) => {
+    if (window.confirm('¿Está seguro de que desea eliminar este producto del carrito?')) {
+      setPendingProducts(prev => prev.filter(item => item.tempId !== tempId));
+      toast.success('Producto removido del carrito');
+    }
+  };
+
+  // Función para enviar todos los productos pendientes a la base de datos
+  const handleSaveAllPending = async () => {
+    if (pendingProducts.length === 0) {
+      toast.warning('No hay productos pendientes para guardar');
+      return;
+    }
+
+    if (!window.confirm(`¿Está seguro de que desea guardar ${pendingProducts.length} productos en la base de datos?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const savedProducts: InventarioProspecto[] = [];
+      
+      for (const product of pendingProducts) {
+        const { tempId, nombre_cliente, ...productData } = product;
+        const savedProduct = await InventarioProspectoController.createInventario(productData);
+        const cliente = clientes.find((c: any) => c.cliente_id === savedProduct.cliente_id);
+        savedProducts.push({
+          ...savedProduct,
+          nombre_cliente: cliente?.nombre_cliente || 'N/A'
+        });
+      }
+      
+      // Agregar productos guardados al inventario
+      setInventario(prev => [...savedProducts, ...prev]);
+      
+      // Limpiar productos pendientes
+      setPendingProducts([]);
+      
+      toast.success(`${savedProducts.length} productos guardados exitosamente en la base de datos`);
+    } catch (error) {
+      console.error('Error al guardar productos:', error);
+      toast.error('Error al guardar los productos en la base de datos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const resetForm = () => {
     setSelectedItem(null);
+    setSelectedPendingItem(null);
     setFormData({
       cliente_id: 0,
       descripcion: '',
@@ -209,7 +316,7 @@ const InventarioView: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-gray-800 p-4 rounded-lg flex items-center">
           <div className="bg-blue-600 p-3 rounded-lg mr-4">
             <Package size={24} />
@@ -240,9 +347,117 @@ const InventarioView: React.FC = () => {
             <p className="text-2xl font-bold">{Object.keys(stats.materialsCount).length}</p>
           </div>
         </div>
+
+        <div className="bg-gray-800 p-4 rounded-lg flex items-center">
+          <div className="bg-orange-600 p-3 rounded-lg mr-4">
+            <ShoppingCart size={24} />
+          </div>
+          <div>
+            <p className="text-gray-400 text-sm">En Carrito</p>
+            <p className="text-2xl font-bold text-orange-400">{stats.pendingItems}</p>
+          </div>
+        </div>
       </div>
 
-      {/* Filters */}
+      {/* Sección de productos pendientes (Carrito) */}
+      {pendingProducts.length > 0 && (
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <ShoppingCart size={24} />
+              Productos en Carrito ({pendingProducts.length})
+            </h2>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingProducts([])}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Trash2 size={16} />
+                Vaciar Carrito
+              </button>
+              <button
+                onClick={handleSaveAllPending}
+                disabled={loading}
+                className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Save size={16} />
+                {loading ? 'Guardando...' : `Guardar Todo (${pendingProducts.length})`}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6">
+            {pendingProducts.map((product) => (
+              <div 
+                key={product.tempId} 
+                className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-orange-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+              >
+                {/* Cabecera de la tarjeta con gradiente */}
+                <div className="bg-gradient-to-r from-orange-500 to-yellow-600 p-4 relative">
+                  <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
+                    <Package size={20} className="text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white truncate pr-8">{product.descripcion || 'Sin descripción'}</h3>
+                  <p className="text-orange-100 text-sm">{product.nombre_cliente}</p>
+                </div>
+                
+                {/* Contenido principal */}
+                <div className="p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="bg-purple-100 dark:bg-purple-900 rounded-full px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
+                      {product.material}
+                    </div>
+                    <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
+                      x{product.cantidad}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Dimensiones:</span>
+                      <span className="text-white text-sm">
+                        {product.largo_mm} × {product.ancho_mm} × {product.alto_mm} mm
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Volumen:</span>
+                      <span className="text-white text-sm">
+                        {((product.largo_mm * product.ancho_mm * product.alto_mm * product.cantidad) / 1000000000).toFixed(6)} m³
+                      </span>
+                    </div>
+                    {product.frecuencia_uso_dia && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Frecuencia:</span>
+                        <span className="text-white text-sm">{product.frecuencia_uso_dia}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Pie de tarjeta con acciones */}
+                <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
+                  <button
+                    onClick={() => handleEditPending(product)}
+                    className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
+                    title="Editar"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDeletePending(product.tempId)}
+                    className="p-2 rounded-full bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 transition-colors"
+                    title="Eliminar del carrito"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Filtros */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
@@ -282,71 +497,94 @@ const InventarioView: React.FC = () => {
         </select>
       </div>
 
-      {/* Table */}
-      <div className="bg-gray-800 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-700">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Descripción</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Material</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Dimensiones (mm)</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Cantidad</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Volumen (m³)</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                    Cargando...
-                  </td>
-                </tr>
-              ) : filteredInventario.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                    No se encontraron items de inventario
-                  </td>
-                </tr>
-              ) : (
-                filteredInventario.map((item: any) => (
-                  <tr key={item.inv_id} className="hover:bg-gray-700 transition-colors">
-                    <td className="px-4 py-3 text-sm">{item.nombre_cliente || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm">{item.descripcion || 'Sin descripción'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className="px-2 py-1 rounded-full text-xs bg-purple-600 text-purple-100">
-                        {item.material || 'No especificado'}
+      {/* Productos guardados en la base de datos */}
+      <div className="mb-8">
+        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Package size={24} />
+          Productos Guardados ({filteredInventario.length})
+        </h2>
+
+        {loading ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          </div>
+        ) : filteredInventario.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">No se encontraron productos guardados</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredInventario.map((item: any) => (
+              <div 
+                key={item.inv_id} 
+                className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+              >
+                {/* Cabecera de la tarjeta con gradiente */}
+                <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 relative">
+                  <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
+                    <Package size={20} className="text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white truncate pr-8">{item.descripcion || 'Sin descripción'}</h3>
+                  <p className="text-blue-100 text-sm flex items-center gap-1">
+                    <User size={14} />
+                    {item.nombre_cliente || 'N/A'}
+                  </p>
+                </div>
+                
+                {/* Contenido principal */}
+                <div className="p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="bg-purple-100 dark:bg-purple-900 rounded-full px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
+                      {item.material || 'No especificado'}
+                    </div>
+                    <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
+                      x{item.cantidad}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Dimensiones:</span>
+                      <span className="text-white text-sm">
+                        {item.largo_mm} × {item.ancho_mm} × {item.alto_mm} mm
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {item.largo_mm} × {item.ancho_mm} × {item.alto_mm}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium">{item.cantidad}</td>
-                    <td className="px-4 py-3 text-sm">{(Number(item.volumen_total_m3) || 0).toFixed(6)}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.inv_id)}
-                          className="text-red-400 hover:text-red-300 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Volumen:</span>
+                      <span className="text-white text-sm">
+                        {(Number(item.volumen_total_m3) || 0).toFixed(6)} m³
+                      </span>
+                    </div>
+                    {item.frecuencia_uso_dia && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Frecuencia:</span>
+                        <span className="text-white text-sm">{item.frecuencia_uso_dia}</span>
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Pie de tarjeta con acciones */}
+                <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
+                  <button
+                    onClick={() => handleEdit(item)}
+                    className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
+                    title="Editar"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.inv_id)}
+                    className="p-2 rounded-full bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 transition-colors"
+                    title="Eliminar"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Modal */}
@@ -354,7 +592,9 @@ const InventarioView: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-semibold mb-4">
-              {selectedItem ? 'Editar Producto' : 'Nuevo Producto'}
+              {selectedItem ? 'Editar Producto Guardado' : 
+               selectedPendingItem ? 'Editar Producto en Carrito' : 
+               'Agregar Producto al Carrito'}
             </h3>
             
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -459,14 +699,32 @@ const InventarioView: React.FC = () => {
               
               <div className="flex gap-3 pt-4">
                 {selectedItem ? (
-                  // Modo edición
+                  // Modo edición de producto guardado
                   <>
                     <button
                       type="submit"
                       disabled={loading}
                       className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-2 px-4 rounded-lg transition-colors"
                     >
-                      {loading ? 'Actualizando...' : 'Actualizar'}
+                      {loading ? 'Actualizando...' : 'Actualizar en BD'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowModal(false)}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </>
+                ) : selectedPendingItem ? (
+                  // Modo edición de producto en carrito
+                  <>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-800 text-white py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Actualizar en Carrito
                     </button>
                     <button
                       type="button"
@@ -477,14 +735,14 @@ const InventarioView: React.FC = () => {
                     </button>
                   </>
                 ) : (
-                  // Modo creación
+                  // Modo creación (agregar al carrito)
                   <>
                     <button
                       type="submit"
                       disabled={loading}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-2 px-4 rounded-lg transition-colors"
+                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white py-2 px-4 rounded-lg transition-colors"
                     >
-                      {loading ? 'Creando...' : 'Crear Producto'}
+                      Agregar al Carrito
                     </button>
                     <button
                       type="button"
