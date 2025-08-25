@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSugerenciasController } from '../../../../controllers/hooks/useSugerenciasController';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
 import { useInventarioProspectoController } from '../../../../controllers/hooks/useInventarioProspectoController';
-import { Calculator, Package, CheckCircle, Clock, AlertCircle, Trash2, Download, Filter, Users } from 'lucide-react';
+import { Calculator, Package, CheckCircle, Clock, AlertCircle, Trash2, Download, Filter, Users, LayoutGrid, List } from 'lucide-react';
 import { CalculoSugerencia, ResultadoSugerencia } from '../../../../models/SugerenciasModel';
 import { InventarioProspecto } from '../../../../models/InventarioProspectoModel';
 import jsPDF from 'jspdf';
@@ -24,6 +24,7 @@ const SugerenciasView: React.FC = () => {
   const [calculando, setCalculando] = useState(false);
   const [filteredInventario, setFilteredInventario] = useState<InventarioProspecto[]>([]);
   const [clienteHistorialFilter, setClienteHistorialFilter] = useState<number | ''>('');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // Filtrar sugerencias por cliente seleccionado
   const filteredSugerencias = clienteHistorialFilter 
@@ -736,6 +737,24 @@ const SugerenciasView: React.FC = () => {
                 ))}
               </select>
             </div>
+
+            {/* Toggle de vista */}
+            <div className="flex bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+                title="Vista de tarjetas"
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+                title="Vista de tabla"
+              >
+                <List size={18} />
+              </button>
+            </div>
             
             {/* Botones de descarga */}
             <div className="flex gap-2">
@@ -798,7 +817,79 @@ const SugerenciasView: React.FC = () => {
             <Clock size={48} className="mx-auto mb-4 opacity-50" />
             <p>{clienteHistorialFilter ? 'Este cliente no tiene sugerencias guardadas' : 'No hay sugerencias guardadas'}</p>
           </div>
+        ) : viewMode === 'cards' ? (
+          /* Vista de tarjetas */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredSugerencias.map((sugerencia) => (
+              <div 
+                key={sugerencia.sugerencia_id} 
+                className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+              >
+                {/* Cabecera de la tarjeta con gradiente */}
+                <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 relative">
+                  <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
+                    <Package size={20} className="text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white truncate pr-8">{sugerencia.modelo_sugerido || 'Sin modelo'}</h3>
+                  <p className="text-blue-100 text-sm flex items-center gap-1">
+                    <Users size={14} />
+                    {sugerencia.nombre_cliente || 'N/A'}
+                  </p>
+                </div>
+                
+                {/* Contenido principal */}
+                <div className="p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
+                      x{sugerencia.cantidad_sugerida || 0}
+                    </div>
+                    <div className={`rounded-full px-3 py-1 text-sm font-medium ${
+                      sugerencia.estado === 'aprobada' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                      sugerencia.estado === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                    }`}>
+                      {sugerencia.estado || 'pendiente'}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Modalidad:</span>
+                      <span className="text-white text-sm">
+                        {sugerencia.modalidad || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Fecha:</span>
+                      <span className="text-white text-sm">
+                        {sugerencia.fecha_sugerencia ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES') : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Pie de tarjeta con acciones */}
+                <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
+                  <button
+                    onClick={() => generateIndividualPDF(sugerencia)}
+                    className="p-2 rounded-full bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors"
+                    title="Descargar PDF"
+                  >
+                    <Download size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteSugerencia(sugerencia.sugerencia_id)}
+                    className="p-2 rounded-full bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 transition-colors"
+                    title="Eliminar sugerencia"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
+          /* Vista de tabla */
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-700">
               <thead className="bg-gray-700">
