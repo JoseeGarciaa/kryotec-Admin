@@ -179,10 +179,11 @@ const SugerenciasView: React.FC = () => {
     pdf.setFont('helvetica', 'bold');
     pdf.text('Cliente', 25, yPosition + 7);
     pdf.text('Producto', 65, yPosition + 7);
-    pdf.text('Modelo', 105, yPosition + 7);
-    pdf.text('Cant.', 135, yPosition + 7);
-    pdf.text('Estado', 150, yPosition + 7);
-    pdf.text('Fecha', 175, yPosition + 7);
+    pdf.text('Cant. Inv.', 95, yPosition + 7);
+    pdf.text('Modelo', 115, yPosition + 7);
+    pdf.text('Cant. Sug.', 145, yPosition + 7);
+    pdf.text('Estado', 165, yPosition + 7);
+    pdf.text('Fecha', 185, yPosition + 7);
     
     yPosition += 15;
     
@@ -200,18 +201,20 @@ const SugerenciasView: React.FC = () => {
       pdf.setFontSize(8);
       // Truncar textos si son muy largos
       const cliente = sugerencia.nombre_cliente || 'N/A';
-      const clienteTruncado = cliente.length > 15 ? cliente.substring(0, 12) + '...' : cliente;
+      const clienteTruncado = cliente.length > 12 ? cliente.substring(0, 9) + '...' : cliente;
       pdf.text(clienteTruncado, 25, yPosition + 2);
       
       const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
-      const productoTruncado = producto.length > 15 ? producto.substring(0, 12) + '...' : producto;
+      const productoTruncado = producto.length > 12 ? producto.substring(0, 9) + '...' : producto;
       pdf.text(productoTruncado, 65, yPosition + 2);
+      
+      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 95, yPosition + 2);
       
       const modelo = sugerencia.modelo_sugerido || 'N/A';
       const modeloTruncado = modelo.length > 12 ? modelo.substring(0, 9) + '...' : modelo;
-      pdf.text(modeloTruncado, 105, yPosition + 2);
+      pdf.text(modeloTruncado, 115, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 135, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 145, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -222,13 +225,13 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 150, yPosition + 2);
+      pdf.text(estado, 165, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       const fecha = sugerencia.fecha_sugerencia 
         ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
         : 'N/A';
-      pdf.text(fecha, 175, yPosition + 2);
+      pdf.text(fecha, 185, yPosition + 2);
       
       yPosition += 12;
       
@@ -330,10 +333,11 @@ const SugerenciasView: React.FC = () => {
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
     pdf.text('Producto', 25, yPosition + 7);
-    pdf.text('Modelo', 75, yPosition + 7);
-    pdf.text('Cant.', 115, yPosition + 7);
-    pdf.text('Estado', 135, yPosition + 7);
-    pdf.text('Fecha', 165, yPosition + 7);
+    pdf.text('Cant. Inv.', 65, yPosition + 7);
+    pdf.text('Modelo', 85, yPosition + 7);
+    pdf.text('Cant. Sug.', 125, yPosition + 7);
+    pdf.text('Estado', 145, yPosition + 7);
+    pdf.text('Fecha', 175, yPosition + 7);
     
     yPosition += 15;
     
@@ -351,14 +355,16 @@ const SugerenciasView: React.FC = () => {
       pdf.setFontSize(8);
       // Truncar texto del producto si es muy largo
       const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
-      const productoTruncado = producto.length > 20 ? producto.substring(0, 17) + '...' : producto;
+      const productoTruncado = producto.length > 15 ? producto.substring(0, 12) + '...' : producto;
       pdf.text(productoTruncado, 25, yPosition + 2);
+      
+      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 65, yPosition + 2);
       
       const modelo = sugerencia.modelo_sugerido || 'N/A';
       const modeloTruncado = modelo.length > 15 ? modelo.substring(0, 12) + '...' : modelo;
-      pdf.text(modeloTruncado, 75, yPosition + 2);
+      pdf.text(modeloTruncado, 85, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 115, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 125, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -369,13 +375,13 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 135, yPosition + 2);
+      pdf.text(estado, 145, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       const fecha = sugerencia.fecha_sugerencia 
         ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
         : 'N/A';
-      pdf.text(fecha, 165, yPosition + 2);
+      pdf.text(fecha, 175, yPosition + 2);
       
       yPosition += 12;
       
