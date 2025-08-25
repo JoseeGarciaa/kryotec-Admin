@@ -46,16 +46,19 @@ const inventarioProspectosService = {
 
   updateInventario: async (id, data) => {
     try {
+      // Calcular volumen total en m³ al actualizar
+      const volumenTotal = (data.largo_mm * data.ancho_mm * data.alto_mm * data.cantidad) / 1000000000;
+      
       const query = `
         UPDATE admin_platform.inventario_prospecto
         SET cliente_id = $1, descripcion = $2, material = $3,
             largo_mm = $4, ancho_mm = $5, alto_mm = $6,
-            cantidad = $7, frecuencia_uso_dia = $8
-        WHERE inv_id = $9 RETURNING *
+            cantidad = $7, frecuencia_uso_dia = $8, volumen_total_m3 = $9
+        WHERE inv_id = $10 RETURNING *
       `;
       const values = [data.cliente_id, data.descripcion, data.material,
                      data.largo_mm, data.ancho_mm, data.alto_mm,
-                     data.cantidad, data.frecuencia_uso_dia, id];
+                     data.cantidad, data.frecuencia_uso_dia, volumenTotal, id];
       const { rows } = await pool.query(query, values);
       return rows[0];
     } catch (error) {

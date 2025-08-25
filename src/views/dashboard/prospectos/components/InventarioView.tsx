@@ -20,7 +20,7 @@ const InventarioView: React.FC = () => {
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
     cliente_id: 0,
     descripcion: '',
-    material: 'ICOPOR',
+    material: '',
     largo_mm: 0,
     ancho_mm: 0,
     alto_mm: 0,
@@ -58,20 +58,25 @@ const InventarioView: React.FC = () => {
 
   // Calcular estadísticas
   const stats = useMemo(() => {
-    const totalItems = inventario.reduce((sum, item) => sum + item.cantidad, 0);
-    const volumenTotal = inventario.reduce((sum, item) => {
+    const totalItems = inventario.reduce((sum: number, item: any) => sum + item.cantidad, 0);
+    const volumenTotal = inventario.reduce((sum: number, item: any) => {
       const volumen = Number(item.volumen_total_m3) || 0;
       return sum + volumen;
     }, 0);
-    const icoporItems = inventario.filter(item => item.material === 'ICOPOR').reduce((sum, item) => sum + item.cantidad, 0);
-    const termicoItems = inventario.filter(item => item.material === 'TERMICO').reduce((sum, item) => sum + item.cantidad, 0);
+    
+    // Agrupar por material
+    const materialsCount: {[key: string]: number} = {};
+    inventario.forEach((item: any) => {
+      const material = item.material || 'Sin especificar';
+      materialsCount[material] = (materialsCount[material] || 0) + item.cantidad;
+    });
   
-    return { totalItems, volumenTotal, icoporItems, termicoItems };
+    return { totalItems, volumenTotal, materialsCount };
   }, [inventario]);
 
   // Filtrar inventario
   const filteredInventario = useMemo(() => {
-    return inventario.filter(item => {
+    return inventario.filter((item: any) => {
       const matchesSearch = item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            item.nombre_cliente?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCliente = clienteFilter === 'todos' || item.cliente_id.toString() === clienteFilter;
@@ -86,49 +91,67 @@ const InventarioView: React.FC = () => {
     try {
       setLoading(true);
       if (selectedItem) {
+        // Editar item existente
         const updated = await InventarioProspectoController.updateInventario(selectedItem.inv_id, formData);
         if (updated) {
           // Encontrar el nombre del cliente
-          const cliente = clientes.find(c => c.cliente_id === updated.cliente_id);
+          const cliente = clientes.find((c: any) => c.cliente_id === updated.cliente_id);
           const updatedWithClientName = {
             ...updated,
             nombre_cliente: cliente?.nombre_cliente || 'N/A'
           };
-          setInventario(prev => prev.map(item => item.inv_id === selectedItem.inv_id ? updatedWithClientName : item));
-          toast.success('Item actualizado exitosamente');
+          setInventario((prev: any) => prev.map((item: any) => item.inv_id === selectedItem.inv_id ? updatedWithClientName : item));
+          toast.success('Producto actualizado exitosamente');
         }
+        setShowModal(false);
+        resetForm();
       } else {
+        // Crear nuevo item
         const newItem = await InventarioProspectoController.createInventario(formData);
         // Encontrar el nombre del cliente
-        const cliente = clientes.find(c => c.cliente_id === newItem.cliente_id);
+        const cliente = clientes.find((c: any) => c.cliente_id === newItem.cliente_id);
         const newItemWithClientName = {
           ...newItem,
           nombre_cliente: cliente?.nombre_cliente || 'N/A'
         };
-        setInventario(prev => [newItemWithClientName, ...prev]);
-        toast.success('Item creado exitosamente');
+        setInventario((prev: any) => [newItemWithClientName, ...prev]);
+        toast.success('Producto creado exitosamente');
+        
+        // Resetear solo los campos del producto pero mantener el cliente seleccionado
+        // para permitir agregar más productos del mismo cliente
+        setFormData({
+          ...formData,
+          descripcion: '',
+          material: '',
+          largo_mm: 0,
+          ancho_mm: 0,
+          alto_mm: 0,
+          cantidad: 0,
+          frecuencia_uso_dia: ''
+        });
+        
+        // No cerrar el modal para permitir agregar otro producto
+        toast.info('¡Puedes agregar otro producto para el mismo cliente!');
       }
-      setShowModal(false);
-      resetForm();
     } catch (error) {
       console.error('Error al guardar:', error);
-      toast.error('Error al guardar el item');
+      toast.error('Error al guardar el producto');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('¿Está seguro de que desea eliminar este item?')) {
+    if (window.confirm('¿Está seguro de que desea eliminar este producto?')) {
       try {
         const success = await InventarioProspectoController.deleteInventario(id);
         if (success) {
-          setInventario(prev => prev.filter(item => item.inv_id !== id));
-          toast.success('Item eliminado exitosamente');
+          setInventario((prev: any) => prev.filter((item: any) => item.inv_id !== id));
+          toast.success('Producto eliminado exitosamente');
         }
       } catch (error) {
         console.error('Error al eliminar:', error);
-        toast.error('Error al eliminar el item');
+        toast.error('Error al eliminar el producto');
       }
     }
   };
@@ -153,7 +176,7 @@ const InventarioView: React.FC = () => {
     setFormData({
       cliente_id: 0,
       descripcion: '',
-      material: 'ICOPOR',
+      material: '',
       largo_mm: 0,
       ancho_mm: 0,
       alto_mm: 0,
@@ -171,8 +194,8 @@ const InventarioView: React.FC = () => {
     <div className="p-6 bg-gray-900 min-h-screen text-white">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-center mb-2">Inventario Prospectos</h1>
-        <p className="text-gray-400 text-center mb-6">Gestiona el inventario de elementos de los clientes prospectos</p>
+        <h1 className="text-3xl font-bold text-center mb-2">Inventario de Productos</h1>
+        <p className="text-gray-400 text-center mb-6">Gestiona el inventario de productos de los clientes prospectos</p>
         
         <div className="flex justify-center mb-6">
           <button
@@ -180,19 +203,19 @@ const InventarioView: React.FC = () => {
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
           >
             <Plus size={20} />
-            Nuevo Item
+            Nuevo Producto
           </button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-gray-800 p-4 rounded-lg flex items-center">
           <div className="bg-blue-600 p-3 rounded-lg mr-4">
             <Package size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Total Items</p>
+            <p className="text-gray-400 text-sm">Total Productos</p>
             <p className="text-2xl font-bold">{stats.totalItems}</p>
           </div>
         </div>
@@ -209,22 +232,12 @@ const InventarioView: React.FC = () => {
         </div>
         
         <div className="bg-gray-800 p-4 rounded-lg flex items-center">
-          <div className="bg-blue-600 p-3 rounded-lg mr-4">
-            <Package size={24} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">ICOPOR</p>
-            <p className="text-2xl font-bold">{stats.icoporItems}</p>
-          </div>
-        </div>
-        
-        <div className="bg-gray-800 p-4 rounded-lg flex items-center">
-          <div className="bg-red-600 p-3 rounded-lg mr-4">
+          <div className="bg-purple-600 p-3 rounded-lg mr-4">
             <Thermometer size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm">TÉRMICO</p>
-            <p className="text-2xl font-bold">{stats.termicoItems}</p>
+            <p className="text-gray-400 text-sm">Tipos de Material</p>
+            <p className="text-2xl font-bold">{Object.keys(stats.materialsCount).length}</p>
           </div>
         </div>
       </div>
@@ -237,18 +250,18 @@ const InventarioView: React.FC = () => {
             type="text"
             placeholder="Buscar en inventario..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e: any) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
           />
         </div>
         
         <select
           value={clienteFilter}
-          onChange={(e) => setClienteFilter(e.target.value)}
+          onChange={(e: any) => setClienteFilter(e.target.value)}
           className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
         >
           <option value="todos">Todos los clientes</option>
-          {clientes.map(cliente => (
+          {clientes.map((cliente: any) => (
             <option key={cliente.cliente_id} value={cliente.cliente_id.toString()}>
               {cliente.nombre_cliente}
             </option>
@@ -257,12 +270,15 @@ const InventarioView: React.FC = () => {
         
         <select
           value={materialFilter}
-          onChange={(e) => setMaterialFilter(e.target.value)}
+          onChange={(e: any) => setMaterialFilter(e.target.value)}
           className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
         >
           <option value="todos">Todos los materiales</option>
-          <option value="ICOPOR">ICOPOR</option>
-          <option value="TERMICO">TÉRMICO</option>
+          {Object.keys(stats.materialsCount).map((material: any) => (
+            <option key={material} value={material}>
+              {material} ({stats.materialsCount[material]})
+            </option>
+          ))}
         </select>
       </div>
 
@@ -295,15 +311,13 @@ const InventarioView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredInventario.map((item) => (
+                filteredInventario.map((item: any) => (
                   <tr key={item.inv_id} className="hover:bg-gray-700 transition-colors">
                     <td className="px-4 py-3 text-sm">{item.nombre_cliente || 'N/A'}</td>
                     <td className="px-4 py-3 text-sm">{item.descripcion || 'Sin descripción'}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        item.material === 'ICOPOR' ? 'bg-blue-600 text-blue-100' : 'bg-red-600 text-red-100'
-                      }`}>
-                        {item.material}
+                      <span className="px-2 py-1 rounded-full text-xs bg-purple-600 text-purple-100">
+                        {item.material || 'No especificado'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm">
@@ -340,7 +354,7 @@ const InventarioView: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-semibold mb-4">
-              {selectedItem ? 'Editar Item' : 'Nuevo Item'}
+              {selectedItem ? 'Editar Producto' : 'Nuevo Producto'}
             </h3>
             
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -348,12 +362,12 @@ const InventarioView: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-300 mb-1">Cliente</label>
                 <select
                   value={formData.cliente_id}
-                  onChange={(e) => setFormData({...formData, cliente_id: parseInt(e.target.value)})}
+                  onChange={(e: any) => setFormData({...formData, cliente_id: parseInt(e.target.value)})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                   required
                 >
                   <option value={0}>Seleccionar cliente</option>
-                  {clientes.map(cliente => (
+                  {clientes.map((cliente: any) => (
                     <option key={cliente.cliente_id} value={cliente.cliente_id}>
                       {cliente.nombre_cliente}
                     </option>
@@ -366,23 +380,22 @@ const InventarioView: React.FC = () => {
                 <input
                   type="text"
                   value={formData.descripcion}
-                  onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
+                  onChange={(e: any) => setFormData({...formData, descripcion: e.target.value})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                  placeholder="Descripción del item"
+                  placeholder="Descripción del producto"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Material</label>
-                <select
+                <input
+                  type="text"
                   value={formData.material}
-                  onChange={(e) => setFormData({...formData, material: e.target.value as 'ICOPOR' | 'TERMICO'})}
+                  onChange={(e: any) => setFormData({...formData, material: e.target.value})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Ej: Pastillas, Jeringas, ICOPOR, TÉRMICO, etc."
                   required
-                >
-                  <option value="ICOPOR">ICOPOR</option>
-                  <option value="TERMICO">TÉRMICO</option>
-                </select>
+                />
               </div>
               
               <div className="grid grid-cols-3 gap-2">
@@ -391,7 +404,7 @@ const InventarioView: React.FC = () => {
                   <input
                     type="number"
                     value={formData.largo_mm}
-                    onChange={(e) => setFormData({...formData, largo_mm: parseInt(e.target.value) || 0})}
+                    onChange={(e: any) => setFormData({...formData, largo_mm: parseInt(e.target.value) || 0})}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                     required
                     min="1"
@@ -402,7 +415,7 @@ const InventarioView: React.FC = () => {
                   <input
                     type="number"
                     value={formData.ancho_mm}
-                    onChange={(e) => setFormData({...formData, ancho_mm: parseInt(e.target.value) || 0})}
+                    onChange={(e: any) => setFormData({...formData, ancho_mm: parseInt(e.target.value) || 0})}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                     required
                     min="1"
@@ -413,7 +426,7 @@ const InventarioView: React.FC = () => {
                   <input
                     type="number"
                     value={formData.alto_mm}
-                    onChange={(e) => setFormData({...formData, alto_mm: parseInt(e.target.value) || 0})}
+                    onChange={(e: any) => setFormData({...formData, alto_mm: parseInt(e.target.value) || 0})}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                     required
                     min="1"
@@ -426,7 +439,7 @@ const InventarioView: React.FC = () => {
                 <input
                   type="number"
                   value={formData.cantidad}
-                  onChange={(e) => setFormData({...formData, cantidad: parseInt(e.target.value) || 0})}
+                  onChange={(e: any) => setFormData({...formData, cantidad: parseInt(e.target.value) || 0})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                   required
                   min="1"
@@ -438,27 +451,50 @@ const InventarioView: React.FC = () => {
                 <input
                   type="text"
                   value={formData.frecuencia_uso_dia}
-                  onChange={(e) => setFormData({...formData, frecuencia_uso_dia: e.target.value})}
+                  onChange={(e: any) => setFormData({...formData, frecuencia_uso_dia: e.target.value})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                   placeholder="Ej: 2-3 veces"
                 />
               </div>
               
               <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-2 px-4 rounded-lg transition-colors"
-                >
-                  {loading ? 'Guardando...' : (selectedItem ? 'Actualizar' : 'Crear')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors"
-                >
-                  Cancelar
-                </button>
+                {selectedItem ? (
+                  // Modo edición
+                  <>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-2 px-4 rounded-lg transition-colors"
+                    >
+                      {loading ? 'Actualizando...' : 'Actualizar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowModal(false)}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </>
+                ) : (
+                  // Modo creación
+                  <>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-2 px-4 rounded-lg transition-colors"
+                    >
+                      {loading ? 'Creando...' : 'Crear Producto'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowModal(false)}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Finalizar
+                    </button>
+                  </>
+                )}
               </div>
             </form>
           </div>
