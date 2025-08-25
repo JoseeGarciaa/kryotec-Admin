@@ -867,6 +867,11 @@ const SugerenciasView: React.FC = () => {
                   <p className="text-blue-100 text-xs opacity-90 truncate">
                     Producto: {sugerencia.producto || sugerencia.descripcion_inventario || 'N/A'}
                   </p>
+                  {sugerencia.cantidad_inventario && (
+                    <p className="text-blue-100 text-xs opacity-90">
+                      Cantidad: {sugerencia.cantidad_inventario} unidades
+                    </p>
+                  )}
                 </div>
                 
                 {/* Contenido principal */}
@@ -891,6 +896,14 @@ const SugerenciasView: React.FC = () => {
                         {sugerencia.modalidad || 'N/A'}
                       </span>
                     </div>
+                    {sugerencia.cantidad_inventario && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Cant. Productos:</span>
+                        <span className="text-white text-sm">
+                          {sugerencia.cantidad_inventario} unidades
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Fecha:</span>
                       <span className="text-white text-sm">
@@ -928,6 +941,7 @@ const SugerenciasView: React.FC = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cliente</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Producto</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cant. Productos</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Modelo Sugerido</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cantidad</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado</th>
@@ -943,6 +957,9 @@ const SugerenciasView: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                       {sugerencia.producto || sugerencia.descripcion_inventario || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                      {sugerencia.cantidad_inventario || '0'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                       {sugerencia.modelo_sugerido}

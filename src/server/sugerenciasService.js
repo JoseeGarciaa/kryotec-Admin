@@ -11,7 +11,8 @@ const sugerenciasService = {
           s.modelo_id, s.estado,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
-          i.descripcion as descripcion_inventario, i.producto, i.largo_mm, i.ancho_mm, i.alto_mm
+          i.descripcion as descripcion_inventario, i.producto, i.cantidad as cantidad_inventario, 
+          i.largo_mm, i.ancho_mm, i.alto_mm
         FROM admin_platform.sugerencias_reemplazo s
         LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
         LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
@@ -52,7 +53,8 @@ const sugerenciasService = {
           s.modelo_id, s.estado,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
-          i.descripcion as descripcion_inventario, i.producto, i.largo_mm, i.ancho_mm, i.alto_mm
+          i.descripcion as descripcion_inventario, i.producto, i.cantidad as cantidad_inventario, 
+          i.largo_mm, i.ancho_mm, i.alto_mm
         FROM admin_platform.sugerencias_reemplazo s
         LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
         LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id

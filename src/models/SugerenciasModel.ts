@@ -15,6 +15,7 @@ export interface SugerenciaReemplazo {
   nombre_cliente?: string;
   descripcion_inventario?: string;
   producto?: string;
+  cantidad_inventario?: number;
   nombre_modelo?: string;
 }
 
