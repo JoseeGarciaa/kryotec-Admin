@@ -5,7 +5,7 @@ const inventarioProspectosService = {
     try {
       const query = `
         SELECT 
-          i.inv_id, i.cliente_id, i.descripcion, i.material,
+          i.inv_id, i.cliente_id, i.descripcion, i.producto,
           i.largo_mm, i.ancho_mm, i.alto_mm, i.cantidad,
           i.volumen_total_m3, i.fecha_registro, i.frecuencia_uso_dia,
           c.nombre_cliente
@@ -28,12 +28,12 @@ const inventarioProspectosService = {
       
       const query = `
         INSERT INTO admin_platform.inventario_prospecto (
-          cliente_id, descripcion, material, largo_mm, ancho_mm, 
+          cliente_id, descripcion, producto, largo_mm, ancho_mm, 
           alto_mm, cantidad, frecuencia_uso_dia, volumen_total_m3
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `;
-      const values = [data.cliente_id, data.descripcion, data.material, 
+      const values = [data.cliente_id, data.descripcion, data.producto, 
                      data.largo_mm, data.ancho_mm, data.alto_mm, 
                      data.cantidad, data.frecuencia_uso_dia, volumenTotal];
       const { rows } = await pool.query(query, values);
@@ -51,12 +51,12 @@ const inventarioProspectosService = {
       
       const query = `
         UPDATE admin_platform.inventario_prospecto
-        SET cliente_id = $1, descripcion = $2, material = $3,
+        SET cliente_id = $1, descripcion = $2, producto = $3,
             largo_mm = $4, ancho_mm = $5, alto_mm = $6,
             cantidad = $7, frecuencia_uso_dia = $8, volumen_total_m3 = $9
         WHERE inv_id = $10 RETURNING *
       `;
-      const values = [data.cliente_id, data.descripcion, data.material,
+      const values = [data.cliente_id, data.descripcion, data.producto,
                      data.largo_mm, data.ancho_mm, data.alto_mm,
                      data.cantidad, data.frecuencia_uso_dia, volumenTotal, id];
       const { rows } = await pool.query(query, values);
