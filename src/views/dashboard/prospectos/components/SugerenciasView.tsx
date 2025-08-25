@@ -25,6 +25,12 @@ const SugerenciasView: React.FC = () => {
   const [filteredInventario, setFilteredInventario] = useState<InventarioProspecto[]>([]);
   const [clienteHistorialFilter, setClienteHistorialFilter] = useState<number | ''>('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  
+  // Estados para precios de alquiler
+  const [showPriceModal, setShowPriceModal] = useState(false);
+  const [preciosAlquiler, setPreciosAlquiler] = useState<{ [key: string]: string }>({});
+  const [pdfType, setPdfType] = useState<'general' | 'cliente'>('general');
+  const [productosUnicos, setProductosUnicos] = useState<string[]>([]);
 
   // Filtrar sugerencias por cliente seleccionado
   const filteredSugerencias = clienteHistorialFilter 
@@ -131,6 +137,63 @@ const SugerenciasView: React.FC = () => {
     }
   };
 
+  // Función para obtener productos únicos de las sugerencias
+  const getProductosUnicos = (sugerenciasToCheck = sugerencias) => {
+    const productos = new Set<string>();
+    sugerenciasToCheck.forEach(sugerencia => {
+      const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
+      if (producto !== 'N/A') {
+        productos.add(producto);
+      }
+    });
+    return Array.from(productos);
+  };
+
+  // Función para abrir modal de precios
+  const handlePDFWithPrices = (type: 'general' | 'cliente') => {
+    const sugerenciasToCheck = type === 'cliente' ? filteredSugerencias : sugerencias;
+    
+    if (type === 'cliente' && !clienteHistorialFilter) {
+      alert('Por favor selecciona un cliente para generar el PDF');
+      return;
+    }
+
+    if (sugerenciasToCheck.length === 0) {
+      alert(type === 'cliente' ? 'Este cliente no tiene sugerencias guardadas' : 'No hay sugerencias para generar PDF');
+      return;
+    }
+
+    const productos = getProductosUnicos(sugerenciasToCheck);
+    setProductosUnicos(productos);
+    setPdfType(type);
+    
+    // Inicializar precios vacíos
+    const preciosIniciales: { [key: string]: string } = {};
+    productos.forEach(producto => {
+      preciosIniciales[producto] = '';
+    });
+    setPreciosAlquiler(preciosIniciales);
+    setShowPriceModal(true);
+  };
+
+  // Función para actualizar precio de un producto
+  const handlePriceChange = (producto: string, precio: string) => {
+    setPreciosAlquiler(prev => ({
+      ...prev,
+      [producto]: precio
+    }));
+  };
+
+  // Función para generar PDF con precios
+  const generatePDFWithPrices = () => {
+    setShowPriceModal(false);
+    if (pdfType === 'general') {
+      generatePDF();
+    } else {
+      generateClientePDF();
+    }
+  };
+
   const generatePDF = async () => {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -175,14 +238,15 @@ const SugerenciasView: React.FC = () => {
     pdf.rect(20, yPosition, pageWidth - 40, 10, 'F');
     
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(9);
+    pdf.setFontSize(8);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Cliente', 25, yPosition + 7);
-    pdf.text('Producto', 65, yPosition + 7);
-    pdf.text('Cant. Inv.', 95, yPosition + 7);
-    pdf.text('Modelo', 115, yPosition + 7);
-    pdf.text('Cant. Sug.', 145, yPosition + 7);
-    pdf.text('Estado', 165, yPosition + 7);
+    pdf.text('Cliente', 22, yPosition + 7);
+    pdf.text('Producto', 45, yPosition + 7);
+    pdf.text('Cant. Inv.', 70, yPosition + 7);
+    pdf.text('Precio Alquiler', 90, yPosition + 7);
+    pdf.text('Modelo', 125, yPosition + 7);
+    pdf.text('Cant. Sug.', 150, yPosition + 7);
+    pdf.text('Estado', 170, yPosition + 7);
     pdf.text('Fecha', 185, yPosition + 7);
     
     yPosition += 15;
@@ -198,23 +262,27 @@ const SugerenciasView: React.FC = () => {
         pdf.rect(20, yPosition - 5, pageWidth - 40, 10, 'F');
       }
       
-      pdf.setFontSize(8);
+      pdf.setFontSize(7);
       // Truncar textos si son muy largos
       const cliente = sugerencia.nombre_cliente || 'N/A';
-      const clienteTruncado = cliente.length > 12 ? cliente.substring(0, 9) + '...' : cliente;
-      pdf.text(clienteTruncado, 25, yPosition + 2);
+      const clienteTruncado = cliente.length > 10 ? cliente.substring(0, 7) + '...' : cliente;
+      pdf.text(clienteTruncado, 22, yPosition + 2);
       
       const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
-      const productoTruncado = producto.length > 12 ? producto.substring(0, 9) + '...' : producto;
-      pdf.text(productoTruncado, 65, yPosition + 2);
+      const productoTruncado = producto.length > 10 ? producto.substring(0, 7) + '...' : producto;
+      pdf.text(productoTruncado, 45, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 95, yPosition + 2);
+      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 70, yPosition + 2);
+      
+      // Precio de alquiler
+      const precioAlquiler = preciosAlquiler[producto] || 'N/A';
+      pdf.text(precioAlquiler, 90, yPosition + 2);
       
       const modelo = sugerencia.modelo_sugerido || 'N/A';
-      const modeloTruncado = modelo.length > 12 ? modelo.substring(0, 9) + '...' : modelo;
-      pdf.text(modeloTruncado, 115, yPosition + 2);
+      const modeloTruncado = modelo.length > 10 ? modelo.substring(0, 7) + '...' : modelo;
+      pdf.text(modeloTruncado, 125, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 145, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 150, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -225,7 +293,7 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 165, yPosition + 2);
+      pdf.text(estado, 170, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       const fecha = sugerencia.fecha_sugerencia 
@@ -330,14 +398,15 @@ const SugerenciasView: React.FC = () => {
     pdf.rect(20, yPosition, pageWidth - 40, 10, 'F');
     
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(9);
+    pdf.setFontSize(8);
     pdf.setFont('helvetica', 'bold');
     pdf.text('Producto', 25, yPosition + 7);
-    pdf.text('Cant. Inv.', 65, yPosition + 7);
-    pdf.text('Modelo', 85, yPosition + 7);
-    pdf.text('Cant. Sug.', 125, yPosition + 7);
-    pdf.text('Estado', 145, yPosition + 7);
-    pdf.text('Fecha', 175, yPosition + 7);
+    pdf.text('Cant. Inv.', 55, yPosition + 7);
+    pdf.text('Precio Alquiler', 75, yPosition + 7);
+    pdf.text('Modelo', 110, yPosition + 7);
+    pdf.text('Cant. Sug.', 140, yPosition + 7);
+    pdf.text('Estado', 160, yPosition + 7);
+    pdf.text('Fecha', 185, yPosition + 7);
     
     yPosition += 15;
     
@@ -352,19 +421,23 @@ const SugerenciasView: React.FC = () => {
         pdf.rect(20, yPosition - 5, pageWidth - 40, 10, 'F');
       }
       
-      pdf.setFontSize(8);
+      pdf.setFontSize(7);
       // Truncar texto del producto si es muy largo
       const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
-      const productoTruncado = producto.length > 15 ? producto.substring(0, 12) + '...' : producto;
+      const productoTruncado = producto.length > 12 ? producto.substring(0, 9) + '...' : producto;
       pdf.text(productoTruncado, 25, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 65, yPosition + 2);
+      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 55, yPosition + 2);
+      
+      // Precio de alquiler
+      const precioAlquiler = preciosAlquiler[producto] || 'N/A';
+      pdf.text(precioAlquiler, 75, yPosition + 2);
       
       const modelo = sugerencia.modelo_sugerido || 'N/A';
-      const modeloTruncado = modelo.length > 15 ? modelo.substring(0, 12) + '...' : modelo;
-      pdf.text(modeloTruncado, 85, yPosition + 2);
+      const modeloTruncado = modelo.length > 12 ? modelo.substring(0, 9) + '...' : modelo;
+      pdf.text(modeloTruncado, 110, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 125, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 140, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -375,13 +448,13 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 145, yPosition + 2);
+      pdf.text(estado, 160, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       const fecha = sugerencia.fecha_sugerencia 
         ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES')
         : 'N/A';
-      pdf.text(fecha, 175, yPosition + 2);
+      pdf.text(fecha, 185, yPosition + 2);
       
       yPosition += 12;
       
@@ -795,7 +868,7 @@ const SugerenciasView: React.FC = () => {
             <div className="flex gap-2">
               {clienteHistorialFilter && (
                 <button
-                  onClick={generateClientePDF}
+                  onClick={() => handlePDFWithPrices('cliente')}
                   className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
                   title="Descargar PDF del cliente seleccionado"
                 >
@@ -804,7 +877,7 @@ const SugerenciasView: React.FC = () => {
                 </button>
               )}
               <button
-                onClick={generatePDF}
+                onClick={() => handlePDFWithPrices('general')}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
                 title="Descargar PDF completo"
               >
@@ -1010,6 +1083,54 @@ const SugerenciasView: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {/* Modal para agregar precios de alquiler */}
+      {showPriceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Agregar Precios de Alquiler
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              Ingresa el precio de alquiler para cada producto. Puedes omitir productos dejando el campo vacío.
+            </p>
+            
+            <div className="space-y-4 mb-6">
+              {productosUnicos.map((producto) => (
+                <div key={producto} className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {producto}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: $150/día"
+                      value={preciosAlquiler[producto] || ''}
+                      onChange={(e) => handlePriceChange(producto, e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowPriceModal(false)}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={generatePDFWithPrices}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Generar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
