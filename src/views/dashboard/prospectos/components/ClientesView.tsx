@@ -232,7 +232,7 @@ const ClientesView: React.FC = () => {
                   className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
                 >
                   {/* Cabecera de la tarjeta con gradiente */}
-                  <div className="bg-gradient-to-r from-blue-500 to-green-600 p-4 relative">
+                  <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 relative">
                     <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
                       <User size={20} className="text-white" />
                     </div>
