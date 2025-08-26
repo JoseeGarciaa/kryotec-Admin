@@ -75,64 +75,45 @@ const sugerenciasService = {
     try {
       console.log('Datos recibidos:', datos);
       
-      // Extraer dimensiones y cantidad del objeto recibido
+      // Extraer datos del objeto recibido
       const { cliente_id, inv_id } = datos;
       
-      // Obtener el inventario completo del cliente para calcular volumen total
+      // Obtener el producto específico del inventario usando inv_id
       const inventarioQuery = `
         SELECT 
-          producto, cantidad, largo_mm, ancho_mm, alto_mm,
-          (largo_mm * ancho_mm * alto_mm) / 1000000000.0 as volumen_unitario_m3
+          producto, cantidad, largo_mm, ancho_mm, alto_mm, volumen_total_m3
         FROM admin_platform.inventario_prospecto
-        WHERE cliente_id = $1
+        WHERE inv_id = $1 AND cliente_id = $2
       `;
       
-      const { rows: inventarioItemsRaw } = await pool.query(inventarioQuery, [cliente_id]);
-      console.log('Items de inventario encontrados:', inventarioItemsRaw.length);
+      const { rows: inventarioItems } = await pool.query(inventarioQuery, [inv_id, cliente_id]);
+      console.log('Items de inventario encontrados:', inventarioItems.length);
       
-      if (inventarioItemsRaw.length === 0) {
-        console.log('No se encontró inventario para el cliente');
+      if (inventarioItems.length === 0) {
+        console.log('No se encontró el producto en el inventario');
         return [];
       }
       
-      // Limpiar y consolidar productos duplicados (por nombre similar)
-      const inventarioMap = new Map();
-      inventarioItemsRaw.forEach(item => {
-        const nombreLimpio = item.producto.toLowerCase().trim();
-        
-        if (inventarioMap.has(nombreLimpio)) {
-          // Sumar cantidades si ya existe
-          const existing = inventarioMap.get(nombreLimpio);
-          existing.cantidad += item.cantidad;
-        } else {
-          // Agregar nuevo item
-          inventarioMap.set(nombreLimpio, {
-            producto: item.producto, // Mantener el nombre original del primero
-            cantidad: item.cantidad,
-            largo_mm: item.largo_mm,
-            ancho_mm: item.ancho_mm,
-            alto_mm: item.alto_mm,
-            volumen_unitario_m3: item.volumen_unitario_m3
-          });
-        }
-      });
+      const producto = inventarioItems[0];
+      console.log('Producto encontrado:', producto);
       
-      const inventarioItems = Array.from(inventarioMap.values());
-      console.log('Items de inventario después de consolidar:', inventarioItems.length);
+      // Usar los datos de la base de datos
+      const cantidadProductos = parseInt(producto.cantidad);
+      const volumenTotalRequeridoM3 = parseFloat(producto.volumen_total_m3);
       
-      // Calcular volumen total de todos los productos del cliente
-      let volumenTotalRequeridoM3 = 0;
-      let totalProductos = 0;
+      // Dimensiones del producto individual en mm
+      const productoFrente = parseInt(producto.largo_mm);
+      const productoAncho = parseInt(producto.ancho_mm);
+      const productoAlto = parseInt(producto.alto_mm);
       
-      inventarioItems.forEach(item => {
-        const volumenTotalItem = item.volumen_unitario_m3 * item.cantidad;
-        volumenTotalRequeridoM3 += volumenTotalItem;
-        totalProductos += item.cantidad;
-        console.log(`${item.producto}: ${item.cantidad} unidades, ${volumenTotalItem.toFixed(6)} m³`);
-      });
+      // Calcular volumen unitario del producto
+      const volumenUnitarioM3 = volumenTotalRequeridoM3 / cantidadProductos;
       
-      console.log(`Volumen total a transportar: ${volumenTotalRequeridoM3.toFixed(6)} m³`);
-      console.log(`Total productos: ${totalProductos} unidades`);
+      console.log(`Producto: ${producto.producto}`);
+      console.log(`Dimensiones individuales: ${productoFrente}×${productoAncho}×${productoAlto} mm`);
+      console.log(`Cantidad: ${cantidadProductos} unidades`);
+      console.log(`Volumen unitario: ${volumenUnitarioM3.toFixed(9)} m³`);
+      console.log(`Volumen total: ${volumenTotalRequeridoM3.toFixed(6)} m³`);
       
       // Buscar TODOS los modelos Cube disponibles
       const query = `
@@ -166,59 +147,38 @@ const sugerenciasService = {
         const volumenModeloM3 = modelo.volumen_litros / 1000;
         console.log(`Modelo ${modelo.nombre_modelo}: ${volumenModeloM3.toFixed(6)} m³`);
         
-        // NUEVA LÓGICA: Calcular basándose en productos individuales
-        let modelosNecesarios = 0;
-        let productosTransportados = 0;
-        let volumenTotalUtilizado = 0;
+        // Verificar si el producto cabe físicamente en el contenedor
+        const cabeEnContenedor = (
+          productoFrente <= modelo.dim_int_frente &&
+          productoAncho <= modelo.dim_int_profundo &&
+          productoAlto <= modelo.dim_int_alto
+        );
         
-        // Para cada tipo de producto en el inventario
-        inventarioItems.forEach(item => {
-          const productoFrente = item.largo_mm;
-          const productoAncho = item.ancho_mm;
-          const productoAlto = item.alto_mm;
-          
-          // Verificar si el producto cabe físicamente en el contenedor
-          const cabeEnContenedor = (
-            productoFrente <= modelo.dim_int_frente &&
-            productoAncho <= modelo.dim_int_profundo &&
-            productoAlto <= modelo.dim_int_alto
-          );
-          
-          if (cabeEnContenedor) {
-            // Si las dimensiones son exactamente iguales, 1 producto = 1 contenedor
-            const dimensionesExactas = (
-              productoFrente === modelo.dim_int_frente &&
-              productoAncho === modelo.dim_int_profundo &&
-              productoAlto === modelo.dim_int_alto
-            );
-            
-            if (dimensionesExactas) {
-              // Caso perfecto: 1 producto = 1 contenedor
-              modelosNecesarios += item.cantidad;
-              productosTransportados += item.cantidad;
-              volumenTotalUtilizado += item.cantidad * item.volumen_unitario_m3;
-              console.log(`${item.producto}: Ajuste perfecto - ${item.cantidad} contenedores necesarios`);
-            } else {
-              // Calcular cuántos productos caben en un contenedor
-              const volumenProducto = item.volumen_unitario_m3;
-              const productosPorContenedor = Math.floor(volumenModeloM3 / volumenProducto);
-              const contenedoresNecesarios = Math.ceil(item.cantidad / productosPorContenedor);
-              
-              modelosNecesarios += contenedoresNecesarios;
-              productosTransportados += item.cantidad;
-              volumenTotalUtilizado += item.cantidad * volumenProducto;
-              console.log(`${item.producto}: ${productosPorContenedor} por contenedor, ${contenedoresNecesarios} contenedores necesarios`);
-            }
-          } else {
-            // El producto no cabe en este modelo de contenedor
-            console.log(`${item.producto}: No cabe en ${modelo.nombre_modelo} (${productoFrente}×${productoAncho}×${productoAlto} > ${modelo.dim_int_frente}×${modelo.dim_int_profundo}×${modelo.dim_int_alto})`);
-            return null; // Este modelo no sirve para estos productos
-          }
-        });
-        
-        if (modelosNecesarios === 0) {
-          console.log(`Modelo ${modelo.nombre_modelo} descartado: ningún producto cabe`);
+        if (!cabeEnContenedor) {
+          console.log(`Producto no cabe en ${modelo.nombre_modelo} (${productoFrente}×${productoAncho}×${productoAlto} > ${modelo.dim_int_frente}×${modelo.dim_int_profundo}×${modelo.dim_int_alto})`);
           return null;
+        }
+        
+        // Verificar si las dimensiones son exactamente iguales
+        const dimensionesExactas = (
+          productoFrente === modelo.dim_int_frente &&
+          productoAncho === modelo.dim_int_profundo &&
+          productoAlto === modelo.dim_int_alto
+        );
+        
+        let modelosNecesarios, volumenTotalUtilizado;
+        
+        if (dimensionesExactas) {
+          // Caso perfecto: 1 producto = 1 contenedor
+          modelosNecesarios = cantidadProductos;
+          volumenTotalUtilizado = volumenTotalRequeridoM3;
+          console.log(`Ajuste perfecto - ${cantidadProductos} contenedores necesarios (1 producto = 1 contenedor)`);
+        } else {
+          // Calcular cuántos productos caben en un contenedor por volumen
+          const productosPorContenedor = Math.floor(volumenModeloM3 / volumenUnitarioM3);
+          modelosNecesarios = Math.ceil(cantidadProductos / productosPorContenedor);
+          volumenTotalUtilizado = volumenTotalRequeridoM3;
+          console.log(`${productosPorContenedor} productos por contenedor, ${modelosNecesarios} contenedores necesarios`);
         }
         
         // Calcular volumen total disponible con estos contenedores
@@ -229,16 +189,53 @@ const sugerenciasService = {
         
         console.log(`Modelo ${modelo.nombre_modelo}: ${modelosNecesarios} contenedores, ${eficiencia.toFixed(1)}% eficiencia`);
         
-        // Determinar mensaje de comparación
+        // Calcular espacio sobrante o faltante
+        const espacioSobrante = volumenTotalDisponible - volumenTotalUtilizado;
+        const porcentajeEspacio = (espacioSobrante / volumenTotalUtilizado) * 100;
+        
+        // Determinar mensaje de comparación detallado
         let mensajeComparacion;
-        if (eficiencia >= 90) {
-          mensajeComparacion = "🎯 Excelente aprovechamiento";
-        } else if (eficiencia >= 75) {
-          mensajeComparacion = "✅ Buen aprovechamiento";
+        let recomendacion = "";
+        
+        if (dimensionesExactas) {
+          if (eficiencia >= 99) {
+            mensajeComparacion = "🎯 Ajuste perfecto dimensional";
+            recomendacion = "¡OPCIÓN IDEAL! Dimensiones exactas, sin desperdicio";
+          } else {
+            mensajeComparacion = "🎯 Ajuste dimensional con espacio mínimo";
+            recomendacion = "Excelente opción, dimensiones exactas";
+          }
+        } else if (eficiencia >= 95) {
+          mensajeComparacion = `✅ Aprovechamiento excelente (${espacioSobrante.toFixed(6)} m³ sobrante)`;
+          recomendacion = "MUY RECOMENDADO - Mínimo desperdicio";
+        } else if (eficiencia >= 85) {
+          mensajeComparacion = `✅ Buen aprovechamiento (${espacioSobrante.toFixed(6)} m³ sobrante)`;
+          recomendacion = "RECOMENDADO - Poco espacio desperdiciado";
+        } else if (eficiencia >= 70) {
+          mensajeComparacion = `📦 Aprovechamiento moderado (${espacioSobrante.toFixed(6)} m³ sobrante)`;
+          recomendacion = "ACEPTABLE - Espacio moderadamente desperdiciado";
         } else if (eficiencia >= 50) {
-          mensajeComparacion = "📦 Aprovechamiento moderado";
+          mensajeComparacion = `⚠️ Mucho espacio sobrante (${espacioSobrante.toFixed(6)} m³ desperdiciado)`;
+          recomendacion = "NO RECOMENDADO - Mucho desperdicio";
         } else {
-          mensajeComparacion = "⚠️ Mucho espacio desperdiciado";
+          mensajeComparacion = `❌ Contenedor muy grande (${espacioSobrante.toFixed(6)} m³ desperdiciado)`;
+          recomendacion = "EVITAR - Excesivo desperdicio de espacio";
+        }
+        
+        // Agregar información sobre la proporción
+        let detalleEspacio = "";
+        if (porcentajeEspacio < 1) {
+          detalleEspacio = "Se ajusta casi perfectamente";
+        } else if (porcentajeEspacio <= 10) {
+          detalleEspacio = "Sobra muy poco espacio";
+        } else if (porcentajeEspacio <= 25) {
+          detalleEspacio = "Sobra poco espacio";
+        } else if (porcentajeEspacio <= 50) {
+          detalleEspacio = "Sobra espacio moderado";
+        } else if (porcentajeEspacio <= 100) {
+          detalleEspacio = "Sobra mucho espacio";
+        } else {
+          detalleEspacio = "Sobra demasiado espacio";
         }
         
         return {
@@ -246,11 +243,20 @@ const sugerenciasService = {
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: modelosNecesarios,
-          total_productos_transportados: productosTransportados,
+          total_productos_transportados: cantidadProductos,
           volumen_total_productos: volumenTotalUtilizado,
           volumen_total_contenedores: volumenTotalDisponible,
+          espacio_sobrante_m3: espacioSobrante,
+          porcentaje_espacio_sobrante: Math.round(porcentajeEspacio * 10) / 10,
           eficiencia: Math.round(eficiencia * 10) / 10,
           mensaje_comparacion: mensajeComparacion,
+          recomendacion: recomendacion,
+          detalle_espacio: detalleEspacio,
+          es_ajuste_perfecto: dimensionesExactas,
+          nivel_recomendacion: eficiencia >= 95 ? 'EXCELENTE' : 
+                             eficiencia >= 85 ? 'BUENO' : 
+                             eficiencia >= 70 ? 'ACEPTABLE' : 
+                             eficiencia >= 50 ? 'MALO' : 'EVITAR',
           dimensiones_internas: {
             frente: modelo.dim_int_frente, // mm
             profundo: modelo.dim_int_profundo, // mm
@@ -262,10 +268,34 @@ const sugerenciasService = {
       console.log(`Sugerencias generadas: ${sugerencias.length}`);
       console.log('Primeras 2 sugerencias:', sugerencias.slice(0, 2));
       
-      // Ordenar por eficiencia descendente
-      const sugerenciasOrdenadas = sugerencias.sort((a, b) => b.eficiencia - a.eficiencia);
+      // Ordenar por mejor recomendación (priorizar ajuste perfecto, luego eficiencia)
+      const sugerenciasOrdenadas = sugerencias.sort((a, b) => {
+        // Prioridad 1: Ajuste perfecto dimensional
+        if (a.es_ajuste_perfecto && !b.es_ajuste_perfecto) return -1;
+        if (!a.es_ajuste_perfecto && b.es_ajuste_perfecto) return 1;
+        
+        // Prioridad 2: Eficiencia alta (mayor eficiencia = mejor)
+        if (a.eficiencia !== b.eficiencia) {
+          return b.eficiencia - a.eficiencia;
+        }
+        
+        // Prioridad 3: Menor cantidad de contenedores (más económico)
+        if (a.cantidad_sugerida !== b.cantidad_sugerida) {
+          return a.cantidad_sugerida - b.cantidad_sugerida;
+        }
+        
+        // Prioridad 4: Menor volumen total (contenedores más pequeños)
+        return a.volumen_total_contenedores - b.volumen_total_contenedores;
+      });
       
-      console.log('Sugerencias calculadas exitosamente');
+      // Marcar la mejor opción
+      if (sugerenciasOrdenadas.length > 0) {
+        sugerenciasOrdenadas[0].es_mejor_opcion = true;
+        sugerenciasOrdenadas[0].etiqueta_recomendacion = "🏆 MEJOR OPCIÓN";
+      }
+      
+      console.log('Sugerencias calculadas y ordenadas exitosamente');
+      console.log(`Mejor opción: ${sugerenciasOrdenadas[0]?.nombre_modelo} (${sugerenciasOrdenadas[0]?.eficiencia}% eficiencia)`);
       return sugerenciasOrdenadas;
       
     } catch (error) {

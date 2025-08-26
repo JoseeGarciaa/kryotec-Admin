@@ -41,16 +41,28 @@ export interface ResultadoSugerencia {
   modelo_id: number;
   nombre_modelo: string;
   cantidad_sugerida: number;
-  cajas_por_modelo?: number; // Agregar información adicional
-  total_cajas_guardadas?: number;
+  total_productos_transportados: number;
+  volumen_total_productos: number;
+  volumen_total_contenedores: number;
+  espacio_sobrante_m3: number;
+  porcentaje_espacio_sobrante: number;
   eficiencia: number;
-  mensaje_comparacion?: string; // Nuevo campo para el mensaje de comparación
+  mensaje_comparacion?: string;
+  recomendacion?: string;
+  detalle_espacio?: string;
+  es_ajuste_perfecto?: boolean;
+  nivel_recomendacion?: 'EXCELENTE' | 'BUENO' | 'ACEPTABLE' | 'MALO' | 'EVITAR';
+  es_mejor_opcion?: boolean;
+  etiqueta_recomendacion?: string;
   dimensiones_internas: {
     frente: number;
     profundo: number;
     alto: number;
   };
   volumen_litros: number;
+  // Campos obsoletos mantenidos por compatibilidad
+  cajas_por_modelo?: number;
+  total_cajas_guardadas?: number;
 }
 
 // URL base de la API

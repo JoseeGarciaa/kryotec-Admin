@@ -780,22 +780,70 @@ const SugerenciasView: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {resultados.map((resultado, index) => (
-                <div key={index} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <div key={index} className={`rounded-lg p-4 border ${
+                  resultado.es_mejor_opcion 
+                    ? 'bg-gradient-to-r from-green-900/50 to-green-800/50 border-green-500' 
+                    : 'bg-gray-700 border-gray-600'
+                }`}>
+                  {/* Etiqueta de mejor opción */}
+                  {resultado.etiqueta_recomendacion && (
+                    <div className="mb-2">
+                      <span className="bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold">
+                        {resultado.etiqueta_recomendacion}
+                      </span>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h3 className="font-semibold text-lg">{resultado.nombre_modelo}</h3>
                       <p className="text-gray-400 text-sm">Cantidad sugerida: {resultado.cantidad_sugerida} unidades</p>
-                      {/* Agregar el mensaje de comparación */}
+                      
+                      {/* Mensaje de comparación mejorado */}
                       {resultado.mensaje_comparacion && (
                         <p className="text-blue-400 text-sm mt-1 font-medium">
                           {resultado.mensaje_comparacion}
                         </p>
                       )}
+                      
+                      {/* Recomendación */}
+                      {resultado.recomendacion && (
+                        <p className={`text-xs mt-1 font-medium ${
+                          resultado.nivel_recomendacion === 'EXCELENTE' ? 'text-green-400' :
+                          resultado.nivel_recomendacion === 'BUENO' ? 'text-blue-400' :
+                          resultado.nivel_recomendacion === 'ACEPTABLE' ? 'text-yellow-400' :
+                          resultado.nivel_recomendacion === 'MALO' ? 'text-orange-400' : 'text-red-400'
+                        }`}>
+                          {resultado.recomendacion}
+                        </p>
+                      )}
+                      
+                      {/* Detalle del espacio */}
+                      {resultado.detalle_espacio && (
+                        <p className="text-gray-500 text-xs mt-1">
+                          {resultado.detalle_espacio}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
-                      <div className="bg-green-600 text-white px-2 py-1 rounded text-sm">
+                      <div className={`text-white px-2 py-1 rounded text-sm ${
+                        resultado.eficiencia >= 95 ? 'bg-green-600' :
+                        resultado.eficiencia >= 85 ? 'bg-blue-600' :
+                        resultado.eficiencia >= 70 ? 'bg-yellow-600' :
+                        resultado.eficiencia >= 50 ? 'bg-orange-600' : 'bg-red-600'
+                      }`}>
                         {resultado.eficiencia.toFixed(1)}% eficiencia
                       </div>
+                      {resultado.nivel_recomendacion && (
+                        <div className={`text-xs mt-1 px-2 py-1 rounded ${
+                          resultado.nivel_recomendacion === 'EXCELENTE' ? 'bg-green-800 text-green-200' :
+                          resultado.nivel_recomendacion === 'BUENO' ? 'bg-blue-800 text-blue-200' :
+                          resultado.nivel_recomendacion === 'ACEPTABLE' ? 'bg-yellow-800 text-yellow-200' :
+                          resultado.nivel_recomendacion === 'MALO' ? 'bg-orange-800 text-orange-200' : 'bg-red-800 text-red-200'
+                        }`}>
+                          {resultado.nivel_recomendacion}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -812,12 +860,34 @@ const SugerenciasView: React.FC = () => {
                     </div>
                   </div>
                   
+                  {/* Información adicional sobre espacio */}
+                  {resultado.espacio_sobrante_m3 !== undefined && (
+                    <div className="mt-3 pt-3 border-t border-gray-600">
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <p className="text-gray-400">Espacio utilizado:</p>
+                          <p className="text-white">{(resultado.volumen_total_productos * 1000).toFixed(1)} litros</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Espacio sobrante:</p>
+                          <p className={`${resultado.espacio_sobrante_m3 > 0.001 ? 'text-yellow-400' : 'text-green-400'}`}>
+                            {(resultado.espacio_sobrante_m3 * 1000).toFixed(1)} litros ({resultado.porcentaje_espacio_sobrante.toFixed(1)}%)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <button
                     onClick={() => handleGuardarSugerencia(resultado)}
-                    className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className={`w-full mt-4 py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                      resultado.es_mejor_opcion 
+                        ? 'bg-green-600 hover:bg-green-700 text-white' 
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
                   >
                     <CheckCircle size={16} />
-                    Guardar Sugerencia
+                    {resultado.es_mejor_opcion ? 'Seleccionar Mejor Opción' : 'Guardar Sugerencia'}
                   </button>
                 </div>
               ))}
