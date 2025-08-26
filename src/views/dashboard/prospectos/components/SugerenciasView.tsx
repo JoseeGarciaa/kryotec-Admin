@@ -215,21 +215,61 @@ const SugerenciasView: React.FC = () => {
 
   const handleGuardarSugerenciaOrden = async (resultado: ResultadoSugerencia) => {
     try {
-      // Para orden de despacho, guardar una sugerencia por cada producto en la orden
-      const promesasGuardado = productosOrden.map(async (producto) => {
-        return createSugerencia({
-          cliente_id: Number(selectedCliente),
-          inv_id: Number(producto.inv_id),
-          modelo_sugerido: resultado.nombre_modelo,
-          cantidad_sugerida: Math.ceil(resultado.cantidad_sugerida / productosOrden.length), // Distribuir proporcionalmente
-          modalidad: 'calculadora_orden',
-          modelo_id: resultado.modelo_id,
-          estado: 'pendiente'
+      // Calcular exactamente cuántos contenedores necesita cada producto
+      const detalleProductos = await Promise.all(productosOrden.map(async (producto) => {
+        // Llamar al endpoint individual para cada producto para obtener cálculo exacto
+        const response = await fetch(`${import.meta.env.PROD ? '/api' : 'http://localhost:3002/api'}/sugerencias/calcular`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cliente_id: Number(selectedCliente),
+            inv_id: Number(producto.inv_id),
+            modelo_especifico: resultado.modelo_id // Forzar a usar el modelo seleccionado
+          }),
         });
+        
+        if (response.ok) {
+          const sugerenciaIndividual = await response.json();
+          // Encontrar la sugerencia para el modelo específico
+          const sugerenciaModelo = sugerenciaIndividual.find((s: any) => s.modelo_id === resultado.modelo_id);
+          
+          return {
+            inv_id: producto.inv_id,
+            producto: producto.producto,
+            descripcion_producto: producto.descripcion_producto,
+            cantidad_productos: producto.cantidad_despachada,
+            contenedores_necesarios: sugerenciaModelo ? sugerenciaModelo.cantidad_sugerida : 0
+          };
+        }
+        return null;
+      }));
+      
+      // Filtrar productos válidos
+      const productosValidos = detalleProductos.filter(p => p !== null);
+      
+      // Usar una nueva función de API para guardar sugerencia de orden
+      const response = await fetch(`${import.meta.env.PROD ? '/api' : 'http://localhost:3002/api'}/sugerencias/orden`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cliente_id: Number(selectedCliente),
+          orden_despacho: selectedOrden,
+          modelo_id: resultado.modelo_id,
+          modelo_sugerido: resultado.nombre_modelo,
+          cantidad_total_sugerida: resultado.cantidad_sugerida,
+          detalle_productos: productosValidos
+        }),
       });
       
-      await Promise.all(promesasGuardado);
-      alert(`Sugerencia guardada exitosamente para ${productosOrden.length} productos de la orden`);
+      if (response.ok) {
+        alert(`Sugerencia de orden guardada exitosamente para ${productosValidos.length} productos`);
+      } else {
+        throw new Error('Error al guardar sugerencia de orden');
+      }
     } catch (err) {
       console.error('Error al guardar sugerencia:', err);
       alert('Error al guardar la sugerencia');

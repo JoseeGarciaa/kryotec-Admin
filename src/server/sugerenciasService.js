@@ -27,6 +27,62 @@ const sugerenciasService = {
     }
   },
 
+  // Crear sugerencia agrupada por orden de despacho
+  createSugerenciaOrden: async (data) => {
+    try {
+      const { cliente_id, orden_despacho, modelo_id, modelo_sugerido, cantidad_total_sugerida, detalle_productos } = data;
+      
+      // Crear una sugerencia principal para la orden (usar el primer producto como referencia)
+      const query = `
+        INSERT INTO admin_platform.sugerencias_reemplazo (
+          cliente_id, inv_id, modelo_sugerido, cantidad_sugerida, 
+          modelo_id, estado, modalidad, orden_despacho, detalle_orden
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING sugerencia_id
+      `;
+      
+      // Usar el primer producto como referencia, pero guardar el detalle completo
+      const primerProducto = detalle_productos[0];
+      const values = [
+        cliente_id, 
+        primerProducto.inv_id, 
+        modelo_sugerido,
+        cantidad_total_sugerida, 
+        modelo_id, 
+        'pendiente',
+        'calculadora_orden',
+        orden_despacho,
+        JSON.stringify(detalle_productos) // Guardar detalle completo como JSON
+      ];
+      
+      const { rows } = await pool.query(query, values);
+      const sugerenciaId = rows[0].sugerencia_id;
+      
+      // Obtener la sugerencia completa
+      const selectQuery = `
+        SELECT 
+          s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
+          s.cantidad_sugerida, s.fecha_sugerencia, 
+          s.modelo_id, s.estado, s.modalidad, s.orden_despacho, s.detalle_orden,
+          c.nombre_cliente,
+          m.nombre_modelo, m.volumen_litros,
+          i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
+          i.largo_mm, i.ancho_mm, i.alto_mm
+        FROM admin_platform.sugerencias_reemplazo s
+        LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
+        LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
+        LEFT JOIN admin_platform.inventario_prospecto i ON s.inv_id = i.inv_id
+        WHERE s.sugerencia_id = $1
+      `;
+      
+      const { rows: completeRows } = await pool.query(selectQuery, [sugerenciaId]);
+      return completeRows[0];
+    } catch (error) {
+      console.error('Error al crear sugerencia de orden:', error);
+      throw error;
+    }
+  },
+
   // Crear una nueva sugerencia
   createSugerencia: async (data) => {
     try {
@@ -429,7 +485,7 @@ const sugerenciasService = {
       console.log('Datos recibidos:', datos);
       
       // Extraer datos del objeto recibido
-      const { cliente_id, inv_id } = datos;
+      const { cliente_id, inv_id, modelo_especifico } = datos;
       
       // Obtener el producto específico del inventario usando inv_id
       const inventarioQuery = `
@@ -471,17 +527,24 @@ const sugerenciasService = {
       console.log(`Volumen unitario: ${volumenUnitarioM3.toFixed(9)} m³`);
       console.log(`Volumen total: ${volumenTotalRequeridoM3.toFixed(6)} m³`);
       
-      // Buscar TODOS los modelos Cube disponibles
-      const query = `
+      // Buscar modelos Cube disponibles (filtrar por modelo específico si se proporciona)
+      let query = `
         SELECT 
           modelo_id, nombre_modelo, volumen_litros,
           dim_int_frente, dim_int_profundo, dim_int_alto
         FROM admin_platform.modelos
         WHERE tipo = 'Cube'
-        ORDER BY volumen_litros ASC
       `;
       
-      const { rows: modelos } = await pool.query(query);
+      let queryParams = [];
+      if (modelo_especifico) {
+        query += ` AND modelo_id = $1`;
+        queryParams.push(modelo_especifico);
+      }
+      
+      query += ` ORDER BY volumen_litros ASC`;
+      
+      const { rows: modelos } = await pool.query(query, queryParams);
       console.log('Modelos encontrados:', modelos.length);
       
       if (modelos.length === 0) {
