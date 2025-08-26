@@ -172,7 +172,7 @@ const sugerenciasService = {
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: modelosNecesarios,
-          total_productos_transportados: totalProductosInventario,
+          total_productos_transportados: totalProductos,
           volumen_total_productos: volumenTotalRequeridoM3,
           volumen_total_contenedores: volumenTotalDisponible,
           eficiencia: Math.round(eficiencia * 10) / 10,
