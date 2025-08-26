@@ -88,7 +88,8 @@ const SugerenciasView: React.FC = () => {
 
   const cargarOrdenesDespacho = async () => {
     try {
-      const response = await fetch('http://localhost:3002/api/inventario-prospectos/ordenes-despacho');
+      const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+      const response = await fetch(`${API_URL}/inventario-prospectos/ordenes-despacho`);
       if (response.ok) {
         const ordenes = await response.json();
         setOrdenesDespacho(ordenes);
@@ -100,7 +101,8 @@ const SugerenciasView: React.FC = () => {
 
   const cargarProductosOrden = async (ordenDespacho: string) => {
     try {
-      const response = await fetch(`http://localhost:3002/api/inventario-prospectos/orden/${encodeURIComponent(ordenDespacho)}`);
+      const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+      const response = await fetch(`${API_URL}/inventario-prospectos/orden/${encodeURIComponent(ordenDespacho)}`);
       if (response.ok) {
         const productos = await response.json();
         setProductosOrden(productos);
@@ -120,7 +122,8 @@ const SugerenciasView: React.FC = () => {
       
       setCalculando(true);
       try {
-        const response = await fetch('http://localhost:3002/api/sugerencias/calcular-por-orden', {
+        const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+        const response = await fetch(`${API_URL}/sugerencias/calcular-por-orden`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
