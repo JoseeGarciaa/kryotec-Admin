@@ -76,25 +76,38 @@ const sugerenciasService = {
       console.log('Datos recibidos:', datos);
       
       // Extraer dimensiones y cantidad del objeto recibido
-      const { dimensiones_requeridas, cantidad } = datos;
+      const { cliente_id, inv_id } = datos;
       
-      if (!dimensiones_requeridas || !dimensiones_requeridas.frente || !dimensiones_requeridas.profundo || !dimensiones_requeridas.alto) {
-        throw new Error('Faltan dimensiones requeridas: frente, profundo, alto');
+      // Obtener el inventario completo del cliente para calcular volumen total
+      const inventarioQuery = `
+        SELECT 
+          producto, cantidad, largo_mm, ancho_mm, alto_mm,
+          (largo_mm * ancho_mm * alto_mm) / 1000000000.0 as volumen_unitario_m3
+        FROM admin_platform.inventario_prospecto
+        WHERE cliente_id = $1
+      `;
+      
+      const { rows: inventarioItems } = await pool.query(inventarioQuery, [cliente_id]);
+      console.log('Items de inventario encontrados:', inventarioItems.length);
+      
+      if (inventarioItems.length === 0) {
+        console.log('No se encontró inventario para el cliente');
+        return [];
       }
       
-      const cantidadCajas = cantidad || 1; // Cantidad de cajas del cliente
+      // Calcular volumen total de todos los productos del cliente
+      let volumenTotalRequeridoM3 = 0;
+      let totalProductos = 0;
       
-      // Convertir milímetros a metros para las dimensiones de UNA caja
-      const frente_m = parseFloat(dimensiones_requeridas.frente) / 1000; // mm a m
-      const profundo_m = parseFloat(dimensiones_requeridas.profundo) / 1000; // mm a m
-      const alto_m = parseFloat(dimensiones_requeridas.alto) / 1000; // mm a m
+      inventarioItems.forEach(item => {
+        const volumenTotalItem = item.volumen_unitario_m3 * item.cantidad;
+        volumenTotalRequeridoM3 += volumenTotalItem;
+        totalProductos += item.cantidad;
+        console.log(`${item.producto}: ${item.cantidad} unidades, ${volumenTotalItem.toFixed(6)} m³`);
+      });
       
-      // Calcular volumen de UNA caja en metros cúbicos
-      const volumenUnaCaja = frente_m * profundo_m * alto_m;
-      
-      // Calcular volumen total requerido
-      const volumenTotalRequeridoM3 = volumenUnaCaja * cantidadCajas;
-      console.log('Volumen total requerido:', volumenTotalRequeridoM3, 'm³');
+      console.log(`Volumen total a transportar: ${volumenTotalRequeridoM3.toFixed(6)} m³`);
+      console.log(`Total productos: ${totalProductos} unidades`);
       
       // Buscar TODOS los modelos Cube disponibles
       const query = `
@@ -108,7 +121,6 @@ const sugerenciasService = {
       
       const { rows: modelos } = await pool.query(query);
       console.log('Modelos encontrados:', modelos.length);
-      console.log('Primer modelo:', modelos[0]);
       
       if (modelos.length === 0) {
         console.log('No se encontraron modelos tipo Cube');
@@ -122,104 +134,37 @@ const sugerenciasService = {
         // Verificar que el modelo tenga dimensiones internas válidas
         if (!modelo.dim_int_frente || !modelo.dim_int_profundo || !modelo.dim_int_alto) {
           console.log(`Modelo ${modelo.nombre_modelo} descartado: sin dimensiones internas`);
-          return null; // Saltar modelos sin dimensiones internas
+          return null;
         }
         
-        console.log(`Dimensiones del modelo ${modelo.nombre_modelo}:`, {
-          frente: modelo.dim_int_frente,
-          profundo: modelo.dim_int_profundo,
-          alto: modelo.dim_int_alto
-        });
+        // Convertir volumen del modelo de litros a metros cúbicos
+        const volumenModeloM3 = modelo.volumen_litros / 1000;
+        console.log(`Modelo ${modelo.nombre_modelo}: ${volumenModeloM3.toFixed(6)} m³`);
         
-        // Convertir dimensiones internas del modelo de mm a metros
-        const frenteModelo = modelo.dim_int_frente; // En mm
-        const profundoModelo = modelo.dim_int_profundo; // En mm
-        const altoModelo = modelo.dim_int_alto; // En mm
+        // Calcular cuántos contenedores de este modelo necesitamos
+        const modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
         
-        // CALCULAR VOLUMEN DEL MODELO USANDO SUS DIMENSIONES INTERNAS
-        const volumenModeloM3 = (frenteModelo * profundoModelo * altoModelo) / 1000000000; // mm³ a m³
-        
-        // Verificar si las dimensiones de la caja coinciden exactamente con el modelo
-        const dimensionesExactas = (
-          frenteModelo === parseInt(dimensiones_requeridas.frente) &&
-          profundoModelo === parseInt(dimensiones_requeridas.profundo) &&
-          altoModelo === parseInt(dimensiones_requeridas.alto)
-        );
-        
-        // NUEVA LÓGICA: Filtrar modelos demasiado grandes para volúmenes pequeños
-        const factorProporcion = volumenModeloM3 / volumenTotalRequeridoM3;
-        console.log(`Modelo ${modelo.nombre_modelo} - Factor proporción:`, factorProporcion);
-        console.log(`Volumen modelo: ${volumenModeloM3} m³, Volumen requerido: ${volumenTotalRequeridoM3} m³`);
-        
-        // Temporalmente comentar estos filtros para diagnosticar
-        /*
-        // Si el modelo es más de 3 veces el volumen requerido Y el volumen total es pequeño (< 0.1 m³)
-        // entonces no lo recomendamos (evita recomendar contenedores gigantes para pocas cajas pequeñas)
-        if (factorProporcion > 3 && volumenTotalRequeridoM3 < 0.1) {
-          console.log(`Modelo ${modelo.nombre_modelo} descartado: factor > 3 y volumen pequeño`);
-          return null; // Modelo demasiado grande para pocas cajas pequeñas
-        }
-        
-        // Si el modelo es más de 10 veces el volumen requerido Y el volumen total es mediano (< 0.5 m³)
-        // entonces tampoco lo recomendamos
-        if (factorProporcion > 10 && volumenTotalRequeridoM3 < 0.5) {
-          console.log(`Modelo ${modelo.nombre_modelo} descartado: factor > 10 y volumen mediano`);
-          return null; // Modelo excesivamente grande
-        }
-        */
-        
-        // Calcular cuántas cajas caben en un modelo (por volumen)
-        const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
-        console.log(`Modelo ${modelo.nombre_modelo}: ${cajasPorModelo} cajas por modelo`);
-        
-        let modelosNecesarios, cajasQueSeGuardan, eficiencia;
-        
-        // Calcular cuántos modelos necesitamos para guardar todas las cajas
-        if (cajasPorModelo > 0) {
-          // Caso normal: las cajas caben en el modelo
-          modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
-          cajasQueSeGuardan = cantidadCajas; // Guardamos todas las cajas
-          
-          // Calcular eficiencia basada en el aprovechamiento del espacio
-          const volumenUtilizado = cantidadCajas * volumenUnaCaja;
-          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-          eficiencia = (volumenUtilizado / volumenTotalDisponible) * 100;
-        } else {
-          // Caso especial: las cajas son muy pequeñas comparadas con el modelo
-          // Calculamos por volumen puro
-          modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
-          cajasQueSeGuardan = cantidadCajas;
-          
-          // Eficiencia basada en la proximidad de volúmenes
-          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-          eficiencia = (volumenTotalRequeridoM3 / volumenTotalDisponible) * 100;
-        }
-        
-        console.log(`Modelo ${modelo.nombre_modelo}: ${modelosNecesarios} modelos necesarios, eficiencia: ${eficiencia.toFixed(1)}%`);
-        
-        // Bonificación por ajuste dimensional perfecto
-        if (dimensionesExactas) {
-          eficiencia = Math.min(100, eficiencia + 10);
-        }
-        
-        // Redondear a 1 decimal
-        eficiencia = Math.round(eficiencia * 10) / 10;
-        
-        // Determinar mensaje de comparación de tamaño
-        let mensajeComparacion;
+        // Calcular volumen total disponible con estos contenedores
         const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-        const diferenciaVolumen = ((volumenTotalDisponible - volumenTotalRequeridoM3) / volumenTotalRequeridoM3) * 100;
         
-        if (dimensionesExactas && Math.abs(diferenciaVolumen) < 1) {
-          mensajeComparacion = "✅ Ajuste perfecto";
-        } else if (diferenciaVolumen > 50) {
-          mensajeComparacion = "📦 Modelo más grande (mucho espacio extra)";
-        } else if (diferenciaVolumen > 10) {
-          mensajeComparacion = "📦 Modelo más grande (espacio extra)";
-        } else if (diferenciaVolumen > -10) {
-          mensajeComparacion = "🎯 Muy buena aproximación";
+        // Calcular eficiencia (qué tan bien aprovechamos el espacio)
+        const eficiencia = (volumenTotalRequeridoM3 / volumenTotalDisponible) * 100;
+        
+        console.log(`Modelo ${modelo.nombre_modelo}: ${modelosNecesarios} contenedores, ${eficiencia.toFixed(1)}% eficiencia`);
+        
+        // Determinar mensaje de comparación
+        const desperdicio = volumenTotalDisponible - volumenTotalRequeridoM3;
+        const porcentajeDesperdicio = (desperdicio / volumenTotalRequeridoM3) * 100;
+        
+        let mensajeComparacion;
+        if (eficiencia >= 90) {
+          mensajeComparacion = "🎯 Excelente aprovechamiento";
+        } else if (eficiencia >= 75) {
+          mensajeComparacion = "✅ Buen aprovechamiento";
+        } else if (eficiencia >= 50) {
+          mensajeComparacion = "📦 Aprovechamiento moderado";
         } else {
-          mensajeComparacion = "⚠️ Modelo más pequeño (aproximación por volumen)";
+          mensajeComparacion = "⚠️ Mucho espacio desperdiciado";
         }
         
         return {
@@ -227,35 +172,31 @@ const sugerenciasService = {
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: modelosNecesarios,
-          cajas_por_modelo: Math.max(cajasPorModelo, 0),
-          total_cajas_guardadas: cajasQueSeGuardan,
-          eficiencia: eficiencia,
+          total_productos_transportados: totalProductosInventario,
+          volumen_total_productos: volumenTotalRequeridoM3,
+          volumen_total_contenedores: volumenTotalDisponible,
+          eficiencia: Math.round(eficiencia * 10) / 10,
           mensaje_comparacion: mensajeComparacion,
           dimensiones_internas: {
-            frente: frenteModelo, // Mantener en mm
-            profundo: profundoModelo, // Mantener en mm
-            alto: altoModelo // Mantener en mm
-          },
-          // Agregar indicador si las cajas no caben físicamente
-          nota_dimensional: (frenteModelo < dimensiones_requeridas.frente || 
-                           profundoModelo < dimensiones_requeridas.profundo || 
-                           altoModelo < dimensiones_requeridas.alto) 
-                           ? 'Aproximación por volumen - las cajas exceden las dimensiones del modelo' 
-                           : null
+            frente: modelo.dim_int_frente, // mm
+            profundo: modelo.dim_int_profundo, // mm
+            alto: modelo.dim_int_alto // mm
+          }
         };
-      }).filter(sugerencia => sugerencia !== null); // Filtrar modelos excluidos
+      }).filter(sugerencia => sugerencia !== null);
       
       console.log(`Sugerencias generadas: ${sugerencias.length}`);
       console.log('Primeras 2 sugerencias:', sugerencias.slice(0, 2));
       
       // Ordenar por eficiencia descendente
-      sugerencias.sort((a, b) => b.eficiencia - a.eficiencia);
+      const sugerenciasOrdenadas = sugerencias.sort((a, b) => b.eficiencia - a.eficiencia);
       
-      return sugerencias;
+      console.log('Sugerencias calculadas exitosamente');
+      return sugerenciasOrdenadas;
       
     } catch (error) {
-      console.error('Error al calcular sugerencias:', error);
-      throw error;
+      console.error('Error en calcularSugerencias:', error);
+      throw new Error(`Error al calcular sugerencias: ${error.message}`);
     }
   },
 
