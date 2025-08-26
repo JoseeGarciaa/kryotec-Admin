@@ -11,7 +11,7 @@ const sugerenciasService = {
           s.modelo_id, s.estado,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
-          i.descripcion as descripcion_inventario, i.producto, i.cantidad as cantidad_inventario, 
+          i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
           i.largo_mm, i.ancho_mm, i.alto_mm
         FROM admin_platform.sugerencias_reemplazo s
         LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
@@ -53,7 +53,7 @@ const sugerenciasService = {
           s.modelo_id, s.estado,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
-          i.descripcion as descripcion_inventario, i.producto, i.cantidad as cantidad_inventario, 
+          i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
           i.largo_mm, i.ancho_mm, i.alto_mm
         FROM admin_platform.sugerencias_reemplazo s
         LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
@@ -81,7 +81,7 @@ const sugerenciasService = {
       // Obtener el producto específico del inventario usando inv_id
       const inventarioQuery = `
         SELECT 
-          producto, cantidad, largo_mm, ancho_mm, alto_mm, volumen_total_m3
+          producto, cantidad_despachada, largo_mm, ancho_mm, alto_mm, volumen_total_m3_producto
         FROM admin_platform.inventario_prospecto
         WHERE inv_id = $1 AND cliente_id = $2
       `;
@@ -98,8 +98,8 @@ const sugerenciasService = {
       console.log('Producto encontrado:', producto);
       
       // Usar los datos de la base de datos
-      const cantidadProductos = parseInt(producto.cantidad);
-      const volumenTotalRequeridoM3 = parseFloat(producto.volumen_total_m3);
+      const cantidadProductos = parseInt(producto.cantidad_despachada);
+      const volumenTotalRequeridoM3 = parseFloat(producto.volumen_total_m3_producto);
       
       // Dimensiones del producto individual en mm
       const productoFrente = parseInt(producto.largo_mm);

@@ -5,10 +5,10 @@ const inventarioProspectosService = {
     try {
       const query = `
         SELECT 
-          i.inv_id, i.cliente_id, i.descripcion, i.producto,
-          i.largo_mm, i.ancho_mm, i.alto_mm, i.cantidad,
-          i.volumen_total_m3, i.fecha_registro, i.frecuencia_uso_dia,
-          c.nombre_cliente
+          i.inv_id, i.cliente_id, i.descripcion_producto, i.producto,
+          i.largo_mm, i.ancho_mm, i.alto_mm, i.cantidad_despachada,
+          i.volumen_total_m3_producto, i.fecha_registro, i.fecha_de_despacho,
+          i.orden_despacho, c.nombre_cliente
         FROM admin_platform.inventario_prospecto i
         LEFT JOIN admin_platform.clientes_prospectos c ON i.cliente_id = c.cliente_id
         ORDER BY i.fecha_registro DESC
@@ -24,18 +24,18 @@ const inventarioProspectosService = {
   createInventario: async (data) => {
     try {
       // Calcular volumen total en m³ (misma fórmula que la calculadora)
-      const volumenTotal = (data.largo_mm * data.ancho_mm * data.alto_mm * data.cantidad) / 1000000000;
+      const volumenTotal = (data.largo_mm * data.ancho_mm * data.alto_mm * data.cantidad_despachada) / 1000000000;
       
       const query = `
         INSERT INTO admin_platform.inventario_prospecto (
-          cliente_id, descripcion, producto, largo_mm, ancho_mm, 
-          alto_mm, cantidad, frecuencia_uso_dia, volumen_total_m3
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          cliente_id, descripcion_producto, producto, largo_mm, ancho_mm, 
+          alto_mm, cantidad_despachada, fecha_de_despacho, orden_despacho, volumen_total_m3_producto
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
       `;
-      const values = [data.cliente_id, data.descripcion, data.producto, 
+      const values = [data.cliente_id, data.descripcion_producto, data.producto, 
                      data.largo_mm, data.ancho_mm, data.alto_mm, 
-                     data.cantidad, data.frecuencia_uso_dia, volumenTotal];
+                     data.cantidad_despachada, data.fecha_de_despacho, data.orden_despacho, volumenTotal];
       const { rows } = await pool.query(query, values);
       return rows[0];
     } catch (error) {
@@ -47,18 +47,18 @@ const inventarioProspectosService = {
   updateInventario: async (id, data) => {
     try {
       // Calcular volumen total en m³ al actualizar
-      const volumenTotal = (data.largo_mm * data.ancho_mm * data.alto_mm * data.cantidad) / 1000000000;
+      const volumenTotal = (data.largo_mm * data.ancho_mm * data.alto_mm * data.cantidad_despachada) / 1000000000;
       
       const query = `
         UPDATE admin_platform.inventario_prospecto
-        SET cliente_id = $1, descripcion = $2, producto = $3,
+        SET cliente_id = $1, descripcion_producto = $2, producto = $3,
             largo_mm = $4, ancho_mm = $5, alto_mm = $6,
-            cantidad = $7, frecuencia_uso_dia = $8, volumen_total_m3 = $9
-        WHERE inv_id = $10 RETURNING *
+            cantidad_despachada = $7, fecha_de_despacho = $8, orden_despacho = $9, volumen_total_m3_producto = $10
+        WHERE inv_id = $11 RETURNING *
       `;
-      const values = [data.cliente_id, data.descripcion, data.producto,
+      const values = [data.cliente_id, data.descripcion_producto, data.producto,
                      data.largo_mm, data.ancho_mm, data.alto_mm,
-                     data.cantidad, data.frecuencia_uso_dia, volumenTotal, id];
+                     data.cantidad_despachada, data.fecha_de_despacho, data.orden_despacho, volumenTotal, id];
       const { rows } = await pool.query(query, values);
       return rows[0];
     } catch (error) {

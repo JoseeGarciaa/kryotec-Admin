@@ -28,13 +28,14 @@ const InventarioView: React.FC = () => {
   // Form state
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
     cliente_id: 0,
-    descripcion: '',
+    descripcion_producto: '',
     producto: '',
     largo_mm: 0,
     ancho_mm: 0,
     alto_mm: 0,
-    cantidad: 0,
-    frecuencia_uso_dia: ''
+    cantidad_despachada: 0,
+    fecha_de_despacho: '',
+    orden_despacho: ''
   });
 
   // Cargar datos iniciales
@@ -67,17 +68,17 @@ const InventarioView: React.FC = () => {
 
   // Calcular estadísticas incluyendo productos pendientes
   const stats = useMemo(() => {
-    const totalItems = inventario.reduce((sum: number, item: any) => sum + Number(item.cantidad || 0), 0);
-    const pendingItems = pendingProducts.reduce((sum: number, item: any) => sum + Number(item.cantidad || 0), 0);
+    const totalItems = inventario.reduce((sum: number, item: any) => sum + Number(item.cantidad_despachada || 0), 0);
+    const pendingItems = pendingProducts.reduce((sum: number, item: any) => sum + Number(item.cantidad_despachada || 0), 0);
     
     const volumenTotal = inventario.reduce((sum: number, item: any) => {
-      const volumen = Number(item.volumen_total_m3) || 0;
+      const volumen = Number(item.volumen_total_m3_producto) || 0;
       return sum + volumen;
     }, 0);
     
     // Calcular volumen de productos pendientes
     const pendingVolumen = pendingProducts.reduce((sum: number, item: any) => {
-      const volumen = (Number(item.largo_mm || 0) * Number(item.ancho_mm || 0) * Number(item.alto_mm || 0) * Number(item.cantidad || 0)) / 1000000000;
+      const volumen = (Number(item.largo_mm || 0) * Number(item.ancho_mm || 0) * Number(item.alto_mm || 0) * Number(item.cantidad_despachada || 0)) / 1000000000;
       return sum + volumen;
     }, 0);
     
@@ -86,12 +87,12 @@ const InventarioView: React.FC = () => {
     
     inventario.forEach((item: any) => {
       const producto = item.producto || 'Sin especificar';
-      productosCount[producto] = (productosCount[producto] || 0) + Number(item.cantidad || 0);
+      productosCount[producto] = (productosCount[producto] || 0) + Number(item.cantidad_despachada || 0);
     });
     
     pendingProducts.forEach((item: any) => {
       const producto = item.producto || 'Sin especificar';
-      productosCount[producto] = (productosCount[producto] || 0) + Number(item.cantidad || 0);
+      productosCount[producto] = (productosCount[producto] || 0) + Number(item.cantidad_despachada || 0);
     });
   
     return { 
@@ -106,7 +107,7 @@ const InventarioView: React.FC = () => {
   // Filtrar inventario
   const filteredInventario = useMemo(() => {
     return inventario.filter((item: any) => {
-      const matchesSearch = item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch = item.descripcion_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            item.nombre_cliente?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCliente = clienteFilter === 'todos' || item.cliente_id.toString() === clienteFilter;
       const matchesProducto = productoFilter === 'todos' || item.producto === productoFilter;
@@ -171,13 +172,14 @@ const InventarioView: React.FC = () => {
       // Resetear solo los campos del producto pero mantener el cliente
       setFormData({
         ...formData,
-        descripcion: '',
+        descripcion_producto: '',
         producto: '',
         largo_mm: 0,
         ancho_mm: 0,
         alto_mm: 0,
-        cantidad: 0,
-        frecuencia_uso_dia: ''
+        cantidad_despachada: 0,
+        fecha_de_despacho: '',
+        orden_despacho: ''
       });
       
       toast.info('¡Puedes agregar otro producto para el mismo cliente!');
@@ -204,13 +206,14 @@ const InventarioView: React.FC = () => {
     setSelectedPendingItem(null);
     setFormData({
       cliente_id: item.cliente_id,
-      descripcion: item.descripcion || '',
+      descripcion_producto: item.descripcion_producto || '',
       producto: item.producto,
       largo_mm: item.largo_mm,
       ancho_mm: item.ancho_mm,
       alto_mm: item.alto_mm,
-      cantidad: item.cantidad,
-      frecuencia_uso_dia: item.frecuencia_uso_dia || ''
+      cantidad_despachada: item.cantidad_despachada,
+      fecha_de_despacho: item.fecha_de_despacho ? item.fecha_de_despacho.toISOString().split('T')[0] : '',
+      orden_despacho: item.orden_despacho || ''
     });
     setShowModal(true);
   };
@@ -220,13 +223,14 @@ const InventarioView: React.FC = () => {
     setSelectedItem(null);
     setFormData({
       cliente_id: item.cliente_id,
-      descripcion: item.descripcion || '',
+      descripcion_producto: item.descripcion_producto || '',
       producto: item.producto,
       largo_mm: item.largo_mm,
       ancho_mm: item.ancho_mm,
       alto_mm: item.alto_mm,
-      cantidad: item.cantidad,
-      frecuencia_uso_dia: item.frecuencia_uso_dia || ''
+      cantidad_despachada: item.cantidad_despachada,
+      fecha_de_despacho: item.fecha_de_despacho || '',
+      orden_despacho: item.orden_despacho || ''
     });
     setShowModal(true);
   };
@@ -283,13 +287,14 @@ const InventarioView: React.FC = () => {
     setSelectedPendingItem(null);
     setFormData({
       cliente_id: 0,
-      descripcion: '',
+      descripcion_producto: '',
       producto: '',
       largo_mm: 0,
       ancho_mm: 0,
       alto_mm: 0,
-      cantidad: 0,
-      frecuencia_uso_dia: ''
+      cantidad_despachada: 0,
+      fecha_de_despacho: '',
+      orden_despacho: ''
     });
   };
 
@@ -418,7 +423,7 @@ const InventarioView: React.FC = () => {
                   <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
                     <Package size={20} className="text-white" />
                   </div>
-                  <h3 className="text-lg font-bold text-white truncate pr-8">{product.descripcion || 'Sin descripción'}</h3>
+                  <h3 className="text-lg font-bold text-white truncate pr-8">{product.descripcion_producto || 'Sin descripción'}</h3>
                   <p className="text-orange-100 text-sm">{product.nombre_cliente}</p>
                 </div>
                 
@@ -429,7 +434,7 @@ const InventarioView: React.FC = () => {
                       {product.producto}
                     </div>
                     <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
-                      x{Number(product.cantidad || 0)}
+                      x{Number(product.cantidad_despachada || 0)}
                     </div>
                   </div>
                   
@@ -443,13 +448,19 @@ const InventarioView: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Volumen:</span>
                       <span className="text-white text-sm">
-                        {((Number(product.largo_mm || 0) * Number(product.ancho_mm || 0) * Number(product.alto_mm || 0) * Number(product.cantidad || 0)) / 1000000000).toFixed(6)} m³
+                        {((Number(product.largo_mm || 0) * Number(product.ancho_mm || 0) * Number(product.alto_mm || 0) * Number(product.cantidad_despachada || 0)) / 1000000000).toFixed(6)} m³
                       </span>
                     </div>
-                    {product.frecuencia_uso_dia && (
+                    {product.fecha_de_despacho && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Frecuencia:</span>
-                        <span className="text-white text-sm">{product.frecuencia_uso_dia}</span>
+                        <span className="text-gray-400 text-sm">Fecha despacho:</span>
+                        <span className="text-white text-sm">{product.fecha_de_despacho}</span>
+                      </div>
+                    )}
+                    {product.orden_despacho && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Orden despacho:</span>
+                        <span className="text-white text-sm">{product.orden_despacho}</span>
                       </div>
                     )}
                   </div>
@@ -545,7 +556,7 @@ const InventarioView: React.FC = () => {
                   <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
                     <Package size={20} className="text-white" />
                   </div>
-                  <h3 className="text-lg font-bold text-white truncate pr-8">{item.descripcion || 'Sin descripción'}</h3>
+                  <h3 className="text-lg font-bold text-white truncate pr-8">{item.descripcion_producto || 'Sin descripción'}</h3>
                   <p className="text-blue-100 text-sm flex items-center gap-1">
                     <User size={14} />
                     {item.nombre_cliente || 'N/A'}
@@ -559,7 +570,7 @@ const InventarioView: React.FC = () => {
                       {item.producto || 'No especificado'}
                     </div>
                     <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
-                      x{Number(item.cantidad || 0)}
+                      x{Number(item.cantidad_despachada || 0)}
                     </div>
                   </div>
                   
@@ -573,13 +584,19 @@ const InventarioView: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Volumen:</span>
                       <span className="text-white text-sm">
-                        {(Number(item.volumen_total_m3) || 0).toFixed(6)} m³
+                        {(Number(item.volumen_total_m3_producto) || 0).toFixed(6)} m³
                       </span>
                     </div>
-                    {item.frecuencia_uso_dia && (
+                    {item.fecha_de_despacho && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Frecuencia:</span>
-                        <span className="text-white text-sm">{item.frecuencia_uso_dia}</span>
+                        <span className="text-gray-400 text-sm">Fecha despacho:</span>
+                        <span className="text-white text-sm">{item.fecha_de_despacho.toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    {item.orden_despacho && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Orden despacho:</span>
+                        <span className="text-white text-sm">{item.orden_despacho}</span>
                       </div>
                     )}
                   </div>
@@ -624,9 +641,12 @@ const InventarioView: React.FC = () => {
                 {filteredInventario.map((item: any) => (
                   <tr key={item.inv_id} className="hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-white">{item.descripcion || 'Sin descripción'}</div>
-                      {item.frecuencia_uso_dia && (
-                        <div className="text-sm text-gray-400">Frecuencia: {item.frecuencia_uso_dia}</div>
+                      <div className="text-sm font-medium text-white">{item.descripcion_producto || 'Sin descripción'}</div>
+                      {item.fecha_de_despacho && (
+                        <div className="text-sm text-gray-400">Fecha despacho: {item.fecha_de_despacho.toLocaleDateString()}</div>
+                      )}
+                      {item.orden_despacho && (
+                        <div className="text-sm text-gray-400">Orden: {item.orden_despacho}</div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -641,10 +661,10 @@ const InventarioView: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{Number(item.cantidad || 0)}</div>
+                      <div className="text-sm text-white">{Number(item.cantidad_despachada || 0)}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{(Number(item.volumen_total_m3) || 0).toFixed(6)} m³</div>
+                      <div className="text-sm text-white">{(Number(item.volumen_total_m3_producto) || 0).toFixed(6)} m³</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
@@ -700,8 +720,8 @@ const InventarioView: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-300 mb-1">Descripción</label>
                 <input
                   type="text"
-                  value={formData.descripcion}
-                  onChange={(e: any) => setFormData({...formData, descripcion: e.target.value})}
+                  value={formData.descripcion_producto}
+                  onChange={(e: any) => setFormData({...formData, descripcion_producto: e.target.value})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                   placeholder="Descripción del producto"
                 />
@@ -756,11 +776,11 @@ const InventarioView: React.FC = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Cantidad</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Cantidad Despachada</label>
                 <input
                   type="number"
-                  value={formData.cantidad}
-                  onChange={(e: any) => setFormData({...formData, cantidad: parseInt(e.target.value) || 0})}
+                  value={formData.cantidad_despachada}
+                  onChange={(e: any) => setFormData({...formData, cantidad_despachada: parseInt(e.target.value) || 0})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                   required
                   min="1"
@@ -768,13 +788,23 @@ const InventarioView: React.FC = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Frecuencia de uso por día</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Fecha de Despacho</label>
+                <input
+                  type="date"
+                  value={formData.fecha_de_despacho}
+                  onChange={(e: any) => setFormData({...formData, fecha_de_despacho: e.target.value})}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Orden de Despacho</label>
                 <input
                   type="text"
-                  value={formData.frecuencia_uso_dia}
-                  onChange={(e: any) => setFormData({...formData, frecuencia_uso_dia: e.target.value})}
+                  value={formData.orden_despacho}
+                  onChange={(e: any) => setFormData({...formData, orden_despacho: e.target.value})}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                  placeholder="Ej: 2-3 veces"
+                  placeholder="Número de orden de despacho"
                 />
               </div>
               

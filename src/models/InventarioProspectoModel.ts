@@ -3,28 +3,30 @@ import { apiClient } from '../services/api';
 export interface InventarioProspecto {
   inv_id: number;
   cliente_id: number;
-  descripcion?: string;
+  descripcion_producto?: string;
   producto: string;
   largo_mm: number;
   ancho_mm: number;
   alto_mm: number;
-  cantidad: number;
-  volumen_total_m3?: number;
+  cantidad_despachada: number;
+  fecha_de_despacho?: Date;
+  volumen_total_m3_producto?: number;
+  orden_despacho?: string;
   fecha_registro?: Date;
-  frecuencia_uso_dia?: string;
   // Campos adicionales para mostrar información del cliente
   nombre_cliente?: string;
 }
 
 export type CreateInventarioProspectoData = {
   cliente_id: number;
-  descripcion?: string;
+  descripcion_producto?: string;
   producto: string;
   largo_mm: number;
   ancho_mm: number;
   alto_mm: number;
-  cantidad: number;
-  frecuencia_uso_dia?: string;
+  cantidad_despachada: number;
+  fecha_de_despacho?: string;
+  orden_despacho?: string;
 };
 
 export class InventarioProspectoModel {
@@ -37,9 +39,10 @@ export class InventarioProspectoModel {
         largo_mm: Number(item.largo_mm),
         ancho_mm: Number(item.ancho_mm),
         alto_mm: Number(item.alto_mm),
-        cantidad: Number(item.cantidad),
-        volumen_total_m3: Number(item.volumen_total_m3) || 0,
-        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
+        cantidad_despachada: Number(item.cantidad_despachada),
+        volumen_total_m3_producto: Number(item.volumen_total_m3_producto) || 0,
+        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null,
+        fecha_de_despacho: item.fecha_de_despacho ? new Date(item.fecha_de_despacho) : null
       }));
     } catch (error) {
       console.error('Error al obtener inventario de prospectos:', error);
@@ -57,9 +60,10 @@ export class InventarioProspectoModel {
         largo_mm: Number(item.largo_mm),
         ancho_mm: Number(item.ancho_mm),
         alto_mm: Number(item.alto_mm),
-        cantidad: Number(item.cantidad),
-        volumen_total_m3: Number(item.volumen_total_m3) || 0,
-        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
+        cantidad_despachada: Number(item.cantidad_despachada),
+        volumen_total_m3_producto: Number(item.volumen_total_m3_producto) || 0,
+        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null,
+        fecha_de_despacho: item.fecha_de_despacho ? new Date(item.fecha_de_despacho) : null
       };
     } catch (error) {
       console.error(`Error al obtener inventario con ID ${id}:`, error);
@@ -77,9 +81,10 @@ export class InventarioProspectoModel {
         largo_mm: Number(item.largo_mm),
         ancho_mm: Number(item.ancho_mm),
         alto_mm: Number(item.alto_mm),
-        cantidad: Number(item.cantidad),
-        volumen_total_m3: Number(item.volumen_total_m3) || 0,
-        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
+        cantidad_despachada: Number(item.cantidad_despachada),
+        volumen_total_m3_producto: Number(item.volumen_total_m3_producto) || 0,
+        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null,
+        fecha_de_despacho: item.fecha_de_despacho ? new Date(item.fecha_de_despacho) : null
       };
     } catch (error) {
       console.error('Error al crear inventario:', error);
@@ -97,9 +102,10 @@ export class InventarioProspectoModel {
         largo_mm: Number(item.largo_mm),
         ancho_mm: Number(item.ancho_mm),
         alto_mm: Number(item.alto_mm),
-        cantidad: Number(item.cantidad),
-        volumen_total_m3: Number(item.volumen_total_m3) || 0,
-        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
+        cantidad_despachada: Number(item.cantidad_despachada),
+        volumen_total_m3_producto: Number(item.volumen_total_m3_producto) || 0,
+        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null,
+        fecha_de_despacho: item.fecha_de_despacho ? new Date(item.fecha_de_despacho) : null
       };
     } catch (error) {
       console.error(`Error al actualizar inventario con ID ${id}:`, error);
@@ -126,9 +132,10 @@ export class InventarioProspectoModel {
         largo_mm: Number(item.largo_mm),
         ancho_mm: Number(item.ancho_mm),
         alto_mm: Number(item.alto_mm),
-        cantidad: Number(item.cantidad),
-        volumen_total_m3: Number(item.volumen_total_m3) || 0,
-        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null
+        cantidad_despachada: Number(item.cantidad_despachada),
+        volumen_total_m3_producto: Number(item.volumen_total_m3_producto) || 0,
+        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null,
+        fecha_de_despacho: item.fecha_de_despacho ? new Date(item.fecha_de_despacho) : null
       }));
     } catch (error) {
       console.error(`Error al obtener inventario del cliente ${clienteId}:`, error);

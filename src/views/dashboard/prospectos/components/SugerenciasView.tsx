@@ -53,7 +53,7 @@ const SugerenciasView: React.FC = () => {
     if (selectedInventario) {
       const item = inventario.find((inv: InventarioProspecto) => inv.inv_id === Number(selectedInventario));
       if (item) {
-        setVolumenRequerido(item.volumen_total_m3?.toString() || '');
+        setVolumenRequerido(item.volumen_total_m3_producto?.toString() || '');
         // Si el item tiene dimensiones, las usamos (mantener en mm)
         if (item.largo_mm && item.ancho_mm && item.alto_mm) {
           setDimensiones({
@@ -86,7 +86,7 @@ const SugerenciasView: React.FC = () => {
     try {
       // Obtener la cantidad del item de inventario seleccionado
       const item = inventario.find((inv: InventarioProspecto) => inv.inv_id === Number(selectedInventario));
-      const cantidadCajas = item?.cantidad || 1;
+      const cantidadCajas = item?.cantidad_despachada || 1;
 
       const calculo: CalculoSugerencia = {
         cliente_id: Number(selectedCliente),
@@ -641,7 +641,7 @@ const SugerenciasView: React.FC = () => {
                 <option value="">Seleccionar item...</option>
                 {filteredInventario.map(item => (
                   <option key={item.inv_id} value={item.inv_id}>
-                    {item.descripcion} - {item.producto}
+                    {item.descripcion_producto} - {item.producto}
                   </option>
                 ))}
               </select>
@@ -709,7 +709,7 @@ const SugerenciasView: React.FC = () => {
               </label>
               <input
                 type="number"
-                value={selectedInventario ? (inventario.find(inv => inv.inv_id === Number(selectedInventario))?.cantidad || 0) : ''}
+                value={selectedInventario ? (inventario.find(inv => inv.inv_id === Number(selectedInventario))?.cantidad_despachada || 0) : ''}
                 readOnly
                 className="w-full p-3 bg-gray-600 border border-gray-600 rounded-lg text-white cursor-not-allowed"
                 placeholder="Seleccione un item del inventario"
