@@ -241,12 +241,12 @@ const SugerenciasView: React.FC = () => {
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'bold');
     pdf.text('Cliente', 22, yPosition + 7);
-    pdf.text('Producto', 50, yPosition + 7);
-    pdf.text('Cant.', 80, yPosition + 7);
-    pdf.text('Precio Alq.', 95, yPosition + 7);
-    pdf.text('Modelo', 125, yPosition + 7);
-    pdf.text('C.Sug', 155, yPosition + 7);
-    pdf.text('Estado', 170, yPosition + 7);
+    pdf.text('Producto', 45, yPosition + 7);
+    pdf.text('Cant.', 70, yPosition + 7);
+    pdf.text('Precio Alq.', 85, yPosition + 7);
+    pdf.text('Modelo Sugerido', 115, yPosition + 7);
+    pdf.text('C.Sug', 175, yPosition + 7);
+    pdf.text('Estado', 190, yPosition + 7);
     
     yPosition += 15;
     
@@ -268,21 +268,21 @@ const SugerenciasView: React.FC = () => {
       pdf.text(clienteTruncado, 22, yPosition + 2);
       
       const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
-      const productoTruncado = producto.length > 12 ? producto.substring(0, 9) + '...' : producto;
-      pdf.text(productoTruncado, 50, yPosition + 2);
+      const productoTruncado = producto.length > 10 ? producto.substring(0, 7) + '...' : producto;
+      pdf.text(productoTruncado, 45, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 80, yPosition + 2);
+      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 70, yPosition + 2);
       
       // Precio de alquiler
       const precioAlquiler = preciosAlquiler[producto] || 'N/A';
-      const precioTruncado = precioAlquiler.length > 10 ? precioAlquiler.substring(0, 7) + '...' : precioAlquiler;
-      pdf.text(precioTruncado, 95, yPosition + 2);
+      const precioTruncado = precioAlquiler.length > 8 ? precioAlquiler.substring(0, 5) + '...' : precioAlquiler;
+      pdf.text(precioTruncado, 85, yPosition + 2);
       
+      // Modelo completo sin truncar
       const modelo = sugerencia.modelo_sugerido || 'N/A';
-      const modeloTruncado = modelo.length > 12 ? modelo.substring(0, 9) + '...' : modelo;
-      pdf.text(modeloTruncado, 125, yPosition + 2);
+      pdf.text(modelo, 115, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 155, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 175, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -293,7 +293,7 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 170, yPosition + 2);
+      pdf.text(estado, 190, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       
@@ -397,11 +397,11 @@ const SugerenciasView: React.FC = () => {
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'bold');
     pdf.text('Producto', 25, yPosition + 7);
-    pdf.text('Cant.', 65, yPosition + 7);
-    pdf.text('Precio Alq.', 80, yPosition + 7);
-    pdf.text('Modelo', 120, yPosition + 7);
-    pdf.text('C.Sug', 155, yPosition + 7);
-    pdf.text('Estado', 175, yPosition + 7);
+    pdf.text('Cant.', 55, yPosition + 7);
+    pdf.text('Precio Alq.', 70, yPosition + 7);
+    pdf.text('Modelo Sugerido', 100, yPosition + 7);
+    pdf.text('C.Sug', 165, yPosition + 7);
+    pdf.text('Estado', 180, yPosition + 7);
     
     yPosition += 15;
     
@@ -419,21 +419,21 @@ const SugerenciasView: React.FC = () => {
       pdf.setFontSize(7);
       // Truncar texto del producto si es muy largo
       const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
-      const productoTruncado = producto.length > 15 ? producto.substring(0, 12) + '...' : producto;
+      const productoTruncado = producto.length > 12 ? producto.substring(0, 9) + '...' : producto;
       pdf.text(productoTruncado, 25, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 65, yPosition + 2);
+      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 55, yPosition + 2);
       
       // Precio de alquiler
       const precioAlquiler = preciosAlquiler[producto] || 'N/A';
-      const precioTruncado = precioAlquiler.length > 12 ? precioAlquiler.substring(0, 9) + '...' : precioAlquiler;
-      pdf.text(precioTruncado, 80, yPosition + 2);
+      const precioTruncado = precioAlquiler.length > 10 ? precioAlquiler.substring(0, 7) + '...' : precioAlquiler;
+      pdf.text(precioTruncado, 70, yPosition + 2);
       
+      // Modelo completo sin truncar
       const modelo = sugerencia.modelo_sugerido || 'N/A';
-      const modeloTruncado = modelo.length > 12 ? modelo.substring(0, 9) + '...' : modelo;
-      pdf.text(modeloTruncado, 120, yPosition + 2);
+      pdf.text(modelo, 100, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 155, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 165, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -444,7 +444,7 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 175, yPosition + 2);
+      pdf.text(estado, 180, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       
