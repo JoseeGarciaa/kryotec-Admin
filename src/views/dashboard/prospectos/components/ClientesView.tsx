@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ClienteProspecto, CreateClienteProspectoData } from '../../../../models/ClienteProspectoModel';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
-import { Plus, Edit2, Trash2, Search, Users, Calendar, LayoutGrid, List, User, Mail, Phone, CreditCard } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, Calendar, LayoutGrid, List, User } from 'lucide-react';
 
 const ClientesView: React.FC = () => {
   const { clientes, loading, error, createCliente, updateCliente, deleteCliente } = useClienteProspectoController();
@@ -146,7 +146,7 @@ const ClientesView: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="bg-blue-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
@@ -166,8 +166,6 @@ const ClientesView: React.FC = () => {
             <Calendar size={40} className="text-orange-200" />
           </div>
         </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       </div>
 
       {/* Filters */}
@@ -232,17 +230,17 @@ const ClientesView: React.FC = () => {
                   className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
                 >
                   {/* Cabecera de la tarjeta con gradiente */}
-                  <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 relative">
-                    <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
-                      <User size={20} className="text-white" />
+                  <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 relative">
+                    <div className="absolute top-3 right-3 bg-white/20 p-2 rounded-full">
+                      <User size={18} className="text-white" />
                     </div>
                     <h3 className="text-lg font-bold text-white truncate pr-8">{cliente.nombre_cliente}</h3>
                     <p className="text-blue-100 text-sm">{cliente.contacto || 'Sin contacto'}</p>
                   </div>
                   
                   {/* Contenido principal */}
-                  <div className="p-4">
-                    <div className="flex justify-between items-center mb-3">
+                  <div className="p-3">
+                    <div className="flex justify-between items-center mb-2">
                       <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
                         {cliente.tipo_cliente || 'N/A'}
                       </div>
@@ -255,7 +253,7 @@ const ClientesView: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div className="space-y-2 mb-4">
+                    <div className="space-y-1 mb-3">
                       <div className="flex justify-between items-center">
                         <span className="text-gray-400 text-sm">Identificación:</span>
                         <span className="text-white text-sm">
@@ -284,7 +282,7 @@ const ClientesView: React.FC = () => {
                   </div>
                   
                   {/* Pie de tarjeta con acciones */}
-                  <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
+                  <div className="border-t border-gray-700 bg-gray-900 px-4 py-2 flex justify-between">
                     <button
                       onClick={() => handleEdit(cliente)}
                       className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"

@@ -474,7 +474,8 @@ app.delete('/api/inventario-prospectos/:id', async (req, res) => {
 // Nuevas rutas para órdenes de despacho
 app.get('/api/inventario-prospectos/ordenes-despacho', async (req, res) => {
   try {
-    const ordenes = await inventarioProspectosService.getOrdenesDespacho();
+    const clienteId = req.query.cliente_id ? parseInt(req.query.cliente_id) : null;
+    const ordenes = await inventarioProspectosService.getOrdenesDespacho(clienteId);
     res.json(ordenes);
   } catch (error) {
     console.error('Error al obtener órdenes de despacho:', error);

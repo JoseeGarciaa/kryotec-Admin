@@ -8,7 +8,7 @@ import { toast } from 'react-toastify';
 
 // Interface para productos pendientes (locales)
 interface PendingProduct extends CreateInventarioProspectoData {
-  tempId: string; // ID temporal para identificar productos locales
+  tempId: string; // ID temporal para identificar productos localmente
   nombre_cliente?: string; // Para mostrar el nombre del cliente
 }
 
@@ -342,7 +342,7 @@ const InventarioView: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-gray-800 p-4 rounded-lg flex items-center">
           <div className="bg-blue-600 p-3 rounded-lg mr-4">
             <Package size={24} />
@@ -387,7 +387,7 @@ const InventarioView: React.FC = () => {
 
       {/* Sección de productos pendientes (Carrito) */}
       {pendingProducts.length > 0 && (
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <ShoppingCart size={24} />
@@ -419,17 +419,17 @@ const InventarioView: React.FC = () => {
                 className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-orange-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
               >
                 {/* Cabecera de la tarjeta con gradiente */}
-                <div className="bg-gradient-to-r from-orange-500 to-yellow-600 p-4 relative">
-                  <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
-                    <Package size={20} className="text-white" />
+                <div className="bg-gradient-to-r from-orange-500 to-yellow-600 p-3 relative">
+                  <div className="absolute top-3 right-3 bg-white/20 p-2 rounded-full">
+                    <Package size={18} className="text-white" />
                   </div>
                   <h3 className="text-lg font-bold text-white truncate pr-8">{product.descripcion_producto || 'Sin descripción'}</h3>
                   <p className="text-orange-100 text-sm">{product.nombre_cliente}</p>
                 </div>
                 
                 {/* Contenido principal */}
-                <div className="p-4">
-                  <div className="flex justify-between items-center mb-3">
+                <div className="p-3">
+                  <div className="flex justify-between items-center mb-2">
                     <div className="bg-purple-100 dark:bg-purple-900 rounded-full px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
                       {product.producto}
                     </div>
@@ -438,7 +438,7 @@ const InventarioView: React.FC = () => {
                     </div>
                   </div>
                   
-                  <div className="space-y-2 mb-4">
+                  <div className="space-y-1 mb-3">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Dimensiones:</span>
                       <span className="text-white text-sm">
@@ -467,7 +467,7 @@ const InventarioView: React.FC = () => {
                 </div>
                 
                 {/* Pie de tarjeta con acciones */}
-                <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
+                <div className="border-t border-gray-700 bg-gray-900 px-4 py-2 flex justify-between">
                   <button
                     onClick={() => handleEditPending(product)}
                     className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
@@ -530,7 +530,7 @@ const InventarioView: React.FC = () => {
       </div>
 
       {/* Productos guardados en la base de datos */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
           <Package size={24} />
           Productos Guardados ({filteredInventario.length})
@@ -552,9 +552,9 @@ const InventarioView: React.FC = () => {
                 className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
               >
                 {/* Cabecera de la tarjeta con gradiente */}
-                <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 relative">
-                  <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full">
-                    <Package size={20} className="text-white" />
+                <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 relative">
+                  <div className="absolute top-3 right-3 bg-white/20 p-2 rounded-full">
+                    <Package size={18} className="text-white" />
                   </div>
                   <h3 className="text-lg font-bold text-white truncate pr-8">{item.descripcion_producto || 'Sin descripción'}</h3>
                   <p className="text-blue-100 text-sm flex items-center gap-1">
@@ -564,8 +564,8 @@ const InventarioView: React.FC = () => {
                 </div>
                 
                 {/* Contenido principal */}
-                <div className="p-4">
-                  <div className="flex justify-between items-center mb-3">
+                <div className="p-3">
+                  <div className="flex justify-between items-center mb-2">
                     <div className="bg-purple-100 dark:bg-purple-900 rounded-full px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
                       {item.producto || 'No especificado'}
                     </div>
@@ -574,7 +574,7 @@ const InventarioView: React.FC = () => {
                     </div>
                   </div>
                   
-                  <div className="space-y-2 mb-4">
+                  <div className="space-y-1 mb-3">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Dimensiones:</span>
                       <span className="text-white text-sm">
@@ -603,7 +603,7 @@ const InventarioView: React.FC = () => {
                 </div>
                 
                 {/* Pie de tarjeta con acciones */}
-                <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
+                <div className="border-t border-gray-700 bg-gray-900 px-4 py-2 flex justify-between">
                   <button
                     onClick={() => handleEdit(item)}
                     className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
@@ -690,15 +690,16 @@ const InventarioView: React.FC = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 text-white">
               {selectedItem ? 'Editar Producto Guardado' : 
                selectedPendingItem ? 'Editar Producto en Carrito' : 
                'Agregar Producto al Carrito'}
             </h3>
             
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Fila 1: Cliente */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Cliente</label>
                 <select
@@ -716,87 +717,102 @@ const InventarioView: React.FC = () => {
                 </select>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Descripción</label>
-                <input
-                  type="text"
-                  value={formData.descripcion_producto}
-                  onChange={(e: any) => setFormData({...formData, descripcion_producto: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                  placeholder="Descripción del producto"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Producto</label>
-                <input
-                  type="text"
-                  value={formData.producto}
-                  onChange={(e: any) => setFormData({...formData, producto: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                  placeholder="Ej: Pastillas, Jeringas, ICOPOR, TÉRMICO, etc."
-                  required
-                />
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2">
+              {/* Fila 2: Descripción y Producto */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Largo (mm)</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Descripción</label>
                   <input
-                    type="number"
-                    value={formData.largo_mm}
-                    onChange={(e: any) => setFormData({...formData, largo_mm: parseInt(e.target.value) || 0})}
+                    type="text"
+                    value={formData.descripcion_producto}
+                    onChange={(e: any) => setFormData({...formData, descripcion_producto: e.target.value})}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    required
-                    min="1"
+                    placeholder="Descripción del producto"
                   />
                 </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Ancho (mm)</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Producto</label>
                   <input
-                    type="number"
-                    value={formData.ancho_mm}
-                    onChange={(e: any) => setFormData({...formData, ancho_mm: parseInt(e.target.value) || 0})}
+                    type="text"
+                    value={formData.producto}
+                    onChange={(e: any) => setFormData({...formData, producto: e.target.value})}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Ej: Pastillas, Jeringas, ICOPOR, TÉRMICO, etc."
                     required
-                    min="1"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Alto (mm)</label>
-                  <input
-                    type="number"
-                    value={formData.alto_mm}
-                    onChange={(e: any) => setFormData({...formData, alto_mm: parseInt(e.target.value) || 0})}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    required
-                    min="1"
                   />
                 </div>
               </div>
               
+              {/* Fila 3: Dimensiones */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Cantidad Despachada</label>
-                <input
-                  type="number"
-                  value={formData.cantidad_despachada}
-                  onChange={(e: any) => setFormData({...formData, cantidad_despachada: parseInt(e.target.value) || 0})}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                  required
-                  min="1"
-                />
+                <label className="block text-sm font-medium text-gray-300 mb-2">Dimensiones (mm)</label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Largo</label>
+                    <input
+                      type="number"
+                      value={formData.largo_mm}
+                      onChange={(e: any) => setFormData({...formData, largo_mm: parseInt(e.target.value) || 0})}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      required
+                      min="1"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Ancho</label>
+                    <input
+                      type="number"
+                      value={formData.ancho_mm}
+                      onChange={(e: any) => setFormData({...formData, ancho_mm: parseInt(e.target.value) || 0})}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      required
+                      min="1"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Alto</label>
+                    <input
+                      type="number"
+                      value={formData.alto_mm}
+                      onChange={(e: any) => setFormData({...formData, alto_mm: parseInt(e.target.value) || 0})}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      required
+                      min="1"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Fecha de Despacho</label>
-                <input
-                  type="date"
-                  value={formData.fecha_de_despacho}
-                  onChange={(e: any) => setFormData({...formData, fecha_de_despacho: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                />
+              {/* Fila 4: Cantidad y Fecha */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Cantidad Despachada</label>
+                  <input
+                    type="number"
+                    value={formData.cantidad_despachada}
+                    onChange={(e: any) => setFormData({...formData, cantidad_despachada: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    required
+                    min="1"
+                    placeholder="0"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Fecha de Despacho</label>
+                  <input
+                    type="date"
+                    value={formData.fecha_de_despacho}
+                    onChange={(e: any) => setFormData({...formData, fecha_de_despacho: e.target.value})}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
               </div>
               
+              {/* Fila 5: Orden de Despacho */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Orden de Despacho</label>
                 <input
@@ -808,7 +824,8 @@ const InventarioView: React.FC = () => {
                 />
               </div>
               
-              <div className="flex gap-3 pt-4">
+              {/* Botones */}
+              <div className="flex gap-3 pt-6 border-t border-gray-600">
                 {selectedItem ? (
                   // Modo edición de producto guardado
                   <>

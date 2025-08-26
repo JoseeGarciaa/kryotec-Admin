@@ -79,19 +79,31 @@ const inventarioProspectosService = {
   },
 
   // Obtener todas las órdenes de despacho únicas
-  getOrdenesDespacho: async () => {
+  getOrdenesDespacho: async (clienteId = null) => {
     try {
-      const query = `
+      let query = `
         SELECT DISTINCT orden_despacho, 
                COUNT(*) as cantidad_productos,
                SUM(cantidad_despachada) as total_productos,
                CAST(SUM(volumen_total_m3_producto) AS DECIMAL) as volumen_total
         FROM admin_platform.inventario_prospecto 
         WHERE orden_despacho IS NOT NULL AND orden_despacho != ''
+      `;
+      
+      const queryParams = [];
+      
+      // Si se proporciona un cliente_id, filtrar por él
+      if (clienteId) {
+        query += ` AND cliente_id = $1`;
+        queryParams.push(clienteId);
+      }
+      
+      query += `
         GROUP BY orden_despacho
         ORDER BY orden_despacho
       `;
-      const { rows } = await pool.query(query);
+      
+      const { rows } = await pool.query(query, queryParams);
       
       // Asegurar que los números sean números
       const processedRows = rows.map(row => ({

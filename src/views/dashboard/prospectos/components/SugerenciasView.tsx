@@ -35,7 +35,7 @@ const SugerenciasView: React.FC = () => {
   // Estados para precios de alquiler
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [preciosAlquiler, setPreciosAlquiler] = useState<{ [key: string]: string }>({});
-  const [pdfType, setPdfType] = useState<'general' | 'cliente'>('general');
+  const [pdfType, setPdfType] = useState<'general' | 'cliente' | 'individual'>('general');
   const [productosUnicos, setProductosUnicos] = useState<{
     id: string;
     producto: string;
@@ -43,6 +43,9 @@ const SugerenciasView: React.FC = () => {
     modelo_sugerido: string;
     cantidad_sugerida: number;
   }[]>([]);
+  
+  // Estados para PDF individual
+  const [sugerenciaIndividual, setSugerenciaIndividual] = useState<any>(null);
 
   // Filtrar sugerencias por cliente seleccionado
   const filteredSugerencias = clienteHistorialFilter 
@@ -78,12 +81,17 @@ const SugerenciasView: React.FC = () => {
     }
   }, [selectedInventario, inventario]);
 
-  // Cargar órdenes de despacho cuando se activa el modo por orden
+  // Cargar órdenes de despacho cuando se activa el modo por orden o cambia el cliente
   useEffect(() => {
-    if (calculoPorOrden) {
-      cargarOrdenesDespacho();
+    if (calculoPorOrden && selectedCliente) {
+      cargarOrdenesDespacho(Number(selectedCliente));
+    } else if (calculoPorOrden && !selectedCliente) {
+      // Limpiar órdenes si no hay cliente seleccionado
+      setOrdenesDespacho([]);
+      setSelectedOrden('');
+      setProductosOrden([]);
     }
-  }, [calculoPorOrden]);
+  }, [calculoPorOrden, selectedCliente]);
 
   // Cargar productos cuando se selecciona una orden
   useEffect(() => {
@@ -92,16 +100,20 @@ const SugerenciasView: React.FC = () => {
     }
   }, [selectedOrden, calculoPorOrden]);
 
-  const cargarOrdenesDespacho = async () => {
+  const cargarOrdenesDespacho = async (clienteId: number) => {
     try {
       const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
-      const response = await fetch(`${API_URL}/inventario-prospectos/ordenes-despacho`);
+      const response = await fetch(`${API_URL}/inventario-prospectos/ordenes-despacho?cliente_id=${clienteId}`);
       if (response.ok) {
         const ordenes = await response.json();
         setOrdenesDespacho(ordenes);
+      } else {
+        console.error('Error al cargar órdenes de despacho:', response.statusText);
+        setOrdenesDespacho([]);
       }
     } catch (error) {
       console.error('Error al cargar órdenes de despacho:', error);
+      setOrdenesDespacho([]);
     }
   };
 
@@ -203,6 +215,19 @@ const SugerenciasView: React.FC = () => {
 
   const handleGuardarSugerencia = async (resultado: ResultadoSugerencia) => {
     try {
+      // Verificar si ya existe una sugerencia con los mismos datos
+      const existeSugerencia = sugerencias.some(s => 
+        s.cliente_id === Number(selectedCliente) &&
+        s.inv_id === Number(selectedInventario) &&
+        s.modelo_sugerido === resultado.nombre_modelo &&
+        s.cantidad_sugerida === resultado.cantidad_sugerida
+      );
+
+      if (existeSugerencia) {
+        alert('Esta sugerencia ya ha sido guardada anteriormente. No se puede agregar un duplicado.');
+        return;
+      }
+
       await createSugerencia({
         cliente_id: Number(selectedCliente),
         inv_id: Number(selectedInventario),
@@ -211,7 +236,10 @@ const SugerenciasView: React.FC = () => {
         modelo_id: resultado.modelo_id,
         estado: 'pendiente'
       });
-      alert('Sugerencia guardada exitosamente');
+      
+      // Limpiar las recomendaciones después de guardar exitosamente
+      setResultados([]);
+      alert('Sugerencia guardada exitosamente. Las recomendaciones se han limpiado.');
     } catch (err) {
       console.error('Error al guardar sugerencia:', err);
       alert('Error al guardar la sugerencia');
@@ -222,6 +250,26 @@ const SugerenciasView: React.FC = () => {
     try {
       // Para cada producto, calcular exactamente cuántos contenedores necesita usando la información del resultado
       const detalleProductos = resultado.detalle_contenedores_por_producto || [];
+      
+      // Verificar si ya existen sugerencias duplicadas para cualquiera de los productos
+      const duplicados = [];
+      for (const detalle of detalleProductos) {
+        const existeSugerencia = sugerencias.some(s => 
+          s.cliente_id === Number(selectedCliente) &&
+          s.inv_id === Number(detalle.inv_id) &&
+          s.modelo_sugerido === resultado.nombre_modelo &&
+          s.cantidad_sugerida === detalle.contenedores_necesarios
+        );
+        
+        if (existeSugerencia) {
+          duplicados.push(detalle.producto || `Producto ID: ${detalle.inv_id}`);
+        }
+      }
+
+      if (duplicados.length > 0) {
+        alert(`Las siguientes sugerencias ya han sido guardadas anteriormente y no se pueden duplicar:\n- ${duplicados.join('\n- ')}`);
+        return;
+      }
       
       // Crear una sugerencia individual para cada producto con su cantidad específica
       const promesasGuardado = detalleProductos.map(async (detalle: any) => {
@@ -236,7 +284,10 @@ const SugerenciasView: React.FC = () => {
       });
       
       await Promise.all(promesasGuardado);
-      alert(`Sugerencias guardadas exitosamente: ${detalleProductos.length} productos con cantidades específicas de contenedores`);
+      
+      // Limpiar las recomendaciones después de guardar exitosamente
+      setResultados([]);
+      alert(`Sugerencias guardadas exitosamente: ${detalleProductos.length} productos con cantidades específicas de contenedores. Las recomendaciones se han limpiado.`);
     } catch (err) {
       console.error('Error al guardar sugerencia:', err);
       alert('Error al guardar la sugerencia');
@@ -248,7 +299,7 @@ const SugerenciasView: React.FC = () => {
     setSelectedInventario('');
     setDimensiones({ frente: '', profundo: '', alto: '' });
     setVolumenRequerido('');
-    setResultados([]);
+    setResultados([]); // Limpiar las recomendaciones también
     setSelectedOrden('');
     setProductosOrden([]);
   };
@@ -328,6 +379,25 @@ const SugerenciasView: React.FC = () => {
     setShowPriceModal(true);
   };
 
+  // Función para abrir modal de precios para PDF individual
+  const handleIndividualPDFWithPrices = (sugerencia: any) => {
+    // Crear array con solo esta sugerencia
+    const sugerenciasArray = [sugerencia];
+    const productos = getProductosUnicos(sugerenciasArray);
+    
+    setProductosUnicos(productos);
+    setPdfType('individual');
+    setSugerenciaIndividual(sugerencia);
+    
+    // Inicializar precios vacíos usando el ID único
+    const preciosIniciales: { [key: string]: string } = {};
+    productos.forEach(producto => {
+      preciosIniciales[producto.id] = '';
+    });
+    setPreciosAlquiler(preciosIniciales);
+    setShowPriceModal(true);
+  };
+
   // Función para actualizar precio de un producto
   const handlePriceChange = (producto: string, precio: string) => {
     setPreciosAlquiler(prev => ({
@@ -341,8 +411,10 @@ const SugerenciasView: React.FC = () => {
     setShowPriceModal(false);
     if (pdfType === 'general') {
       generatePDF();
-    } else {
+    } else if (pdfType === 'cliente') {
       generateClientePDF();
+    } else if (pdfType === 'individual' && sugerenciaIndividual) {
+      generateIndividualPDF(sugerenciaIndividual);
     }
   };
 
@@ -385,24 +457,19 @@ const SugerenciasView: React.FC = () => {
     pdf.text('Historial de Sugerencias', 20, yPosition);
     yPosition += 15;
     
-    // Debug: verificar qué sugerencias se van a mostrar
-    console.log('Sugerencias para PDF (total):', sugerencias.length);
-    console.log('Primeras 3 sugerencias:', sugerencias.slice(0, 3));
-    
-    // Headers de la tabla
+    // Headers de la tabla con mejor espaciado
     pdf.setFillColor(59, 130, 246); // bg-blue-500
-    pdf.rect(20, yPosition, pageWidth - 40, 10, 'F');
+    pdf.rect(20, yPosition, pageWidth - 40, 12, 'F');
     
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(8);
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Cliente', 22, yPosition + 7);
-    pdf.text('Producto', 45, yPosition + 7);
-    pdf.text('Cant.', 95, yPosition + 7);
-    pdf.text('Precio Alq.', 110, yPosition + 7);
-    pdf.text('Modelo Sugerido', 140, yPosition + 7);
-    pdf.text('C.Sug', 175, yPosition + 7);
-    pdf.text('Estado', 185, yPosition + 7);
+    pdf.text('Cliente', 22, yPosition + 8);
+    pdf.text('Producto / Descripción', 50, yPosition + 8);
+    pdf.text('Cant.', 120, yPosition + 8);
+    pdf.text('Precio', 135, yPosition + 8);
+    pdf.text('Modelo', 155, yPosition + 8);
+    pdf.text('C.Sug', 180, yPosition + 8);
     
     yPosition += 15;
     
@@ -411,70 +478,60 @@ const SugerenciasView: React.FC = () => {
     pdf.setFont('helvetica', 'normal');
     
     sugerencias.forEach((sugerencia, index) => {
-      // Debug: Verificar datos de la sugerencia
-      console.log('Datos de sugerencia para PDF:', {
-        producto: sugerencia.producto,
-        descripcion_inventario: sugerencia.descripcion_inventario,
-        index: index
-      });
-      
       // Alternar colores de fila
       if (index % 2 === 0) {
         pdf.setFillColor(248, 250, 252); // bg-slate-50
-        pdf.rect(20, yPosition - 5, pageWidth - 40, 15, 'F'); // Aumentar altura para 2 líneas
+        pdf.rect(20, yPosition - 2, pageWidth - 40, 18, 'F');
       }
       
-      pdf.setFontSize(7);
+      pdf.setFontSize(8);
+      
       // Cliente
       const cliente = sugerencia.nombre_cliente || 'N/A';
-      const clienteTruncado = cliente.length > 12 ? cliente.substring(0, 9) + '...' : cliente;
-      pdf.text(clienteTruncado, 22, yPosition + 2);
+      const clienteTruncado = cliente.length > 15 ? cliente.substring(0, 12) + '...' : cliente;
+      pdf.text(clienteTruncado, 22, yPosition + 5);
       
-      // Producto con descripción
+      // Producto y descripción en formato más limpio
       const producto = sugerencia.producto || 'N/A';
       const descripcion = sugerencia.descripcion_inventario || '';
       
-      // Mostrar producto en primera línea
-      const productoTruncado = producto.length > 18 ? producto.substring(0, 15) + '...' : producto;
-      pdf.text(productoTruncado, 45, yPosition + 2);
+      // Mostrar producto
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      const productoTruncado = producto.length > 20 ? producto.substring(0, 17) + '...' : producto;
+      pdf.text(productoTruncado, 50, yPosition + 3);
       
-      // Mostrar descripción en segunda línea si existe
-      if (descripcion && descripcion.trim() !== '') {
-        pdf.setFontSize(6);
-        pdf.setTextColor(100, 100, 100);
-        const descripcionTruncada = descripcion.length > 20 ? descripcion.substring(0, 17) + '...' : descripcion;
-        pdf.text(descripcionTruncada, 45, yPosition + 8);
-        pdf.setTextColor(0, 0, 0);
+      // Mostrar descripción en línea separada con estilo diferente
+      if (descripcion && descripcion.trim() !== '' && descripcion !== producto) {
+        pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(7);
+        pdf.setTextColor(80, 80, 80);
+        const descripcionTruncada = descripcion.length > 25 ? descripcion.substring(0, 22) + '...' : descripcion;
+        pdf.text(descripcionTruncada, 50, yPosition + 11);
+        pdf.setTextColor(0, 0, 0);
       }
       
-      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 95, yPosition + 2);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
       
-      // Precio de alquiler usando la función helper
+      // Cantidad
+      pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 120, yPosition + 5);
+      
+      // Precio de alquiler
       const precioAlquiler = getPrecioAlquiler(sugerencia);
-      const precioTruncado = precioAlquiler.length > 10 ? precioAlquiler.substring(0, 7) + '...' : precioAlquiler;
-      pdf.text(precioTruncado, 110, yPosition + 2);
+      const precioDisplay = precioAlquiler === 'N/A' ? '-' : precioAlquiler;
+      const precioTruncado = precioDisplay.length > 8 ? precioDisplay.substring(0, 6) + '..' : precioDisplay;
+      pdf.text(precioTruncado, 135, yPosition + 5);
       
       // Modelo sugerido
       const modelo = sugerencia.modelo_sugerido || 'N/A';
-      const modeloTruncado = modelo.length > 12 ? modelo.substring(0, 9) + '...' : modelo;
-      pdf.text(modeloTruncado, 140, yPosition + 2);
+      const modeloTruncado = modelo.length > 15 ? modelo.substring(0, 12) + '...' : modelo;
+      pdf.text(modeloTruncado, 155, yPosition + 5);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 175, yPosition + 2);
+      // Cantidad sugerida
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 180, yPosition + 5);
       
-      // Estado con color
-      const estado = sugerencia.estado || 'pendiente';
-      if (estado === 'completado') {
-        pdf.setTextColor(34, 197, 94); // text-green-500
-      } else if (estado === 'pendiente') {
-        pdf.setTextColor(251, 191, 36); // text-yellow-500
-      } else {
-        pdf.setTextColor(239, 68, 68); // text-red-500
-      }
-      pdf.text(estado, 185, yPosition + 2);
-      pdf.setTextColor(0, 0, 0); // Resetear color
-      
-      yPosition += 15; // Aumentar espacio entre filas
+      yPosition += 18; // Espacio mayor entre filas para acomodar descripción
       
       // Nueva página si es necesario
       if (yPosition > pageHeight - 30) {
@@ -752,6 +809,14 @@ const SugerenciasView: React.FC = () => {
     pdf.text(sugerencia.modelo_sugerido || 'N/A', 80, yPosition);
     yPosition += 15;
     
+    // Precio de alquiler
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Precio de Alquiler:', 20, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    const precioAlquiler = getPrecioAlquiler(sugerencia);
+    pdf.text(precioAlquiler, 80, yPosition);
+    yPosition += 15;
+    
     pdf.setFont('helvetica', 'bold');
     pdf.text('Cantidad:', 20, yPosition);
     pdf.setFont('helvetica', 'normal');
@@ -858,7 +923,13 @@ const SugerenciasView: React.FC = () => {
               </label>
               <select
                 value={selectedCliente}
-                onChange={(e) => setSelectedCliente(e.target.value as any)}
+                onChange={(e) => {
+                  setSelectedCliente(e.target.value as any);
+                  // Limpiar órdenes y productos cuando cambie el cliente
+                  setSelectedOrden('');
+                  setProductosOrden([]);
+                  setOrdenesDespacho([]);
+                }}
                 className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Seleccionar cliente...</option>
@@ -879,9 +950,14 @@ const SugerenciasView: React.FC = () => {
                 <select
                   value={selectedOrden}
                   onChange={(e) => setSelectedOrden(e.target.value)}
-                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                  disabled={!selectedCliente}
+                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Seleccionar orden...</option>
+                  <option value="">
+                    {!selectedCliente ? 'Primero seleccione un cliente...' : 
+                     ordenesDespacho.length === 0 ? 'No hay órdenes para este cliente...' : 
+                     'Seleccionar orden...'}
+                  </option>
                   {ordenesDespacho.map(orden => (
                     <option key={orden.orden_despacho} value={orden.orden_despacho}>
                       {orden.orden_despacho} ({orden.cantidad_productos} productos, {(parseFloat(orden.volumen_total) || 0).toFixed(3)} m³)
@@ -1083,9 +1159,22 @@ const SugerenciasView: React.FC = () => {
 
         {/* Panel de Resultados */}
         <div className="bg-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <Package className="text-green-400" size={24} />
-            <h2 className="text-xl font-semibold">Resultados</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Package className="text-green-400" size={24} />
+              <h2 className="text-xl font-semibold">Resultados</h2>
+            </div>
+            {/* Botón para limpiar recomendaciones */}
+            {resultados.length > 0 && (
+              <button
+                onClick={() => setResultados([])}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2"
+                title="Limpiar recomendaciones"
+              >
+                <Clock size={16} />
+                Limpiar
+              </button>
+            )}
           </div>
 
           {resultados.length === 0 ? (
@@ -1206,6 +1295,7 @@ const SugerenciasView: React.FC = () => {
                         ? 'bg-green-600 hover:bg-green-700 text-white' 
                         : 'bg-green-600 hover:bg-green-700 text-white'
                     }`}
+                    title="Al guardar, las recomendaciones se limpiarán automáticamente"
                   >
                     <CheckCircle size={16} />
                     {resultado.es_mejor_opcion ? 'Seleccionar Mejor Opción' : 'Guardar Sugerencia'}
@@ -1390,7 +1480,7 @@ const SugerenciasView: React.FC = () => {
                 {/* Pie de tarjeta con acciones */}
                 <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
                   <button
-                    onClick={() => generateIndividualPDF(sugerencia)}
+                    onClick={() => handleIndividualPDFWithPrices(sugerencia)}
                     className="p-2 rounded-full bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors"
                     title="Descargar PDF"
                   >
@@ -1463,7 +1553,7 @@ const SugerenciasView: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => generateIndividualPDF(sugerencia)}
+                          onClick={() => handleIndividualPDFWithPrices(sugerencia)}
                           className="text-blue-400 hover:text-blue-300 transition-colors p-1 rounded"
                           title="Descargar PDF"
                         >
@@ -1491,10 +1581,13 @@ const SugerenciasView: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Agregar Precios de Alquiler
+              {pdfType === 'individual' ? 'Precio de Alquiler para Sugerencia' : 'Agregar Precios de Alquiler'}
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              Ingresa el precio de alquiler para cada producto. Puedes omitir productos dejando el campo vacío.
+              {pdfType === 'individual' 
+                ? 'Ingresa el precio de alquiler para esta sugerencia específica.' 
+                : 'Ingresa el precio de alquiler para cada producto. Puedes omitir productos dejando el campo vacío.'
+              }
             </p>
             
             <div className="space-y-4 mb-6">
