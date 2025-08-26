@@ -400,8 +400,8 @@ const SugerenciasView: React.FC = () => {
     pdf.text('Cant.', 55, yPosition + 7);
     pdf.text('Precio Alq.', 70, yPosition + 7);
     pdf.text('Modelo Sugerido', 100, yPosition + 7);
-    pdf.text('C.Sug', 165, yPosition + 7);
-    pdf.text('Estado', 180, yPosition + 7);
+    pdf.text('C.Sug', 155, yPosition + 7);
+    pdf.text('Estado', 175, yPosition + 7);
     
     yPosition += 15;
     
