@@ -170,50 +170,36 @@ const sugerenciasService = {
         
         // Calcular cuántas cajas caben en un modelo (por volumen)
         const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
-        
-        // ELIMINAR ESTA LÍNEA DUPLICADA (línea 135):
-        // const dimensionesExactas = (
-        //   frenteModelo === dimensiones_requeridas.frente &&
-        //   profundoModelo === dimensiones_requeridas.profundo &&
-        //   altoModelo === dimensiones_requeridas.alto
-        // );
+        console.log(`Modelo ${modelo.nombre_modelo}: ${cajasPorModelo} cajas por modelo`);
         
         let modelosNecesarios, cajasQueSeGuardan, eficiencia;
         
-        if (cajasPorModelo === 0) {
-          // Si no cabe ni una caja por volumen, calculamos cuántos modelos necesitamos
+        // Calcular cuántos modelos necesitamos para guardar todas las cajas
+        if (cajasPorModelo > 0) {
+          // Caso normal: las cajas caben en el modelo
+          modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
+          cajasQueSeGuardan = cantidadCajas; // Guardamos todas las cajas
+          
+          // Calcular eficiencia basada en el aprovechamiento del espacio
+          const volumenUtilizado = cantidadCajas * volumenUnaCaja;
+          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
+          eficiencia = (volumenUtilizado / volumenTotalDisponible) * 100;
+        } else {
+          // Caso especial: las cajas son muy pequeñas comparadas con el modelo
+          // Calculamos por volumen puro
           modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
           cajasQueSeGuardan = cantidadCajas;
           
-          // Calcular proximidad al volumen requerido
+          // Eficiencia basada en la proximidad de volúmenes
           const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-          const diferencia = Math.abs(volumenTotalDisponible - volumenTotalRequeridoM3);
-          const volumenMayor = Math.max(volumenTotalDisponible, volumenTotalRequeridoM3);
-          eficiencia = Math.max(10, 100 - (diferencia / volumenMayor) * 100);
-        } else {
-          // Lógica normal cuando sí caben cajas
-          modelosNecesarios = Math.ceil(cantidadCajas / cajasPorModelo);
-          cajasQueSeGuardan = Math.min(cantidadCajas, modelosNecesarios * cajasPorModelo);
-          
-          // NUEVA LÓGICA DE EFICIENCIA BASADA EN PROXIMIDAD AL VOLUMEN:
-          const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-          
-          if (dimensionesExactas && Math.abs(volumenTotalDisponible - volumenTotalRequeridoM3) < 0.001) {
-            // Volumen exactamente igual = 100%
-            eficiencia = 100;
-          } else {
-            // Calcular proximidad: entre más cerca del volumen requerido, mayor eficiencia
-            const diferencia = Math.abs(volumenTotalDisponible - volumenTotalRequeridoM3);
-            const volumenMayor = Math.max(volumenTotalDisponible, volumenTotalRequeridoM3);
-            
-            // Fórmula de proximidad: 100% - (diferencia relativa * 100)
-            eficiencia = Math.max(10, 100 - (diferencia / volumenMayor) * 100);
-            
-            // Bonificación por ajuste dimensional perfecto
-            if (dimensionesExactas) {
-              eficiencia = Math.min(100, eficiencia + 10);
-            }
-          }
+          eficiencia = (volumenTotalRequeridoM3 / volumenTotalDisponible) * 100;
+        }
+        
+        console.log(`Modelo ${modelo.nombre_modelo}: ${modelosNecesarios} modelos necesarios, eficiencia: ${eficiencia.toFixed(1)}%`);
+        
+        // Bonificación por ajuste dimensional perfecto
+        if (dimensionesExactas) {
+          eficiencia = Math.min(100, eficiencia + 10);
         }
         
         // Redondear a 1 decimal
