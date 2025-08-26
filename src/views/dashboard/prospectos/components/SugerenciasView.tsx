@@ -36,7 +36,13 @@ const SugerenciasView: React.FC = () => {
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [preciosAlquiler, setPreciosAlquiler] = useState<{ [key: string]: string }>({});
   const [pdfType, setPdfType] = useState<'general' | 'cliente'>('general');
-  const [productosUnicos, setProductosUnicos] = useState<string[]>([]);
+  const [productosUnicos, setProductosUnicos] = useState<{
+    id: string;
+    producto: string;
+    descripcion: string;
+    modelo_sugerido: string;
+    cantidad_sugerida: number;
+  }[]>([]);
 
   // Filtrar sugerencias por cliente seleccionado
   const filteredSugerencias = clienteHistorialFilter 
@@ -261,14 +267,38 @@ const SugerenciasView: React.FC = () => {
 
   // Función para obtener productos únicos de las sugerencias
   const getProductosUnicos = (sugerenciasToCheck = sugerencias) => {
-    const productos = new Set<string>();
+    const productosMap = new Map<string, any>();
+    
     sugerenciasToCheck.forEach(sugerencia => {
-      const producto = sugerencia.producto || sugerencia.descripcion_inventario || 'N/A';
-      if (producto !== 'N/A') {
-        productos.add(producto);
+      const producto = sugerencia.producto || 'N/A';
+      const descripcion = sugerencia.descripcion_inventario || '';
+      const modelo = sugerencia.modelo_sugerido || 'N/A';
+      const cantidad = sugerencia.cantidad_sugerida || 0;
+      
+      // Crear una clave única basada en producto + descripción + modelo
+      const key = `${producto}_${descripcion}_${modelo}`;
+      
+      if (!productosMap.has(key) && producto !== 'N/A') {
+        productosMap.set(key, {
+          id: key,
+          producto: producto,
+          descripcion: descripcion,
+          modelo_sugerido: modelo,
+          cantidad_sugerida: cantidad
+        });
       }
     });
-    return Array.from(productos);
+    
+    return Array.from(productosMap.values());
+  };
+
+  // Función helper para obtener el precio de alquiler de una sugerencia
+  const getPrecioAlquiler = (sugerencia: any) => {
+    const producto = sugerencia.producto || 'N/A';
+    const descripcion = sugerencia.descripcion_inventario || '';
+    const modelo = sugerencia.modelo_sugerido || 'N/A';
+    const key = `${producto}_${descripcion}_${modelo}`;
+    return preciosAlquiler[key] || 'N/A';
   };
 
   // Función para abrir modal de precios
@@ -289,10 +319,10 @@ const SugerenciasView: React.FC = () => {
     setProductosUnicos(productos);
     setPdfType(type);
     
-    // Inicializar precios vacíos
+    // Inicializar precios vacíos usando el ID único
     const preciosIniciales: { [key: string]: string } = {};
     productos.forEach(producto => {
-      preciosIniciales[producto] = '';
+      preciosIniciales[producto.id] = '';
     });
     setPreciosAlquiler(preciosIniciales);
     setShowPriceModal(true);
@@ -420,8 +450,8 @@ const SugerenciasView: React.FC = () => {
       
       pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 95, yPosition + 2);
       
-      // Precio de alquiler
-      const precioAlquiler = preciosAlquiler[producto] || 'N/A';
+      // Precio de alquiler usando la función helper
+      const precioAlquiler = getPrecioAlquiler(sugerencia);
       const precioTruncado = precioAlquiler.length > 10 ? precioAlquiler.substring(0, 7) + '...' : precioAlquiler;
       pdf.text(precioTruncado, 110, yPosition + 2);
       
@@ -596,8 +626,8 @@ const SugerenciasView: React.FC = () => {
       
       pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 80, yPosition + 2);
       
-      // Precio de alquiler
-      const precioAlquiler = preciosAlquiler[producto] || 'N/A';
+      // Precio de alquiler usando la función helper
+      const precioAlquiler = getPrecioAlquiler(sugerencia);
       const precioTruncado = precioAlquiler.length > 10 ? precioAlquiler.substring(0, 7) + '...' : precioAlquiler;
       pdf.text(precioTruncado, 95, yPosition + 2);
       
@@ -1468,17 +1498,33 @@ const SugerenciasView: React.FC = () => {
             </p>
             
             <div className="space-y-4 mb-6">
-              {productosUnicos.map((producto) => (
-                <div key={producto} className="flex items-center gap-3">
-                  <div className="flex-1">
+              {productosUnicos.map((productoInfo) => (
+                <div key={productoInfo.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div className="mb-3">
+                    <h4 className="font-medium text-gray-900 dark:text-white">
+                      {productoInfo.producto}
+                    </h4>
+                    {productoInfo.descripcion && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Descripción: {productoInfo.descripcion}
+                      </p>
+                    )}
+                    <p className="text-sm text-blue-600 dark:text-blue-400">
+                      Modelo Sugerido: {productoInfo.modelo_sugerido}
+                    </p>
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      Cantidad Sugerida: {productoInfo.cantidad_sugerida} contenedores
+                    </p>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {producto}
+                      Precio de Alquiler
                     </label>
                     <input
                       type="text"
                       placeholder="Ej: $150/día"
-                      value={preciosAlquiler[producto] || ''}
-                      onChange={(e) => handlePriceChange(producto, e.target.value)}
+                      value={preciosAlquiler[productoInfo.id] || ''}
+                      onChange={(e) => handlePriceChange(productoInfo.id, e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
