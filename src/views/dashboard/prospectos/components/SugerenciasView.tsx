@@ -72,6 +72,16 @@ const SugerenciasView: React.FC = () => {
       return;
     }
 
+    // Validar que las dimensiones sean números válidos
+    const frente = parseFloat(dimensiones.frente);
+    const profundo = parseFloat(dimensiones.profundo);
+    const alto = parseFloat(dimensiones.alto);
+
+    if (isNaN(frente) || isNaN(profundo) || isNaN(alto) || frente <= 0 || profundo <= 0 || alto <= 0) {
+      alert('Por favor ingrese dimensiones válidas (números mayores a 0)');
+      return;
+    }
+
     setCalculando(true);
     try {
       // Obtener la cantidad del item de inventario seleccionado
@@ -84,16 +94,19 @@ const SugerenciasView: React.FC = () => {
         volumen_requerido: Number(volumenRequerido) || 0,
         cantidad: cantidadCajas, // Agregar la cantidad de cajas
         dimensiones_requeridas: {
-          frente: Number(dimensiones.frente), // Ahora en mm
-          profundo: Number(dimensiones.profundo), // Ahora en mm
-          alto: Number(dimensiones.alto) // Ahora en mm
+          frente: frente, // Ahora en mm
+          profundo: profundo, // Ahora en mm
+          alto: alto // Ahora en mm
         }
       };
 
+      console.log('Enviando datos de cálculo:', calculo);
       const resultadosCalculo = await calcularSugerencias(calculo);
+      console.log('Resultados recibidos:', resultadosCalculo);
       setResultados(resultadosCalculo);
     } catch (err) {
       console.error('Error al calcular sugerencias:', err);
+      alert('Error al calcular sugerencias. Por favor intente nuevamente.');
     } finally {
       setCalculando(false);
     }

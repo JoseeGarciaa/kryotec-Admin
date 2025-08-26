@@ -1,3 +1,4 @@
+import { apiClient } from '../services/api';
 import axios from 'axios';
 
 // Interfaz para una sugerencia de reemplazo
@@ -53,7 +54,12 @@ export interface ResultadoSugerencia {
 }
 
 // URL base de la API
-const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+const API_URL = import.meta.env.PROD 
+  ? 'https://kryotec-admin-production.up.railway.app/api' 
+  : 'http://localhost:3002/api';
+
+console.log('API_URL configurada:', API_URL);
+console.log('Modo producción:', import.meta.env.PROD);
 
 // Modelo para Sugerencias
 export const SugerenciasModel = {
@@ -82,10 +88,19 @@ export const SugerenciasModel = {
   // Calcular sugerencias para un inventario específico
   calcularSugerencias: async (calculo: CalculoSugerencia): Promise<ResultadoSugerencia[]> => {
     try {
-      const response = await axios.post(`${API_URL}/sugerencias/calcular`, calculo);
+      console.log('Modelo: Enviando request a: /sugerencias/calcular');
+      console.log('Modelo: Datos enviados:', calculo);
+      
+      const response = await apiClient.post('/sugerencias/calcular', calculo);
+      console.log('Modelo: Respuesta recibida:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Error al calcular sugerencias:', error);
+      console.error('Modelo: Error al calcular sugerencias:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Modelo: Status:', error.response?.status);
+        console.error('Modelo: Data:', error.response?.data);
+        console.error('Modelo: Headers:', error.response?.headers);
+      }
       throw error;
     }
   },

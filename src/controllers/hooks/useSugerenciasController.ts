@@ -25,8 +25,12 @@ export const useSugerenciasController = () => {
   // Calcular sugerencias
   const calcularSugerencias = async (calculo: CalculoSugerencia): Promise<ResultadoSugerencia[]> => {
     try {
-      return await SugerenciasController.calcularSugerencias(calculo);
+      console.log('Hook: Enviando datos de cálculo:', calculo);
+      const resultado = await SugerenciasController.calcularSugerencias(calculo);
+      console.log('Hook: Resultado recibido:', resultado);
+      return resultado;
     } catch (err) {
+      console.error('Hook: Error al calcular sugerencias:', err);
       setError('Error al calcular sugerencias');
       throw err;
     }
