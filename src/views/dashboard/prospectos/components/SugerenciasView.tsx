@@ -245,8 +245,8 @@ const SugerenciasView: React.FC = () => {
     pdf.text('Cant.', 70, yPosition + 7);
     pdf.text('Precio Alq.', 85, yPosition + 7);
     pdf.text('Modelo Sugerido', 115, yPosition + 7);
-    pdf.text('C.Sug', 175, yPosition + 7);
-    pdf.text('Estado', 190, yPosition + 7);
+    pdf.text('C.Sug', 170, yPosition + 7);
+    pdf.text('Estado', 185, yPosition + 7);
     
     yPosition += 15;
     
@@ -282,7 +282,7 @@ const SugerenciasView: React.FC = () => {
       const modelo = sugerencia.modelo_sugerido || 'N/A';
       pdf.text(modelo, 115, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 175, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 170, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -293,7 +293,7 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 190, yPosition + 2);
+      pdf.text(estado, 185, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       
@@ -433,7 +433,7 @@ const SugerenciasView: React.FC = () => {
       const modelo = sugerencia.modelo_sugerido || 'N/A';
       pdf.text(modelo, 100, yPosition + 2);
       
-      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 165, yPosition + 2);
+      pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 155, yPosition + 2);
       
       // Estado con color
       const estado = sugerencia.estado || 'pendiente';
@@ -444,7 +444,7 @@ const SugerenciasView: React.FC = () => {
       } else {
         pdf.setTextColor(239, 68, 68); // text-red-500
       }
-      pdf.text(estado, 180, yPosition + 2);
+      pdf.text(estado, 175, yPosition + 2);
       
       pdf.setTextColor(0, 0, 0);
       
