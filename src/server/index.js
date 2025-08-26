@@ -471,6 +471,27 @@ app.delete('/api/inventario-prospectos/:id', async (req, res) => {
   }
 });
 
+// Nuevas rutas para órdenes de despacho
+app.get('/api/inventario-prospectos/ordenes-despacho', async (req, res) => {
+  try {
+    const ordenes = await inventarioProspectosService.getOrdenesDespacho();
+    res.json(ordenes);
+  } catch (error) {
+    console.error('Error al obtener órdenes de despacho:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+app.get('/api/inventario-prospectos/orden/:ordenDespacho', async (req, res) => {
+  try {
+    const productos = await inventarioProspectosService.getProductosPorOrden(req.params.ordenDespacho);
+    res.json(productos);
+  } catch (error) {
+    console.error('Error al obtener productos por orden:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // Rutas para sugerencias - MOVER AQUÍ ANTES DEL app.listen()
 app.get('/api/sugerencias', async (req, res) => {
   try {
@@ -489,6 +510,17 @@ app.post('/api/sugerencias/calcular', async (req, res) => {
   } catch (error) {
     console.error('Error en POST /api/sugerencias/calcular:', error);
     res.status(500).json({ error: 'Error al calcular sugerencias' });
+  }
+});
+
+// Nueva ruta para calcular sugerencias por orden de despacho
+app.post('/api/sugerencias/calcular-por-orden', async (req, res) => {
+  try {
+    const sugerencias = await sugerenciasService.calcularSugerenciasPorOrden(req.body);
+    res.json(sugerencias);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/calcular-por-orden:', error);
+    res.status(500).json({ error: 'Error al calcular sugerencias por orden de despacho' });
   }
 });
 

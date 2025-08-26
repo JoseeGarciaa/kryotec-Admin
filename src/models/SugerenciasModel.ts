@@ -43,23 +43,30 @@ export interface ResultadoSugerencia {
   cantidad_sugerida: number;
   total_productos_transportados: number;
   volumen_total_productos: number;
-  volumen_total_contenedores: number;
+  volumen_total_contenedores?: number;
+  volumen_total_disponible?: number;
   espacio_sobrante_m3: number;
-  porcentaje_espacio_sobrante: number;
-  eficiencia: number;
+  porcentaje_espacio_sobrante?: number;
+  eficiencia?: number; // Para compatibilidad con cálculo individual
+  eficiencia_porcentaje?: number; // Para cálculo por orden
   mensaje_comparacion?: string;
-  recomendacion?: string;
+  recomendacion?: string; // Para compatibilidad con cálculo individual
+  recomendacion_nivel?: string; // Para cálculo por orden
   detalle_espacio?: string;
   es_ajuste_perfecto?: boolean;
   nivel_recomendacion?: 'EXCELENTE' | 'BUENO' | 'ACEPTABLE' | 'MALO' | 'EVITAR';
   es_mejor_opcion?: boolean;
   etiqueta_recomendacion?: string;
-  dimensiones_internas: {
+  dimensiones_internas?: {
     frente: number;
     profundo: number;
     alto: number;
   };
-  volumen_litros: number;
+  volumen_litros?: number;
+  volumen_modelo_m3?: number;
+  orden_despacho?: string;
+  resumen_productos?: any[];
+  es_calculo_por_orden?: boolean;
   // Campos obsoletos mantenidos por compatibilidad
   cajas_por_modelo?: number;
   total_cajas_guardadas?: number;

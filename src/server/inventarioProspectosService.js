@@ -76,6 +76,58 @@ const inventarioProspectosService = {
       console.error('Error al eliminar inventario:', error);
       throw error;
     }
+  },
+
+  // Obtener todas las órdenes de despacho únicas
+  getOrdenesDespacho: async () => {
+    try {
+      const query = `
+        SELECT DISTINCT orden_despacho, 
+               COUNT(*) as cantidad_productos,
+               SUM(cantidad_despachada) as total_productos,
+               CAST(SUM(volumen_total_m3_producto) AS DECIMAL) as volumen_total
+        FROM admin_platform.inventario_prospecto 
+        WHERE orden_despacho IS NOT NULL AND orden_despacho != ''
+        GROUP BY orden_despacho
+        ORDER BY orden_despacho
+      `;
+      const { rows } = await pool.query(query);
+      
+      // Asegurar que los números sean números
+      const processedRows = rows.map(row => ({
+        ...row,
+        cantidad_productos: parseInt(row.cantidad_productos),
+        total_productos: parseInt(row.total_productos),
+        volumen_total: parseFloat(row.volumen_total)
+      }));
+      
+      return processedRows;
+    } catch (error) {
+      console.error('Error al obtener órdenes de despacho:', error);
+      throw error;
+    }
+  },
+
+  // Obtener productos por orden de despacho
+  getProductosPorOrden: async (ordenDespacho) => {
+    try {
+      const query = `
+        SELECT 
+          i.inv_id, i.cliente_id, i.descripcion_producto, i.producto,
+          i.largo_mm, i.ancho_mm, i.alto_mm, i.cantidad_despachada,
+          i.volumen_total_m3_producto, i.fecha_registro, i.fecha_de_despacho,
+          i.orden_despacho, c.nombre_cliente
+        FROM admin_platform.inventario_prospecto i
+        LEFT JOIN admin_platform.clientes_prospectos c ON i.cliente_id = c.cliente_id
+        WHERE i.orden_despacho = $1
+        ORDER BY i.fecha_registro DESC
+      `;
+      const { rows } = await pool.query(query, [ordenDespacho]);
+      return rows;
+    } catch (error) {
+      console.error('Error al obtener productos por orden:', error);
+      throw error;
+    }
   }
 };
 
