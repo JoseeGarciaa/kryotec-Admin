@@ -213,6 +213,29 @@ const SugerenciasView: React.FC = () => {
     }
   };
 
+  const handleGuardarSugerenciaOrden = async (resultado: ResultadoSugerencia) => {
+    try {
+      // Para orden de despacho, guardar una sugerencia por cada producto en la orden
+      const promesasGuardado = productosOrden.map(async (producto) => {
+        return createSugerencia({
+          cliente_id: Number(selectedCliente),
+          inv_id: Number(producto.inv_id),
+          modelo_sugerido: resultado.nombre_modelo,
+          cantidad_sugerida: Math.ceil(resultado.cantidad_sugerida / productosOrden.length), // Distribuir proporcionalmente
+          modalidad: 'calculadora_orden',
+          modelo_id: resultado.modelo_id,
+          estado: 'pendiente'
+        });
+      });
+      
+      await Promise.all(promesasGuardado);
+      alert(`Sugerencia guardada exitosamente para ${productosOrden.length} productos de la orden`);
+    } catch (err) {
+      console.error('Error al guardar sugerencia:', err);
+      alert('Error al guardar la sugerencia');
+    }
+  };
+
   const resetForm = () => {
     setSelectedCliente('');
     setSelectedInventario('');
@@ -1078,7 +1101,7 @@ const SugerenciasView: React.FC = () => {
                   )}
                   
                   <button
-                    onClick={() => handleGuardarSugerencia(resultado)}
+                    onClick={() => calculoPorOrden ? handleGuardarSugerenciaOrden(resultado) : handleGuardarSugerencia(resultado)}
                     className={`w-full mt-4 py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
                       resultado.es_mejor_opcion 
                         ? 'bg-green-600 hover:bg-green-700 text-white' 
