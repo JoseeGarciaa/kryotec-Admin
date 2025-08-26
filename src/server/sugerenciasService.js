@@ -87,13 +87,38 @@ const sugerenciasService = {
         WHERE cliente_id = $1
       `;
       
-      const { rows: inventarioItems } = await pool.query(inventarioQuery, [cliente_id]);
-      console.log('Items de inventario encontrados:', inventarioItems.length);
+      const { rows: inventarioItemsRaw } = await pool.query(inventarioQuery, [cliente_id]);
+      console.log('Items de inventario encontrados:', inventarioItemsRaw.length);
       
-      if (inventarioItems.length === 0) {
+      if (inventarioItemsRaw.length === 0) {
         console.log('No se encontró inventario para el cliente');
         return [];
       }
+      
+      // Limpiar y consolidar productos duplicados (por nombre similar)
+      const inventarioMap = new Map();
+      inventarioItemsRaw.forEach(item => {
+        const nombreLimpio = item.producto.toLowerCase().trim();
+        
+        if (inventarioMap.has(nombreLimpio)) {
+          // Sumar cantidades si ya existe
+          const existing = inventarioMap.get(nombreLimpio);
+          existing.cantidad += item.cantidad;
+        } else {
+          // Agregar nuevo item
+          inventarioMap.set(nombreLimpio, {
+            producto: item.producto, // Mantener el nombre original del primero
+            cantidad: item.cantidad,
+            largo_mm: item.largo_mm,
+            ancho_mm: item.ancho_mm,
+            alto_mm: item.alto_mm,
+            volumen_unitario_m3: item.volumen_unitario_m3
+          });
+        }
+      });
+      
+      const inventarioItems = Array.from(inventarioMap.values());
+      console.log('Items de inventario después de consolidar:', inventarioItems.length);
       
       // Calcular volumen total de todos los productos del cliente
       let volumenTotalRequeridoM3 = 0;
@@ -141,21 +166,70 @@ const sugerenciasService = {
         const volumenModeloM3 = modelo.volumen_litros / 1000;
         console.log(`Modelo ${modelo.nombre_modelo}: ${volumenModeloM3.toFixed(6)} m³`);
         
-        // Calcular cuántos contenedores de este modelo necesitamos
-        const modelosNecesarios = Math.ceil(volumenTotalRequeridoM3 / volumenModeloM3);
+        // NUEVA LÓGICA: Calcular basándose en productos individuales
+        let modelosNecesarios = 0;
+        let productosTransportados = 0;
+        let volumenTotalUtilizado = 0;
+        
+        // Para cada tipo de producto en el inventario
+        inventarioItems.forEach(item => {
+          const productoFrente = item.largo_mm;
+          const productoAncho = item.ancho_mm;
+          const productoAlto = item.alto_mm;
+          
+          // Verificar si el producto cabe físicamente en el contenedor
+          const cabeEnContenedor = (
+            productoFrente <= modelo.dim_int_frente &&
+            productoAncho <= modelo.dim_int_profundo &&
+            productoAlto <= modelo.dim_int_alto
+          );
+          
+          if (cabeEnContenedor) {
+            // Si las dimensiones son exactamente iguales, 1 producto = 1 contenedor
+            const dimensionesExactas = (
+              productoFrente === modelo.dim_int_frente &&
+              productoAncho === modelo.dim_int_profundo &&
+              productoAlto === modelo.dim_int_alto
+            );
+            
+            if (dimensionesExactas) {
+              // Caso perfecto: 1 producto = 1 contenedor
+              modelosNecesarios += item.cantidad;
+              productosTransportados += item.cantidad;
+              volumenTotalUtilizado += item.cantidad * item.volumen_unitario_m3;
+              console.log(`${item.producto}: Ajuste perfecto - ${item.cantidad} contenedores necesarios`);
+            } else {
+              // Calcular cuántos productos caben en un contenedor
+              const volumenProducto = item.volumen_unitario_m3;
+              const productosPorContenedor = Math.floor(volumenModeloM3 / volumenProducto);
+              const contenedoresNecesarios = Math.ceil(item.cantidad / productosPorContenedor);
+              
+              modelosNecesarios += contenedoresNecesarios;
+              productosTransportados += item.cantidad;
+              volumenTotalUtilizado += item.cantidad * volumenProducto;
+              console.log(`${item.producto}: ${productosPorContenedor} por contenedor, ${contenedoresNecesarios} contenedores necesarios`);
+            }
+          } else {
+            // El producto no cabe en este modelo de contenedor
+            console.log(`${item.producto}: No cabe en ${modelo.nombre_modelo} (${productoFrente}×${productoAncho}×${productoAlto} > ${modelo.dim_int_frente}×${modelo.dim_int_profundo}×${modelo.dim_int_alto})`);
+            return null; // Este modelo no sirve para estos productos
+          }
+        });
+        
+        if (modelosNecesarios === 0) {
+          console.log(`Modelo ${modelo.nombre_modelo} descartado: ningún producto cabe`);
+          return null;
+        }
         
         // Calcular volumen total disponible con estos contenedores
         const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
         
         // Calcular eficiencia (qué tan bien aprovechamos el espacio)
-        const eficiencia = (volumenTotalRequeridoM3 / volumenTotalDisponible) * 100;
+        const eficiencia = (volumenTotalUtilizado / volumenTotalDisponible) * 100;
         
         console.log(`Modelo ${modelo.nombre_modelo}: ${modelosNecesarios} contenedores, ${eficiencia.toFixed(1)}% eficiencia`);
         
         // Determinar mensaje de comparación
-        const desperdicio = volumenTotalDisponible - volumenTotalRequeridoM3;
-        const porcentajeDesperdicio = (desperdicio / volumenTotalRequeridoM3) * 100;
-        
         let mensajeComparacion;
         if (eficiencia >= 90) {
           mensajeComparacion = "🎯 Excelente aprovechamiento";
@@ -172,8 +246,8 @@ const sugerenciasService = {
           nombre_modelo: modelo.nombre_modelo,
           volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: modelosNecesarios,
-          total_productos_transportados: totalProductos,
-          volumen_total_productos: volumenTotalRequeridoM3,
+          total_productos_transportados: productosTransportados,
+          volumen_total_productos: volumenTotalUtilizado,
           volumen_total_contenedores: volumenTotalDisponible,
           eficiencia: Math.round(eficiencia * 10) / 10,
           mensaje_comparacion: mensajeComparacion,
