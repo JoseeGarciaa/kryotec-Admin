@@ -197,29 +197,31 @@ const sugerenciasService = {
         let mensajeComparacion;
         let recomendacion = "";
         
-        if (dimensionesExactas) {
-          if (eficiencia >= 99) {
-            mensajeComparacion = "🎯 Ajuste perfecto dimensional";
-            recomendacion = "¡OPCIÓN IDEAL! Dimensiones exactas, sin desperdicio";
-          } else {
-            mensajeComparacion = "🎯 Ajuste dimensional con espacio mínimo";
-            recomendacion = "Excelente opción, dimensiones exactas";
-          }
-        } else if (eficiencia >= 95) {
-          mensajeComparacion = `✅ Aprovechamiento excelente (${espacioSobrante.toFixed(6)} m³ sobrante)`;
+        if (eficiencia >= 95) {
+          mensajeComparacion = `✅ Aprovechamiento excelente`;
           recomendacion = "MUY RECOMENDADO - Mínimo desperdicio";
         } else if (eficiencia >= 85) {
-          mensajeComparacion = `✅ Buen aprovechamiento (${espacioSobrante.toFixed(6)} m³ sobrante)`;
+          mensajeComparacion = `✅ Buen aprovechamiento`;
           recomendacion = "RECOMENDADO - Poco espacio desperdiciado";
         } else if (eficiencia >= 70) {
-          mensajeComparacion = `📦 Aprovechamiento moderado (${espacioSobrante.toFixed(6)} m³ sobrante)`;
+          mensajeComparacion = `📦 Aprovechamiento moderado`;
           recomendacion = "ACEPTABLE - Espacio moderadamente desperdiciado";
         } else if (eficiencia >= 50) {
-          mensajeComparacion = `⚠️ Mucho espacio sobrante (${espacioSobrante.toFixed(6)} m³ desperdiciado)`;
+          mensajeComparacion = `⚠️ Mucho espacio sobrante`;
           recomendacion = "NO RECOMENDADO - Mucho desperdicio";
         } else {
-          mensajeComparacion = `❌ Contenedor muy grande (${espacioSobrante.toFixed(6)} m³ desperdiciado)`;
+          mensajeComparacion = `❌ Contenedor muy grande`;
           recomendacion = "EVITAR - Excesivo desperdicio de espacio";
+        }
+        
+        // Agregar información especial para ajuste dimensional perfecto
+        if (dimensionesExactas) {
+          mensajeComparacion = `🎯 Ajuste dimensional con espacio mínimo`;
+          if (eficiencia >= 95) {
+            recomendacion = "IDEAL - Dimensiones exactas con alta eficiencia";
+          } else {
+            recomendacion = "Excelente opción, dimensiones exactas";
+          }
         }
         
         // Agregar información sobre la proporción
@@ -268,16 +270,16 @@ const sugerenciasService = {
       console.log(`Sugerencias generadas: ${sugerencias.length}`);
       console.log('Primeras 2 sugerencias:', sugerencias.slice(0, 2));
       
-      // Ordenar por mejor recomendación (priorizar ajuste perfecto, luego eficiencia)
+      // Ordenar por mejor recomendación (PRIORIZAR EFICIENCIA)
       const sugerenciasOrdenadas = sugerencias.sort((a, b) => {
-        // Prioridad 1: Ajuste perfecto dimensional
-        if (a.es_ajuste_perfecto && !b.es_ajuste_perfecto) return -1;
-        if (!a.es_ajuste_perfecto && b.es_ajuste_perfecto) return 1;
-        
-        // Prioridad 2: Eficiencia alta (mayor eficiencia = mejor)
+        // Prioridad 1: EFICIENCIA (mayor eficiencia = mejor)
         if (a.eficiencia !== b.eficiencia) {
           return b.eficiencia - a.eficiencia;
         }
+        
+        // Prioridad 2: Si tienen la misma eficiencia, preferir ajuste perfecto dimensional
+        if (a.es_ajuste_perfecto && !b.es_ajuste_perfecto) return -1;
+        if (!a.es_ajuste_perfecto && b.es_ajuste_perfecto) return 1;
         
         // Prioridad 3: Menor cantidad de contenedores (más económico)
         if (a.cantidad_sugerida !== b.cantidad_sugerida) {
@@ -288,7 +290,7 @@ const sugerenciasService = {
         return a.volumen_total_contenedores - b.volumen_total_contenedores;
       });
       
-      // Marcar la mejor opción
+      // Marcar la mejor opción (la de mayor eficiencia)
       if (sugerenciasOrdenadas.length > 0) {
         sugerenciasOrdenadas[0].es_mejor_opcion = true;
         sugerenciasOrdenadas[0].etiqueta_recomendacion = "🏆 MEJOR OPCIÓN";
