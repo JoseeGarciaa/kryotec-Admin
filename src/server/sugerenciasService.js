@@ -27,62 +27,6 @@ const sugerenciasService = {
     }
   },
 
-  // Crear sugerencia agrupada por orden de despacho
-  createSugerenciaOrden: async (data) => {
-    try {
-      const { cliente_id, orden_despacho, modelo_id, modelo_sugerido, cantidad_total_sugerida, detalle_productos } = data;
-      
-      // Crear una sugerencia principal para la orden (usar el primer producto como referencia)
-      const query = `
-        INSERT INTO admin_platform.sugerencias_reemplazo (
-          cliente_id, inv_id, modelo_sugerido, cantidad_sugerida, 
-          modelo_id, estado, modalidad, orden_despacho, detalle_orden
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING sugerencia_id
-      `;
-      
-      // Usar el primer producto como referencia, pero guardar el detalle completo
-      const primerProducto = detalle_productos[0];
-      const values = [
-        cliente_id, 
-        primerProducto.inv_id, 
-        modelo_sugerido,
-        cantidad_total_sugerida, 
-        modelo_id, 
-        'pendiente',
-        'calculadora_orden',
-        orden_despacho,
-        JSON.stringify(detalle_productos) // Guardar detalle completo como JSON
-      ];
-      
-      const { rows } = await pool.query(query, values);
-      const sugerenciaId = rows[0].sugerencia_id;
-      
-      // Obtener la sugerencia completa
-      const selectQuery = `
-        SELECT 
-          s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
-          s.cantidad_sugerida, s.fecha_sugerencia, 
-          s.modelo_id, s.estado, s.modalidad, s.orden_despacho, s.detalle_orden,
-          c.nombre_cliente,
-          m.nombre_modelo, m.volumen_litros,
-          i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
-          i.largo_mm, i.ancho_mm, i.alto_mm
-        FROM admin_platform.sugerencias_reemplazo s
-        LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
-        LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
-        LEFT JOIN admin_platform.inventario_prospecto i ON s.inv_id = i.inv_id
-        WHERE s.sugerencia_id = $1
-      `;
-      
-      const { rows: completeRows } = await pool.query(selectQuery, [sugerenciaId]);
-      return completeRows[0];
-    } catch (error) {
-      console.error('Error al crear sugerencia de orden:', error);
-      throw error;
-    }
-  },
-
   // Crear una nueva sugerencia
   createSugerencia: async (data) => {
     try {
@@ -212,6 +156,7 @@ const sugerenciasService = {
         let totalContenedoresNecesarios = 0;
         let totalVolumenUtilizado = 0;
         let algunProductoNoCabe = false;
+        let detalleContenedoresPorProducto = []; // Agregar array para detalles
         
         // Para cada tipo de producto en la orden, calcular contenedores individualmente
         for (const item of inventarioItems) {
@@ -253,10 +198,12 @@ const sugerenciasService = {
             );
             
             let contenedoresParaEsteProducto;
+            let tipoAjuste;
             
             if (dimensionesExactas) {
               // Caso perfecto: 1 producto = 1 contenedor (IGUAL que en el individual)
               contenedoresParaEsteProducto = cantidadProducto;
+              tipoAjuste = "perfecto";
               console.log(`Ajuste perfecto - ${cantidadProducto} contenedores necesarios (1 producto = 1 contenedor)`);
             } else {
               // Calcular por volumen (IGUAL que en el individual)
@@ -271,8 +218,21 @@ const sugerenciasService = {
               
               // Calcular contenedores necesarios (IGUAL que en el individual)
               contenedoresParaEsteProducto = Math.ceil(cantidadProducto / productosPorContenedor);
+              tipoAjuste = "volumetrico";
               console.log(`${productosPorContenedor.toFixed(2)} productos por contenedor, ${contenedoresParaEsteProducto} contenedores necesarios`);
             }
+            
+            // Registrar detalle de este producto
+            detalleContenedoresPorProducto.push({
+              inv_id: item.inv_id,
+              producto: item.producto,
+              descripcion_producto: item.descripcion_producto,
+              cantidad_productos: cantidadProducto,
+              contenedores_necesarios: contenedoresParaEsteProducto,
+              tipo_ajuste: tipoAjuste,
+              volumen_unitario: volumenUnitarioProducto,
+              volumen_total_producto: volumenTotalProducto
+            });
             
             // Sumar al total
             totalContenedoresNecesarios += contenedoresParaEsteProducto;
@@ -347,6 +307,7 @@ const sugerenciasService = {
           },
           orden_despacho: orden_despacho,
           resumen_productos: resumenProductos,
+          detalle_contenedores_por_producto: detalleContenedoresPorProducto, // NUEVO: información detallada
           es_calculo_por_orden: true
         };
       }).filter(sugerencia => sugerencia !== null);

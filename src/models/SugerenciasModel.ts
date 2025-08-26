@@ -8,10 +8,11 @@ export interface SugerenciaReemplazo {
   inv_id: number | null;
   modelo_sugerido: string | null;
   cantidad_sugerida: number | null;
-  modalidad: string | null;
   fecha_sugerencia: string | null;
   modelo_id: number | null;
   estado: string | null;
+  orden_despacho?: string | null;
+  detalle_orden?: string | null;
   // Campos adicionales para joins
   nombre_cliente?: string;
   descripcion_inventario?: string;
@@ -66,6 +67,7 @@ export interface ResultadoSugerencia {
   volumen_modelo_m3?: number;
   orden_despacho?: string;
   resumen_productos?: any[];
+  detalle_contenedores_por_producto?: any[]; // Nueva propiedad para detalles específicos
   es_calculo_por_orden?: boolean;
   // Campos obsoletos mantenidos por compatibilidad
   cajas_por_modelo?: number;

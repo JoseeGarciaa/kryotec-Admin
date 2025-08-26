@@ -548,17 +548,6 @@ app.delete('/api/sugerencias/:id', async (req, res) => {
   }
 });
 
-// Nuevo endpoint para crear sugerencias de orden agrupadas
-app.post('/api/sugerencias/orden', async (req, res) => {
-  try {
-    const nuevaSugerenciaOrden = await sugerenciasService.createSugerenciaOrden(req.body);
-    res.status(201).json(nuevaSugerenciaOrden);
-  } catch (error) {
-    console.error('Error en POST /api/sugerencias/orden:', error);
-    res.status(500).json({ error: 'Error al crear sugerencia de orden' });
-  }
-});
-
 // Servir archivos estáticos en producción
 if (process.env.NODE_ENV === 'production') {
   const path = require('path');

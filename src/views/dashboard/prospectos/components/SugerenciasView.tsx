@@ -202,7 +202,6 @@ const SugerenciasView: React.FC = () => {
         inv_id: Number(selectedInventario),
         modelo_sugerido: resultado.nombre_modelo,
         cantidad_sugerida: resultado.cantidad_sugerida,
-        modalidad: 'calculadora',
         modelo_id: resultado.modelo_id,
         estado: 'pendiente'
       });
@@ -215,61 +214,23 @@ const SugerenciasView: React.FC = () => {
 
   const handleGuardarSugerenciaOrden = async (resultado: ResultadoSugerencia) => {
     try {
-      // Calcular exactamente cuántos contenedores necesita cada producto
-      const detalleProductos = await Promise.all(productosOrden.map(async (producto) => {
-        // Llamar al endpoint individual para cada producto para obtener cálculo exacto
-        const response = await fetch(`${import.meta.env.PROD ? '/api' : 'http://localhost:3002/api'}/sugerencias/calcular`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            cliente_id: Number(selectedCliente),
-            inv_id: Number(producto.inv_id),
-            modelo_especifico: resultado.modelo_id // Forzar a usar el modelo seleccionado
-          }),
-        });
-        
-        if (response.ok) {
-          const sugerenciaIndividual = await response.json();
-          // Encontrar la sugerencia para el modelo específico
-          const sugerenciaModelo = sugerenciaIndividual.find((s: any) => s.modelo_id === resultado.modelo_id);
-          
-          return {
-            inv_id: producto.inv_id,
-            producto: producto.producto,
-            descripcion_producto: producto.descripcion_producto,
-            cantidad_productos: producto.cantidad_despachada,
-            contenedores_necesarios: sugerenciaModelo ? sugerenciaModelo.cantidad_sugerida : 0
-          };
-        }
-        return null;
-      }));
+      // Para cada producto, calcular exactamente cuántos contenedores necesita usando la información del resultado
+      const detalleProductos = resultado.detalle_contenedores_por_producto || [];
       
-      // Filtrar productos válidos
-      const productosValidos = detalleProductos.filter(p => p !== null);
-      
-      // Usar una nueva función de API para guardar sugerencia de orden
-      const response = await fetch(`${import.meta.env.PROD ? '/api' : 'http://localhost:3002/api'}/sugerencias/orden`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Crear una sugerencia individual para cada producto con su cantidad específica
+      const promesasGuardado = detalleProductos.map(async (detalle: any) => {
+        return createSugerencia({
           cliente_id: Number(selectedCliente),
-          orden_despacho: selectedOrden,
-          modelo_id: resultado.modelo_id,
+          inv_id: Number(detalle.inv_id),
           modelo_sugerido: resultado.nombre_modelo,
-          cantidad_total_sugerida: resultado.cantidad_sugerida,
-          detalle_productos: productosValidos
-        }),
+          cantidad_sugerida: detalle.contenedores_necesarios, // Usar la cantidad específica calculada
+          modelo_id: resultado.modelo_id,
+          estado: 'pendiente'
+        });
       });
       
-      if (response.ok) {
-        alert(`Sugerencia de orden guardada exitosamente para ${productosValidos.length} productos`);
-      } else {
-        throw new Error('Error al guardar sugerencia de orden');
-      }
+      await Promise.all(promesasGuardado);
+      alert(`Sugerencias guardadas exitosamente: ${detalleProductos.length} productos con cantidades específicas de contenedores`);
     } catch (err) {
       console.error('Error al guardar sugerencia:', err);
       alert('Error al guardar la sugerencia');
@@ -1306,12 +1267,6 @@ const SugerenciasView: React.FC = () => {
                   </div>
                   
                   <div className="space-y-2 mb-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm">Modalidad:</span>
-                      <span className="text-white text-sm">
-                        {sugerencia.modalidad || 'N/A'}
-                      </span>
-                    </div>
                     {sugerencia.cantidad_inventario && (
                       <div className="flex justify-between items-center">
                         <span className="text-gray-400 text-sm">Cant. Productos:</span>
