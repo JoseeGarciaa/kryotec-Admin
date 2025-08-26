@@ -107,17 +107,29 @@ const sugerenciasService = {
       `;
       
       const { rows: modelos } = await pool.query(query);
+      console.log('Modelos encontrados:', modelos.length);
+      console.log('Primer modelo:', modelos[0]);
       
       if (modelos.length === 0) {
+        console.log('No se encontraron modelos tipo Cube');
         return [];
       }
       
       // Calcular sugerencias para cada modelo
-      const sugerencias = modelos.map(modelo => {
+      const sugerencias = modelos.map((modelo, index) => {
+        console.log(`Evaluando modelo ${index + 1}/${modelos.length}:`, modelo.nombre_modelo);
+        
         // Verificar que el modelo tenga dimensiones internas válidas
         if (!modelo.dim_int_frente || !modelo.dim_int_profundo || !modelo.dim_int_alto) {
+          console.log(`Modelo ${modelo.nombre_modelo} descartado: sin dimensiones internas`);
           return null; // Saltar modelos sin dimensiones internas
         }
+        
+        console.log(`Dimensiones del modelo ${modelo.nombre_modelo}:`, {
+          frente: modelo.dim_int_frente,
+          profundo: modelo.dim_int_profundo,
+          alto: modelo.dim_int_alto
+        });
         
         // Convertir dimensiones internas del modelo de mm a metros
         const frenteModelo = modelo.dim_int_frente; // En mm
@@ -136,18 +148,25 @@ const sugerenciasService = {
         
         // NUEVA LÓGICA: Filtrar modelos demasiado grandes para volúmenes pequeños
         const factorProporcion = volumenModeloM3 / volumenTotalRequeridoM3;
+        console.log(`Modelo ${modelo.nombre_modelo} - Factor proporción:`, factorProporcion);
+        console.log(`Volumen modelo: ${volumenModeloM3} m³, Volumen requerido: ${volumenTotalRequeridoM3} m³`);
         
+        // Temporalmente comentar estos filtros para diagnosticar
+        /*
         // Si el modelo es más de 3 veces el volumen requerido Y el volumen total es pequeño (< 0.1 m³)
         // entonces no lo recomendamos (evita recomendar contenedores gigantes para pocas cajas pequeñas)
         if (factorProporcion > 3 && volumenTotalRequeridoM3 < 0.1) {
+          console.log(`Modelo ${modelo.nombre_modelo} descartado: factor > 3 y volumen pequeño`);
           return null; // Modelo demasiado grande para pocas cajas pequeñas
         }
         
         // Si el modelo es más de 10 veces el volumen requerido Y el volumen total es mediano (< 0.5 m³)
         // entonces tampoco lo recomendamos
         if (factorProporcion > 10 && volumenTotalRequeridoM3 < 0.5) {
+          console.log(`Modelo ${modelo.nombre_modelo} descartado: factor > 10 y volumen mediano`);
           return null; // Modelo excesivamente grande
         }
+        */
         
         // Calcular cuántas cajas caben en un modelo (por volumen)
         const cajasPorModelo = Math.floor(volumenModeloM3 / volumenUnaCaja);
@@ -239,6 +258,9 @@ const sugerenciasService = {
                            : null
         };
       }).filter(sugerencia => sugerencia !== null); // Filtrar modelos excluidos
+      
+      console.log(`Sugerencias generadas: ${sugerencias.length}`);
+      console.log('Primeras 2 sugerencias:', sugerencias.slice(0, 2));
       
       // Ordenar por eficiencia descendente
       sugerencias.sort((a, b) => b.eficiencia - a.eficiencia);
