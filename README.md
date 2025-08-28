@@ -124,3 +124,9 @@ Para añadir nuevas funcionalidades al proyecto:
 
 - Email: admin@kruotecsense.com
 - Contraseña: admin123
+
+## Inventario Prospectos: flujo Excel
+
+- Desde la vista de Inventario, usa el botón "Plantilla" para descargar el Excel base (alineado al esquema: Descripcion, Producto, Largo_mm, Ancho_mm, Alto_mm, Cantidad, Fecha_Despacho, Orden_Despacho, Notas).
+- Selecciona un Cliente en el selector adjunto y luego haz clic en "Importar" para subir el .xlsx rellenado.
+- Backend: POST /api/inventario-prospectos/import (multipart/form-data: file, cliente_id). Valida, evita duplicados por cliente + producto + dimensiones + cantidad + orden, e inserta en bloque.

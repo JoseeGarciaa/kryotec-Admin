@@ -3,8 +3,10 @@ import { InventarioProspecto, CreateInventarioProspectoData } from '../../../../
 import { InventarioProspectoController } from '../../../../controllers/InventarioProspectoController';
 import { ClienteProspectoController } from '../../../../controllers/ClienteProspectoController';
 import { ClienteProspecto } from '../../../../models/ClienteProspectoModel';
-import { Plus, Edit2, Trash2, Search, Package, Box, Save, ShoppingCart, User, LayoutGrid, List, Thermometer } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, Box, Save, ShoppingCart, User, LayoutGrid, List, Thermometer, Download, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { downloadInventarioTemplate } from '../../../../utils/excelTemplate';
+import { apiClient } from '../../../../services/api';
 
 // Interface para productos pendientes (locales)
 interface PendingProduct extends CreateInventarioProspectoData {
@@ -24,6 +26,8 @@ const InventarioView: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<InventarioProspecto | null>(null);
   const [selectedPendingItem, setSelectedPendingItem] = useState<PendingProduct | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [selectedClienteForImport, setSelectedClienteForImport] = useState<number>(0);
 
   // Form state
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
@@ -63,6 +67,43 @@ const InventarioView: React.FC = () => {
       setClientes(data);
     } catch (error) {
       console.error('Error al cargar clientes:', error);
+    }
+  };
+
+  // Descargar plantilla Excel
+  const handleDownloadTemplate = () => {
+    downloadInventarioTemplate({ includeSampleRow: true });
+  };
+
+  // Abrir selector de archivo para importar
+  const openImportDialog = () => {
+    if (!selectedClienteForImport || selectedClienteForImport === 0) {
+      toast.warn('Selecciona un cliente para asociar los registros importados');
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      setLoading(true);
+      const form = new FormData();
+      form.append('file', file);
+      form.append('cliente_id', String(selectedClienteForImport));
+      const res = await apiClient.post('/inventario-prospectos/import', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const r = res.data;
+      toast.success(`Importación completada: ${r.inserted} insertados, ${r.skipped} duplicados, ${r.errors} con error`);
+      await fetchInventario();
+    } catch (error) {
+      console.error('Error al importar inventario:', error);
+      toast.error('Error al importar inventario');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -312,7 +353,7 @@ const InventarioView: React.FC = () => {
           <p className="text-gray-400 mb-6">Gestiona el inventario de productos de los clientes prospectos</p>
         </div>
         
-        <div className="flex items-center gap-4">
+  <div className="flex items-center gap-4">
           {/* Botones para cambiar el modo de vista */}
           <div className="flex bg-gray-700 rounded-lg p-1">
             <button
@@ -329,6 +370,42 @@ const InventarioView: React.FC = () => {
             >
               <List size={18} />
             </button>
+          </div>
+
+          {/* Import/Export */}
+          <div className="flex items-center gap-2 bg-gray-800 p-2 rounded-lg">
+            <select
+              value={selectedClienteForImport}
+              onChange={(e: any) => setSelectedClienteForImport(parseInt(e.target.value) || 0)}
+              className="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+              title="Cliente para importar"
+            >
+              <option value={0}>Cliente para importar</option>
+              {clientes.map((c: any) => (
+                <option key={c.cliente_id} value={c.cliente_id}>{c.nombre_cliente}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleDownloadTemplate}
+              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md flex items-center gap-2"
+              title="Descargar plantilla Excel"
+            >
+              <Download size={16} /> Plantilla
+            </button>
+            <button
+              onClick={openImportDialog}
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md flex items-center gap-2"
+              title="Importar inventario desde Excel"
+            >
+              <Upload size={16} /> Importar
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileSelected}
+              className="hidden"
+            />
           </div>
           
           <button

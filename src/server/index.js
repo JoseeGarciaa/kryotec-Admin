@@ -10,6 +10,8 @@ const clientesProspectosService = require('./clientesProspectosService');
 const clientesProspectosRoutes = require('./routes/clientesProspectosRoutes'); // Agregar esta línea
 const inventarioProspectosService = require('./inventarioProspectosService');
 const sugerenciasService = require('./sugerenciasService');
+const multer = require('multer');
+const XLSX = require('xlsx');
 
 const app = express();
 const PORT = process.env.PORT || 3002; // Cambiado a 3002 para evitar conflictos
@@ -22,6 +24,9 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Multer setup for Excel uploads (in-memory)
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Registrar las rutas de clientes-prospectos
 app.use('/api/clientes-prospectos', clientesProspectosRoutes); // Agregar esta línea
@@ -490,6 +495,86 @@ app.get('/api/inventario-prospectos/orden/:ordenDespacho', async (req, res) => {
   } catch (error) {
     console.error('Error al obtener productos por orden:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Importación de inventario desde Excel
+app.post('/api/inventario-prospectos/import', upload.single('file'), async (req, res) => {
+  try {
+    const { cliente_id } = req.body;
+    const clienteIdNum = parseInt(cliente_id);
+    if (!clienteIdNum || !req.file) {
+      return res.status(400).json({ error: 'cliente_id y archivo son requeridos' });
+    }
+
+    // Parse workbook
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    // Expected headers mapping (case-insensitive)
+    const normalize = (s) => String(s || '').trim().toLowerCase();
+    const results = { inserted: 0, skipped: 0, errors: 0, details: [] };
+
+    // Fetch existing items for de-duplication
+    const existing = await inventarioProspectosService.getInventarioByCliente(clienteIdNum);
+    const existingSet = new Set(existing.map(e => [
+      normalize(e.descripcion_producto), normalize(e.producto), e.largo_mm, e.ancho_mm, e.alto_mm,
+      e.cantidad_despachada, normalize(e.orden_despacho)
+    ].join('|')));
+
+    const toInsert = [];
+    for (let idx = 0; idx < rows.length; idx++) {
+      const r = rows[idx];
+      const record = {
+        cliente_id: clienteIdNum,
+        descripcion_producto: r['Descripcion'] || r['DESCRIPCION'] || r['descripcion'] || '',
+        producto: r['Producto'] || r['PRODUCTO'] || r['producto'] || '',
+        largo_mm: Number(r['Largo_mm'] ?? r['Largo'] ?? r['largo_mm'] ?? r['largo']) || 0,
+        ancho_mm: Number(r['Ancho_mm'] ?? r['Ancho'] ?? r['ancho_mm'] ?? r['ancho']) || 0,
+        alto_mm: Number(r['Alto_mm'] ?? r['Alto'] ?? r['alto_mm'] ?? r['alto']) || 0,
+        cantidad_despachada: Number(r['Cantidad'] ?? r['cantidad'] ?? r['CANTIDAD']) || 0,
+        fecha_de_despacho: (r['Fecha_Despacho (YYYY-MM-DD)'] || r['Fecha_Despacho'] || r['fecha_despacho'] || '').toString().slice(0, 10) || null,
+        orden_despacho: r['Orden_Despacho'] || r['orden_despacho'] || ''
+      };
+
+      // Basic validation
+      const errors = [];
+      if (!record.producto) errors.push('Producto requerido');
+      if (!(record.largo_mm > 0 && record.ancho_mm > 0 && record.alto_mm > 0)) errors.push('Dimensiones inválidas');
+      if (!(record.cantidad_despachada > 0)) errors.push('Cantidad inválida');
+      if (record.fecha_de_despacho && !/^\d{4}-\d{2}-\d{2}$/.test(record.fecha_de_despacho)) errors.push('Fecha inválida');
+
+      if (errors.length) {
+        results.errors++;
+        results.details.push({ row: idx + 2, status: 'error', errors });
+        continue;
+      }
+
+      // Dedup key per cliente
+      const key = [
+        normalize(record.descripcion_producto), normalize(record.producto), record.largo_mm, record.ancho_mm, record.alto_mm,
+        record.cantidad_despachada, normalize(record.orden_despacho)
+      ].join('|');
+      if (existingSet.has(key)) {
+        results.skipped++;
+        results.details.push({ row: idx + 2, status: 'skipped', reason: 'Duplicado existente' });
+        continue;
+      }
+      existingSet.add(key);
+      toInsert.push(record);
+    }
+
+    if (toInsert.length > 0) {
+      await inventarioProspectosService.bulkInsertInventario(toInsert);
+      results.inserted = toInsert.length;
+    }
+
+    return res.json(results);
+  } catch (error) {
+    console.error('Error en importación de inventario:', error);
+    res.status(500).json({ error: 'Error al importar inventario' });
   }
 });
 

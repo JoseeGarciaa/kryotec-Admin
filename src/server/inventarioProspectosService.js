@@ -1,4 +1,5 @@
 const pool = require('./config/db');
+const format = require('pg-format');
 
 const inventarioProspectosService = {
   getAllInventario: async () => {
@@ -74,6 +75,57 @@ const inventarioProspectosService = {
       return rows[0];
     } catch (error) {
       console.error('Error al eliminar inventario:', error);
+      throw error;
+    }
+  },
+
+  // Obtener inventario por cliente (para deduplicación en importaciones)
+  getInventarioByCliente: async (clienteId) => {
+    try {
+      const query = `
+        SELECT inv_id, cliente_id, descripcion_producto, producto,
+               largo_mm, ancho_mm, alto_mm, cantidad_despachada,
+               fecha_de_despacho, orden_despacho
+        FROM admin_platform.inventario_prospecto
+        WHERE cliente_id = $1
+      `;
+      const { rows } = await pool.query(query, [clienteId]);
+      return rows;
+    } catch (error) {
+      console.error('Error al obtener inventario por cliente:', error);
+      throw error;
+    }
+  },
+
+  // Inserción masiva para importaciones
+  bulkInsertInventario: async (items) => {
+    if (!items || items.length === 0) return [];
+    try {
+      const rows = items.map(it => [
+        it.cliente_id,
+        it.descripcion_producto || null,
+        it.producto,
+        it.largo_mm,
+        it.ancho_mm,
+        it.alto_mm,
+        it.cantidad_despachada,
+        it.fecha_de_despacho || null,
+        it.orden_despacho || null,
+        // volumen total calculado
+        (it.largo_mm * it.ancho_mm * it.alto_mm * it.cantidad_despachada) / 1000000000
+      ]);
+
+      const query = format(`
+        INSERT INTO admin_platform.inventario_prospecto (
+          cliente_id, descripcion_producto, producto, largo_mm, ancho_mm, alto_mm,
+          cantidad_despachada, fecha_de_despacho, orden_despacho, volumen_total_m3_producto
+        ) VALUES %L RETURNING *
+      `, rows);
+
+      const { rows: inserted } = await pool.query(query);
+      return inserted;
+    } catch (error) {
+      console.error('Error en inserción masiva de inventario:', error);
       throw error;
     }
   },
