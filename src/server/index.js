@@ -508,13 +508,67 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
     }
 
     // Parse workbook
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true, raw: false });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    // Helpers
+    const normalize = (s) => String(s || '').trim().toLowerCase();
+    const toInt = (v) => {
+      if (v === null || v === undefined || v === '') return 0;
+      const n = Number(String(v).toString().replace(',', '.'));
+      return Number.isFinite(n) ? Math.round(n) : 0;
+    };
+    const toDateString = (v) => {
+      if (!v) return null;
+      if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10);
+      if (typeof v === 'number') {
+        try {
+          const d = XLSX.SSF && XLSX.SSF.parse_date_code ? XLSX.SSF.parse_date_code(v) : null;
+          if (d && d.y && d.m && d.d) {
+            const yyyy = String(d.y).padStart(4, '0');
+            const mm = String(d.m).padStart(2, '0');
+            const dd = String(d.d).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+          }
+        } catch (_) {}
+      }
+      const s = String(v).trim();
+      // Accept YYYY-MM-DD or YYYY/MM/DD
+      let m = s.match(/^(\d{4})[-\/]?(\d{2})[-\/]?(\d{2})$/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      // Accept DD-MM-YYYY or DD/MM/YYYY (common in Colombia)
+      m = s.match(/^(\d{2})[-\/]?(\d{2})[-\/]?(\d{4})$/);
+      if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+      return null;
+    };
+
+    // Detect header row dynamically (supports templates with title rows)
+    const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(30, aoa.length); i++) {
+      const row = (aoa[i] || []).map(normalize);
+      if (
+        row.includes('producto') &&
+        (row.includes('orden_despacho') || row.includes('orden despacho') || row.includes('orden')) &&
+        (row.includes('largo_mm') || row.includes('largo')) &&
+        (row.includes('ancho_mm') || row.includes('ancho')) &&
+        (row.includes('alto_mm') || row.includes('alto'))
+      ) {
+        headerRowIdx = i;
+        break;
+      }
+    }
+
+    // Parse rows starting from detected header
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', range: headerRowIdx });
+    if (!rows || rows.length === 0) {
+      return res.status(400).json({
+        error: 'No se encontraron datos para importar. Verifica que la hoja "Inventario" tenga los encabezados esperados (Descripcion, Producto, Largo_mm, Ancho_mm, Alto_mm, Cantidad, Fecha_Despacho (YYYY-MM-DD), Orden_Despacho).'
+      });
+    }
 
     // Expected headers mapping (case-insensitive)
-    const normalize = (s) => String(s || '').trim().toLowerCase();
     const results = { inserted: 0, skipped: 0, errors: 0, details: [] };
 
     // Fetch existing items for de-duplication
@@ -524,19 +578,25 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
       e.cantidad_despachada, normalize(e.orden_despacho)
     ].join('|')));
 
-    const toInsert = [];
-    for (let idx = 0; idx < rows.length; idx++) {
+  const toInsert = [];
+  const previews = [];
+  const dryRun = (req.query && (req.query.dryRun === '1' || req.query.dryRun === 'true')) ||
+           (req.body && (req.body.dryRun === '1' || req.body.dryRun === true));
+  const baseExcelRow = (headerRowIdx + 2); // fila Excel donde inicia el primer dato (headerIdx es 0-based; +1 header, +1 primera data)
+  for (let idx = 0; idx < rows.length; idx++) {
       const r = rows[idx];
       const record = {
         cliente_id: clienteIdNum,
         descripcion_producto: r['Descripcion'] || r['DESCRIPCION'] || r['descripcion'] || '',
         producto: r['Producto'] || r['PRODUCTO'] || r['producto'] || '',
-        largo_mm: Number(r['Largo_mm'] ?? r['Largo'] ?? r['largo_mm'] ?? r['largo']) || 0,
-        ancho_mm: Number(r['Ancho_mm'] ?? r['Ancho'] ?? r['ancho_mm'] ?? r['ancho']) || 0,
-        alto_mm: Number(r['Alto_mm'] ?? r['Alto'] ?? r['alto_mm'] ?? r['alto']) || 0,
-        cantidad_despachada: Number(r['Cantidad'] ?? r['cantidad'] ?? r['CANTIDAD']) || 0,
-        fecha_de_despacho: (r['Fecha_Despacho (YYYY-MM-DD)'] || r['Fecha_Despacho'] || r['fecha_despacho'] || '').toString().slice(0, 10) || null,
-        orden_despacho: r['Orden_Despacho'] || r['orden_despacho'] || ''
+        largo_mm: toInt(r['Largo_mm'] ?? r['Largo'] ?? r['largo_mm'] ?? r['largo']),
+        ancho_mm: toInt(r['Ancho_mm'] ?? r['Ancho'] ?? r['ancho_mm'] ?? r['ancho']),
+        alto_mm: toInt(r['Alto_mm'] ?? r['Alto'] ?? r['alto_mm'] ?? r['alto']),
+        cantidad_despachada: toInt(r['Cantidad'] ?? r['cantidad'] ?? r['CANTIDAD']),
+        fecha_de_despacho: toDateString(
+          r['Fecha_Despacho (YYYY-MM-DD)'] ?? r['Fecha_Despacho'] ?? r['fecha_despacho'] ?? r['Fecha despacho']
+        ),
+        orden_despacho: r['Orden_Despacho'] || r['orden_despacho'] || r['Orden'] || r['ORDEN'] || ''
       };
 
       // Basic validation
@@ -545,10 +605,13 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
       if (!(record.largo_mm > 0 && record.ancho_mm > 0 && record.alto_mm > 0)) errors.push('Dimensiones inválidas');
       if (!(record.cantidad_despachada > 0)) errors.push('Cantidad inválida');
       if (record.fecha_de_despacho && !/^\d{4}-\d{2}-\d{2}$/.test(record.fecha_de_despacho)) errors.push('Fecha inválida');
+      if (!record.orden_despacho) errors.push('Orden_Despacho requerido');
 
       if (errors.length) {
         results.errors++;
-        results.details.push({ row: idx + 2, status: 'error', errors });
+        const detail = { row: baseExcelRow + idx, status: 'error', errors };
+        results.details.push(detail);
+        previews.push({ ...detail, record });
         continue;
       }
 
@@ -559,11 +622,23 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
       ].join('|');
       if (existingSet.has(key)) {
         results.skipped++;
-        results.details.push({ row: idx + 2, status: 'skipped', reason: 'Duplicado existente' });
+        const detail = { row: baseExcelRow + idx, status: 'skipped', reason: 'Duplicado existente' };
+        results.details.push(detail);
+        previews.push({ ...detail, record });
         continue;
       }
       existingSet.add(key);
       toInsert.push(record);
+      previews.push({ row: baseExcelRow + idx, status: 'ok', record });
+    }
+
+    if (dryRun) {
+      return res.json({
+        results,
+        preview: previews,
+        totalRows: rows.length,
+        canInsert: toInsert.length
+      });
     }
 
     if (toInsert.length > 0) {

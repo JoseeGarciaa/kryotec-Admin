@@ -28,6 +28,15 @@ const InventarioView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [selectedClienteForImport, setSelectedClienteForImport] = useState<number>(0);
+  const [selectedFileForImport, setSelectedFileForImport] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<null | {
+    preview: Array<{ row: number; status: 'ok' | 'skipped' | 'error'; reason?: string; errors?: string[]; record: any }>,
+    results: { inserted: number; skipped: number; errors: number; details: any[] },
+    totalRows: number,
+    canInsert: number
+  }>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [isImportingPreview, setIsImportingPreview] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
@@ -72,7 +81,7 @@ const InventarioView: React.FC = () => {
 
   // Descargar plantilla Excel
   const handleDownloadTemplate = () => {
-    downloadInventarioTemplate({ includeSampleRow: true });
+    downloadInventarioTemplate();
   };
 
   // Abrir selector de archivo para importar
@@ -86,10 +95,46 @@ const InventarioView: React.FC = () => {
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = '';
     if (!file) return;
     try {
       setLoading(true);
+      setShowImportModal(true);
+      setIsImportingPreview(true);
+      // Paso 1: Dry-run para previsualización
+      const form = new FormData();
+      form.append('file', file);
+      form.append('cliente_id', String(selectedClienteForImport));
+      form.append('dryRun', '1');
+      const res = await apiClient.post('/inventario-prospectos/import?dryRun=1', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data?.error) {
+        toast.error(res.data.error);
+        setShowImportModal(false);
+        return;
+      }
+      setSelectedFileForImport(file);
+      setImportPreview(res.data);
+    } catch (error) {
+      console.error('Error al importar inventario:', error);
+      toast.error('Error al importar inventario');
+      setShowImportModal(false);
+    } finally {
+      setLoading(false);
+      setIsImportingPreview(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    try {
+      setLoading(true);
+      const file = selectedFileForImport;
+      if (!file) {
+        toast.info('Vuelve a seleccionar el archivo para confirmar la importación');
+        setShowImportModal(false);
+        return;
+      }
       const form = new FormData();
       form.append('file', file);
       form.append('cliente_id', String(selectedClienteForImport));
@@ -98,10 +143,14 @@ const InventarioView: React.FC = () => {
       });
       const r = res.data;
       toast.success(`Importación completada: ${r.inserted} insertados, ${r.skipped} duplicados, ${r.errors} con error`);
+  setShowImportModal(false);
+      setImportPreview(null);
+      setSelectedFileForImport(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       await fetchInventario();
     } catch (error) {
-      console.error('Error al importar inventario:', error);
-      toast.error('Error al importar inventario');
+      console.error('Error al confirmar importación:', error);
+      toast.error('Error al confirmar importación');
     } finally {
       setLoading(false);
     }
@@ -960,6 +1009,71 @@ const InventarioView: React.FC = () => {
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de previsualización de importación */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto border border-gray-700">
+            <h3 className="text-xl font-semibold mb-4 text-white">Confirmar importación desde Excel</h3>
+            {isImportingPreview || !importPreview ? (
+              <p className="text-gray-300 mb-4">Procesando archivo…</p>
+            ) : (
+              <p className="text-gray-300 mb-4">
+                Filas leídas: <span className="font-semibold">{importPreview.totalRows ?? 0}</span> · Listas para insertar: <span className="font-semibold text-green-400">{importPreview.canInsert ?? 0}</span> · Duplicados: <span className="text-yellow-400 font-semibold">{importPreview.results?.skipped ?? 0}</span> · Errores: <span className="text-red-400 font-semibold">{importPreview.results?.errors ?? 0}</span>
+              </p>
+            )}
+            <div className="overflow-x-auto bg-gray-800 rounded-lg border border-gray-700">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-700 text-gray-200">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Fila</th>
+                    <th className="px-3 py-2 text-left">Estado</th>
+                    <th className="px-3 py-2 text-left">Producto</th>
+                    <th className="px-3 py-2 text-left">Dimensiones</th>
+                    <th className="px-3 py-2 text-left">Cantidad</th>
+                    <th className="px-3 py-2 text-left">Fecha</th>
+                    <th className="px-3 py-2 text-left">Orden</th>
+                    <th className="px-3 py-2 text-left">Detalle</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700">
+                  {isImportingPreview || !importPreview ? (
+                    <tr>
+                      <td className="px-3 py-4 text-gray-400" colSpan={8}>Procesando archivo…</td>
+                    </tr>
+                  ) : (
+                    (importPreview.preview ?? []).slice(0, 300).map((p, i) => (
+                      <tr key={`${p.row}-${i}`} className="hover:bg-gray-700">
+                        <td className="px-3 py-2 text-gray-300">{p.row}</td>
+                        <td className="px-3 py-2">
+                          {p.status === 'ok' && <span className="text-green-400">OK</span>}
+                          {p.status === 'skipped' && <span className="text-yellow-400">Duplicado</span>}
+                          {p.status === 'error' && <span className="text-red-400">Error</span>}
+                        </td>
+                        <td className="px-3 py-2 text-gray-200">{p.record?.producto}</td>
+                        <td className="px-3 py-2 text-gray-300">{p.record?.largo_mm} × {p.record?.ancho_mm} × {p.record?.alto_mm} mm</td>
+                        <td className="px-3 py-2 text-gray-300">{p.record?.cantidad_despachada}</td>
+                        <td className="px-3 py-2 text-gray-300">{p.record?.fecha_de_despacho || '-'}</td>
+                        <td className="px-3 py-2 text-gray-300">{p.record?.orden_despacho}</td>
+                        <td className="px-3 py-2 text-gray-300">{p.errors?.join(', ') || p.reason || ''}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {!isImportingPreview && (importPreview?.preview?.length ?? 0) > 300 && (
+              <p className="text-xs text-gray-400 mt-2">Mostrando primeras 300 filas…</p>
+            )}
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => { setShowImportModal(false); setImportPreview(null); }} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md">Cancelar</button>
+              <button onClick={confirmImport} disabled={loading || isImportingPreview || ((importPreview?.canInsert ?? 0) === 0)} className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-4 py-2 rounded-md">
+                {loading || isImportingPreview ? 'Importando…' : `Confirmar e insertar (${importPreview?.canInsert ?? 0})`}
+              </button>
+            </div>
           </div>
         </div>
       )}
