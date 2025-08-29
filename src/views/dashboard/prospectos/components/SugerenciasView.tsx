@@ -1309,19 +1309,19 @@ const SugerenciasView: React.FC = () => {
 
       {/* Historial de Sugerencias */}
       <div className="bg-gray-800 rounded-lg p-6 mt-8">
-        <div className="flex items-center justify-between gap-2 mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-2">
             <Clock className="text-yellow-400" size={24} />
             <h2 className="text-xl font-semibold">Historial de Sugerencias</h2>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             {/* Filtro por cliente */}
             <div className="flex items-center gap-2">
               <Users className="text-gray-400" size={16} />
               <select
                 value={clienteHistorialFilter}
                 onChange={(e) => setClienteHistorialFilter(e.target.value as any)}
-                className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-blue-500"
+                className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
               >
                 <option value="">Todos los clientes</option>
                 {clientes.map(cliente => (
@@ -1333,7 +1333,7 @@ const SugerenciasView: React.FC = () => {
             </div>
 
             {/* Toggle de vista */}
-            <div className="flex bg-gray-700 rounded-lg p-1">
+            <div className="flex bg-gray-700 rounded-lg p-1 shrink-0 self-start sm:self-auto">
               <button
                 onClick={() => setViewMode('cards')}
                 className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
@@ -1351,11 +1351,11 @@ const SugerenciasView: React.FC = () => {
             </div>
             
             {/* Botones de descarga */}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               {clienteHistorialFilter && (
                 <button
                   onClick={() => handlePDFWithPrices('cliente')}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors text-sm w-full sm:w-auto justify-center"
                   title="Descargar PDF del cliente seleccionado"
                 >
                   <Users size={16} />
@@ -1364,7 +1364,7 @@ const SugerenciasView: React.FC = () => {
               )}
               <button
                 onClick={() => handlePDFWithPrices('general')}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm w-full sm:w-auto justify-center"
                 title="Descargar PDF completo"
               >
                 <Download size={16} />
