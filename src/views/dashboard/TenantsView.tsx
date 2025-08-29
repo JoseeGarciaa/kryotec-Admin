@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, Plus, Eye, Edit, Trash2, X, Building2, LayoutGrid, List } from 'lucide-react';
 import { useTenantController } from '../../controllers/TenantController';
 import { TenantForm } from './components/TenantForm';
@@ -9,6 +10,8 @@ import { useBreakpoint } from '../../utils/responsive';
 import { MainLayout } from '../../components/layout/MainLayout';
 
 export const TenantsView: React.FC = () => {
+  const location = useLocation();
+  const isStandalone = location.pathname.startsWith('/tenants');
   const { isMobile } = useBreakpoint();
   const {
     state,
@@ -149,46 +152,50 @@ export const TenantsView: React.FC = () => {
 
   // Definimos el encabezado para el MainLayout
   const header = (
-    <div className="flex justify-between items-center p-3 sm:p-6">
-      <h1 className="text-lg sm:text-2xl font-bold">Gestión de Empresas</h1>
-      <div className="flex items-center gap-1 sm:gap-4">
-        {/* Botones para cambiar el modo de vista */}
-        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-          <button
-            onClick={() => setViewMode('cards')}
-            className={`p-1.5 sm:p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
-            title="Vista de tarjetas"
-            aria-label="Vista de tarjetas"
-          >
-            <LayoutGrid size={isMobile ? 16 : 18} />
-          </button>
-          <button
-            onClick={() => setViewMode('table')}
-            className={`p-1.5 sm:p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
-            title="Vista de tabla"
-            aria-label="Vista de tabla"
-          >
-            <List size={isMobile ? 16 : 18} />
-          </button>
-        </div>
-        
-        <button 
-          onClick={() => setShowCreateForm(true)}
-          className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
-          aria-label="Crear nueva empresa"
-        >
-          <Plus size={isMobile ? 16 : 18} />
-          {!isMobile && <span>Nueva Empresa</span>}
-          {isMobile && <span>Nuevo</span>}
-        </button>
-      </div>
+    <div className="px-3 pt-6 pb-3 sm:px-6 sm:pt-8 sm:pb-4">
+      <h2 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent text-left tracking-tight">
+        Bienvenido a Kryotecsense
+      </h2>
     </div>
   );
 
   // Contenido principal
   const content = (
     <div className="px-4 sm:px-6 py-4">
-      {error && (
+      {/* Título de la vista + acciones (debajo del header sticky) */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold">Gestión de Empresas</h1>
+        <div className="flex items-center gap-4 self-stretch sm:self-auto">
+          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`p-1.5 sm:p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+              title="Vista de tarjetas"
+              aria-label="Vista de tarjetas"
+            >
+              <LayoutGrid size={isMobile ? 16 : 18} />
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 sm:p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+              title="Vista de tabla"
+              aria-label="Vista de tabla"
+            >
+              <List size={isMobile ? 16 : 18} />
+            </button>
+          </div>
+          
+          <button 
+            onClick={() => setShowCreateForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center"
+            aria-label="Crear nueva empresa"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Nuevo</span>
+          </button>
+        </div>
+      </div>
+  {error && (
         <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 dark:bg-red-900 dark:text-red-200">
           <p>{error}</p>
         </div>
@@ -406,7 +413,7 @@ export const TenantsView: React.FC = () => {
   
   // Retornamos el componente MainLayout con el header y content
   return (
-    <MainLayout header={header}>
+    <MainLayout header={isStandalone ? header : undefined}>
       {content}
     </MainLayout>
   );

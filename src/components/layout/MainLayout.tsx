@@ -33,10 +33,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         )}
 
         {/* Contenido principal */}
-        <main className={`flex-1 flex flex-col ${isMobile ? 'pt-14' : ''}`}>
+  <main className={`flex-1 flex flex-col`}>
           {/* Encabezado */}
           {header && (
-            <header className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+            <header className={`sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm ${isMobile ? 'pl-14' : ''}`}>
               {header}
             </header>
           )}

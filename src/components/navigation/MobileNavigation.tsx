@@ -64,9 +64,9 @@ export const MobileNavigation: React.FC = () => {
       {isMobile && (
         <button
           onClick={toggleMenu}
-          className="fixed top-3 left-3 z-50 p-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 shadow-lg text-white"
+          className="fixed top-4 left-3 z-40 p-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 shadow-lg text-white"
           aria-label="Menú de navegación"
-        >
+       >
           {isOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
       )}
