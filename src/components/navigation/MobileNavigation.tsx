@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Home, Users, Box, LogOut, Moon, Sun } from 'lucide-react';
+import { Menu, X, Home, Users, Box, LogOut, Moon, Sun, Package, Lightbulb } from 'lucide-react';
 import credocubeLogo from '../../assets/images/credocube-logo.png';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthContext } from '../../views/contexts/AuthContext';
@@ -33,6 +33,10 @@ export const MobileNavigation: React.FC = () => {
     { icon: <Users size={22} />, label: 'Empresas', path: '/tenants' },
     { icon: <Box size={22} />, label: 'Credocubes', path: '/dashboard?tab=credocubes' },
     { icon: <Users size={22} />, label: 'Usuarios', path: '/dashboard?tab=usuarios' },
+  // Prospectos (nuevo)
+  { icon: <Users size={22} />, label: 'Prospectos', path: '/dashboard?tab=prospectos' },
+  { icon: <Package size={22} />, label: 'Inventario (Prospectos)', path: '/dashboard?tab=prospectos-inventario' },
+  { icon: <Lightbulb size={22} />, label: 'Sugerencias', path: '/dashboard?tab=prospectos-sugerencias' },
   ];
 
   const isActive = (path: string) => {

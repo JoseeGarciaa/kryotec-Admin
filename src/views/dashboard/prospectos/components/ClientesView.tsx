@@ -110,13 +110,13 @@ const ClientesView: React.FC = () => {
   return (
     <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div className="text-center flex-1">
           <h1 className="text-3xl font-bold text-white mb-2">Clientes Prospectos</h1>
           <p className="text-gray-400 mb-6">Gestiona los clientes potenciales y existentes</p>
         </div>
         
-        <div className="flex items-center gap-4">
+  <div className="flex items-center gap-4 self-stretch sm:self-auto">
           {/* Botones para cambiar el modo de vista */}
           <div className="flex bg-gray-700 rounded-lg p-1">
             <button
@@ -137,7 +137,7 @@ const ClientesView: React.FC = () => {
           
           <button
             onClick={() => { resetForm(); setShowModal(true); }}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center gap-2"
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg flex items-center gap-2 w-full sm:w-auto justify-center"
           >
             <Plus size={20} />
             Nuevo Cliente
@@ -146,7 +146,7 @@ const ClientesView: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="bg-blue-500 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
@@ -169,7 +169,7 @@ const ClientesView: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="relative">
           <input
             type="text"
@@ -371,12 +371,12 @@ const ClientesView: React.FC = () => {
       {/* Modal de creación/edición */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl p-4 sm:p-6">
             <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
               {selectedCliente ? 'Editar Cliente' : 'Nuevo Cliente'}
             </h3>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Tipo de Identificación
@@ -435,7 +435,7 @@ const ClientesView: React.FC = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Contacto
@@ -460,7 +460,7 @@ const ClientesView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Teléfono

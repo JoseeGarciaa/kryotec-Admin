@@ -143,9 +143,9 @@ export const CredocubesView: React.FC = () => {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Gestión de Credocubes</h1>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 self-stretch sm:self-auto">
           {/* Botones para cambiar el modo de vista */}
           <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
@@ -166,7 +166,7 @@ export const CredocubesView: React.FC = () => {
           
           <button 
             onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center"
           >
             <Plus className="w-5 h-5" />
             <span>Nuevo Modelo</span>
@@ -175,7 +175,7 @@ export const CredocubesView: React.FC = () => {
       </div>
       
       {/* Barra de búsqueda y filtros */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6">
+  <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="relative flex-grow">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search size={18} className="text-gray-400" />
@@ -190,11 +190,11 @@ export const CredocubesView: React.FC = () => {
         </div>
         
         {/* Selector de tipo */}
-        <div className="relative min-w-[200px]">
+    <div className="relative w-full md:min-w-[200px]">
           <select
             value={selectedTipo}
             onChange={(e) => setSelectedTipo(e.target.value)}
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 appearance-none"
+      className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 appearance-none"
           >
             <option value="">Todos los tipos</option>
             {tiposUnicos.map((tipo) => (

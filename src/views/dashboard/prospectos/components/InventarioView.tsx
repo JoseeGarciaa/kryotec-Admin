@@ -396,13 +396,13 @@ const InventarioView: React.FC = () => {
   return (
     <div className="p-6 bg-gray-900 min-h-screen text-white">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div className="text-center flex-1">
           <h1 className="text-3xl font-bold mb-2">Inventario de Productos</h1>
           <p className="text-gray-400 mb-6">Gestiona el inventario de productos de los clientes prospectos</p>
         </div>
         
-  <div className="flex items-center gap-4">
+  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           {/* Botones para cambiar el modo de vista */}
           <div className="flex bg-gray-700 rounded-lg p-1">
             <button
@@ -422,11 +422,11 @@ const InventarioView: React.FC = () => {
           </div>
 
           {/* Import/Export */}
-          <div className="flex items-center gap-2 bg-gray-800 p-2 rounded-lg">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-gray-800 p-2 rounded-lg w-full sm:w-auto">
             <select
               value={selectedClienteForImport}
               onChange={(e: any) => setSelectedClienteForImport(parseInt(e.target.value) || 0)}
-              className="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+        className="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm w-full sm:w-auto"
               title="Cliente para importar"
             >
               <option value={0}>Cliente para importar</option>
@@ -436,14 +436,14 @@ const InventarioView: React.FC = () => {
             </select>
             <button
               onClick={handleDownloadTemplate}
-              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md flex items-center gap-2"
+        className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md flex items-center gap-2 justify-center w-full sm:w-auto"
               title="Descargar plantilla Excel"
             >
               <Download size={16} /> Plantilla
             </button>
             <button
               onClick={openImportDialog}
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md flex items-center gap-2"
+        className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md flex items-center gap-2 justify-center w-full sm:w-auto"
               title="Importar inventario desde Excel"
             >
               <Upload size={16} /> Importar
@@ -459,7 +459,7 @@ const InventarioView: React.FC = () => {
           
           <button
             onClick={openCreateModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors w-full sm:w-auto justify-center"
           >
             <Plus size={20} />
             Nuevo Producto
@@ -514,15 +514,15 @@ const InventarioView: React.FC = () => {
       {/* Sección de productos pendientes (Carrito) */}
       {pendingProducts.length > 0 && (
         <div className="mb-6">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <ShoppingCart size={24} />
               Productos en Carrito ({pendingProducts.length})
             </h2>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
               <button
                 onClick={() => setPendingProducts([])}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors w-full sm:w-auto justify-center"
               >
                 <Trash2 size={16} />
                 Vaciar Carrito
@@ -530,7 +530,7 @@ const InventarioView: React.FC = () => {
               <button
                 onClick={handleSaveAllPending}
                 disabled={loading}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors w-full sm:w-auto justify-center"
               >
                 <Save size={16} />
                 {loading ? 'Guardando...' : `Guardar Todo (${pendingProducts.length})`}
@@ -872,7 +872,7 @@ const InventarioView: React.FC = () => {
               {/* Fila 3: Dimensiones */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Dimensiones (mm)</label>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">Largo</label>
                     <input
