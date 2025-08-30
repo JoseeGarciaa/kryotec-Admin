@@ -82,16 +82,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
       </button>
 
-      <div className={`p-6 ${!sidebarOpen ? 'lg:p-3' : ''}`}>
-        <div className={`flex items-center gap-3 mb-8 ${!sidebarOpen ? 'lg:justify-center lg:mb-6' : ''}`}>
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm p-1">
-            <img src={credocubeLogo} alt="CredoCube Logo" className="w-full h-full object-contain" />
+      <div className="h-full flex flex-col">
+        {/* Encabezado con logo */}
+        <div className={`p-6 ${!sidebarOpen ? 'lg:p-3' : ''}`}>
+          <div className={`flex items-center gap-3 mb-8 ${!sidebarOpen ? 'lg:justify-center lg:mb-6' : ''}`}>
+            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm p-1">
+              <img src={credocubeLogo} alt="CredoCube Logo" className="w-full h-full object-contain" />
+            </div>
+            {sidebarOpen && <h1 className="text-xl font-bold text-gray-900 dark:text-white">CredoCube</h1>}
           </div>
-          {sidebarOpen && <h1 className="text-xl font-bold text-gray-900 dark:text-white">CredoCube</h1>}
         </div>
-        
-        <nav className="space-y-2">
-          {navigationItems.map((item) => {
+
+        {/* Navegación scrollable */}
+        <div className={`flex-1 overflow-y-auto px-6 ${!sidebarOpen ? 'lg:px-3' : ''}`}>
+          <nav className="space-y-2">
+            {navigationItems.map((item) => {
             const IconComponent = item.icon;
             const isExpanded = expandedItems.includes(item.id);
             const isActive = activeTab === item.id || activeTab.startsWith(`${item.id}-`);
@@ -153,84 +158,86 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             );
           })}
-        </nav>
-      </div>
-      
-      <div className={`absolute bottom-6 ${sidebarOpen ? 'left-6 right-6' : 'lg:left-3 lg:right-3'}`}>
-        {/* Usuario y menú de opciones */}
-        <div className={`border-t border-gray-200 dark:border-gray-700 pt-4 mb-4 ${!sidebarOpen ? 'hidden lg:block' : ''}`}>
-          <div 
-            className="flex items-center gap-3 mb-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-md"
-            onClick={() => setUserMenuOpen(!userMenuOpen)}
-          >
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">
-                {user?.name?.charAt(0) || 'A'}
-              </span>
-            </div>
-            {sidebarOpen && (
-              <div className="flex-1 overflow-hidden flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{user?.name || 'Usuario Admin'}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email || 'test@kryosense.com'}</p>
+          </nav>
+        </div>
+
+        {/* Sección inferior fija al flujo (no absoluta) */}
+        <div className={`${sidebarOpen ? 'px-6' : 'lg:px-3'} pb-6`}>
+          {/* Usuario y menú de opciones */}
+          <div className={`border-t border-gray-200 dark:border-gray-700 pt-4 mb-4 ${!sidebarOpen ? 'hidden lg:block' : ''}`}>
+            <div 
+              className="flex items-center gap-3 mb-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-md"
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+            >
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-medium">
+                  {user?.name?.charAt(0) || 'A'}
+                </span>
+              </div>
+              {sidebarOpen && (
+                <div className="flex-1 overflow-hidden flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{user?.name || 'Usuario Admin'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email || 'test@kryosense.com'}</p>
+                  </div>
+                  {userMenuOpen ? (
+                    <ChevronUp className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  )}
                 </div>
-                {userMenuOpen ? (
-                  <ChevronUp className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                )}
+              )}
+            </div>
+
+            {/* Opciones de configuración */}
+            {sidebarOpen && userMenuOpen && (
+              <div className="space-y-1 pl-11 mt-1 transition-all duration-300 ease-in-out">
+                <button className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                  <Settings className="w-4 h-4 mr-3" />
+                  Configuración
+                </button>
+                <button className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                  <Bell className="w-4 h-4 mr-3" />
+                  Notificaciones
+                </button>
+                <button 
+                  onClick={toggleTheme}
+                  className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                >
+                  {theme === 'dark' ? (
+                    <>
+                      <Sun className="w-4 h-4 mr-3 text-yellow-500" />
+                      Modo claro
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="w-4 h-4 mr-3" />
+                      Modo oscuro
+                    </>
+                  )}
+                </button>
+                <button 
+                  onClick={logout}
+                  className="flex items-center w-full px-2 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                >
+                  <LogOut className="w-4 h-4 mr-3" />
+                  Cerrar sesión
+                </button>
               </div>
             )}
           </div>
-          
-          {/* Opciones de configuración */}
-          {sidebarOpen && userMenuOpen && (
-            <div className="space-y-1 pl-11 mt-1 transition-all duration-300 ease-in-out">
-              <button className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-                <Settings className="w-4 h-4 mr-3" />
-                Configuración
-              </button>
-              <button className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-                <Bell className="w-4 h-4 mr-3" />
-                Notificaciones
-              </button>
-              <button 
-                onClick={toggleTheme}
-                className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              >
-                {theme === 'dark' ? (
-                  <>
-                    <Sun className="w-4 h-4 mr-3 text-yellow-500" />
-                    Modo claro
-                  </>
-                ) : (
-                  <>
-                    <Moon className="w-4 h-4 mr-3" />
-                    Modo oscuro
-                  </>
-                )}
-              </button>
-              <button 
-                onClick={logout}
-                className="flex items-center w-full px-2 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              >
-                <LogOut className="w-4 h-4 mr-3" />
-                Cerrar sesión
-              </button>
-            </div>
+
+          {/* Botón de cerrar sesión cuando la barra está colapsada */}
+          {!sidebarOpen && (
+            <button 
+              onClick={logout}
+              className="flex items-center justify-center p-2 rounded-lg w-full text-red-500 hover:bg-red-50 dark:hover:bg-gray-700 mt-auto"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           )}
         </div>
-        
-        {/* Botón de cerrar sesión cuando la barra está colapsada */}
-        {!sidebarOpen && (
-          <button 
-            onClick={logout}
-            className="flex items-center justify-center p-2 rounded-lg w-full text-red-500 hover:bg-red-50 dark:hover:bg-gray-700 mt-auto"
-            title="Cerrar sesión"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
-        )}
       </div>
     </div>
   );
