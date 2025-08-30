@@ -20,6 +20,55 @@ const ClientesView: React.FC = () => {
     .toLowerCase()
     .trim();
 
+  const displayEstado = (estado?: string) => {
+    if (!estado) return '';
+    return estado === 'Pendiente' ? 'Prospecto' : estado;
+  };
+
+  // Curated canonical tipos
+  const CLIENTE_TIPOS = [
+    'pyme',
+    'corporativo',
+    'persona natural',
+    'entidad publica',
+    'salud',
+    'ONG',
+    'educacion'
+  ] as const;
+
+  type CanonTipo = typeof CLIENTE_TIPOS[number];
+
+  const toCanonicalTipo = (tipo?: string): CanonTipo | string => {
+    const t = normalize(tipo);
+    // direct matches to curated
+    const direct = CLIENTE_TIPOS.find(ct => normalize(ct) === t);
+    if (direct) return direct;
+    // legacy synonyms mapping
+    if (t === 'empresa') return 'pyme';
+    if (t === 'personal') return 'persona natural';
+    if (t === 'gobierno') return 'entidad publica';
+    // if unknown, return original to avoid losing info
+    return tipo || '';
+  };
+
+  const CANON_LABELS: Record<string, string> = {
+    'pyme': 'Pyme',
+    'corporativo': 'Corporativo',
+    'persona natural': 'Persona Natural',
+    'entidad publica': 'Entidad Pública',
+    'salud': 'Salud',
+    'ONG': 'ONG',
+    'educacion': 'Educación'
+  };
+
+  const prettyTipo = (tipo?: string) => {
+    const canon = toCanonicalTipo(tipo) as string;
+    if (!canon) return '';
+    return CANON_LABELS[canon] || canon.charAt(0).toUpperCase() + canon.slice(1);
+  };
+
+  const displayTipo = (tipo?: string) => prettyTipo(tipo);
+
   // Form state
   const [formData, setFormData] = useState<CreateClienteProspectoData>({
     tipo_identificacion: '',
@@ -50,18 +99,15 @@ const ClientesView: React.FC = () => {
     return { total, esteMes };
   }, [clientes]);
 
-  // Opciones dinámicas para filtros (estados y tipos reales en datos)
+  // Opciones dinámicas para filtros (estados reales en datos)
   const statusOptions = useMemo(() => {
     const set = new Set<string>();
     clientes.forEach(c => { if (c.estado && c.estado.trim()) set.add(c.estado.trim()); });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [clientes]);
 
-  const typeOptions = useMemo(() => {
-    const set = new Set<string>();
-    clientes.forEach(c => { if (c.tipo_cliente && c.tipo_cliente.trim()) set.add(c.tipo_cliente.trim()); });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [clientes]);
+  // Tipos de cliente: usar lista curada
+  const typeOptions = CLIENTE_TIPOS as readonly string[];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,11 +173,13 @@ const ClientesView: React.FC = () => {
       cliente.contacto,
       cliente.telefono,
       cliente.tipo_cliente,
-      cliente.estado
+      displayTipo(cliente.tipo_cliente),
+      cliente.estado,
+      displayEstado(cliente.estado)
     ].some(val => normalize(val).includes(q));
 
     const matchesStatus = statusFilter === 'todos' || normalize(cliente.estado) === normalize(statusFilter);
-    const matchesType = typeFilter === 'todos' || normalize(cliente.tipo_cliente) === normalize(typeFilter);
+  const matchesType = typeFilter === 'todos' || normalize(toCanonicalTipo(cliente.tipo_cliente) as string) === normalize(typeFilter);
 
     return matchesSearch && matchesStatus && matchesType;
   });
@@ -217,7 +265,7 @@ const ClientesView: React.FC = () => {
         >
           <option value="todos">Todos los estados</option>
           {statusOptions.map((s) => (
-            <option key={s} value={s}>{s}</option>
+            <option key={s} value={s}>{displayEstado(s)}</option>
           ))}
         </select>
         
@@ -228,7 +276,7 @@ const ClientesView: React.FC = () => {
         >
           <option value="todos">Todos los tipos</option>
           {typeOptions.map((t) => (
-            <option key={t} value={t}>{t}</option>
+            <option key={t} value={t}>{prettyTipo(t)}</option>
           ))}
         </select>
       </div>
@@ -271,14 +319,14 @@ const ClientesView: React.FC = () => {
                   <div className="p-3">
                     <div className="flex justify-between items-center mb-2">
                       <div className="bg-blue-100 dark:bg-blue-900 rounded-full px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
-                        {cliente.tipo_cliente || 'N/A'}
+                        {displayTipo(cliente.tipo_cliente) || 'N/A'}
                       </div>
                       <div className={`rounded-full px-3 py-1 text-sm font-medium ${
                         cliente.estado === 'Activo' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
                         cliente.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
                         'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                       }`}>
-                        {cliente.estado}
+                        {displayEstado(cliente.estado)}
                       </div>
                     </div>
                     
@@ -360,7 +408,7 @@ const ClientesView: React.FC = () => {
                         <div className="text-sm text-gray-600 dark:text-gray-400">{cliente.telefono}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_cliente}</div>
+                        <div className="text-sm text-gray-900 dark:text-white">{displayTipo(cliente.tipo_cliente)}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -368,7 +416,7 @@ const ClientesView: React.FC = () => {
                           cliente.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' :
                           'bg-red-100 text-red-800'
                         }`}>
-                          {cliente.estado}
+                          {displayEstado(cliente.estado)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
@@ -453,14 +501,14 @@ const ClientesView: React.FC = () => {
                   Tipo de Cliente
                 </label>
                 <select
-                  value={formData.tipo_cliente}
+                  value={toCanonicalTipo(formData.tipo_cliente) as string}
                   onChange={(e) => setFormData({ ...formData, tipo_cliente: e.target.value })}
                   className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="">Seleccione...</option>
-                  <option value="Empresa">Empresa</option>
-                  <option value="Personal">Personal</option>
-                  <option value="Gobierno">Gobierno</option>
+                  {CLIENTE_TIPOS.map(t => (
+                    <option key={t} value={t}>{prettyTipo(t)}</option>
+                  ))}
                 </select>
               </div>
 
@@ -512,7 +560,7 @@ const ClientesView: React.FC = () => {
                   >
                     <option value="Activo">Activo</option>
                     <option value="Inactivo">Inactivo</option>
-                    <option value="Pendiente">Pendiente</option>
+                    <option value="Pendiente">Prospecto</option>
                   </select>
                 </div>
               </div>
