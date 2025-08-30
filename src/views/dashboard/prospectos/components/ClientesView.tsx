@@ -12,6 +12,14 @@ const ClientesView: React.FC = () => {
   const [selectedCliente, setSelectedCliente] = useState<ClienteProspecto | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
+  // Helpers
+  const normalize = (v?: string) => (v || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+
   // Form state
   const [formData, setFormData] = useState<CreateClienteProspectoData>({
     tipo_identificacion: '',
@@ -40,6 +48,19 @@ const ClientesView: React.FC = () => {
     }).length;
 
     return { total, esteMes };
+  }, [clientes]);
+
+  // Opciones dinámicas para filtros (estados y tipos reales en datos)
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    clientes.forEach(c => { if (c.estado && c.estado.trim()) set.add(c.estado.trim()); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [clientes]);
+
+  const typeOptions = useMemo(() => {
+    const set = new Set<string>();
+    clientes.forEach(c => { if (c.tipo_cliente && c.tipo_cliente.trim()) set.add(c.tipo_cliente.trim()); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [clientes]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,13 +118,21 @@ const ClientesView: React.FC = () => {
   };
 
   const filteredClientes = clientes.filter(cliente => {
-    const matchesSearch = cliente.nombre_cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.numero_identificacion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.correo?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'todos' || cliente.estado === statusFilter;
-    const matchesType = typeFilter === 'todos' || cliente.tipo_cliente === typeFilter;
-    
+    const q = normalize(searchTerm);
+    const matchesSearch = q === '' || [
+      cliente.nombre_cliente,
+      cliente.numero_identificacion,
+      cliente.tipo_identificacion,
+      cliente.correo,
+      cliente.contacto,
+      cliente.telefono,
+      cliente.tipo_cliente,
+      cliente.estado
+    ].some(val => normalize(val).includes(q));
+
+    const matchesStatus = statusFilter === 'todos' || normalize(cliente.estado) === normalize(statusFilter);
+    const matchesType = typeFilter === 'todos' || normalize(cliente.tipo_cliente) === normalize(typeFilter);
+
     return matchesSearch && matchesStatus && matchesType;
   });
 
@@ -187,9 +216,9 @@ const ClientesView: React.FC = () => {
           className="p-3 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
         >
           <option value="todos">Todos los estados</option>
-          <option value="Activo">Activo</option>
-          <option value="Inactivo">Inactivo</option>
-          <option value="Pendiente">Pendiente</option>
+          {statusOptions.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
         </select>
         
         <select
@@ -198,9 +227,9 @@ const ClientesView: React.FC = () => {
           className="p-3 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
         >
           <option value="todos">Todos los tipos</option>
-          <option value="Empresa">Empresa</option>
-          <option value="Personal">Personal</option>
-          <option value="Gobierno">Gobierno</option>
+          {typeOptions.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
         </select>
       </div>
 
