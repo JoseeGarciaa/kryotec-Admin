@@ -30,8 +30,8 @@ const inventarioProspectosService = {
       const query = `
         INSERT INTO admin_platform.inventario_prospecto (
           cliente_id, descripcion_producto, producto, largo_mm, ancho_mm, 
-          alto_mm, cantidad_despachada, fecha_de_despacho, orden_despacho, volumen_total_m3_producto
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          alto_mm, cantidad_despachada, fecha_de_despacho, orden_despacho, volumen_total_m3_producto, fecha_registro
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, (now() at time zone 'America/Bogota'))
         RETURNING *
       `;
       const values = [data.cliente_id, data.descripcion_producto, data.producto, 
@@ -115,11 +115,29 @@ const inventarioProspectosService = {
         (it.largo_mm * it.ancho_mm * it.alto_mm * it.cantidad_despachada) / 1000000000
       ]);
 
+      // Insertar y fijar fecha_registro en hora de Bogotá para todas las filas, casteando tipos explícitamente
       const query = format(`
         INSERT INTO admin_platform.inventario_prospecto (
           cliente_id, descripcion_producto, producto, largo_mm, ancho_mm, alto_mm,
+          cantidad_despachada, fecha_de_despacho, orden_despacho, volumen_total_m3_producto, fecha_registro
+        )
+        SELECT 
+          (v.cliente_id)::int,
+          (v.descripcion_producto)::text,
+          (v.producto)::text,
+          (v.largo_mm)::int,
+          (v.ancho_mm)::int,
+          (v.alto_mm)::int,
+          (v.cantidad_despachada)::int,
+          NULLIF(v.fecha_de_despacho, '')::date,
+          (v.orden_despacho)::text,
+          (v.volumen_total_m3_producto)::numeric,
+          (now() at time zone 'America/Bogota')
+        FROM (VALUES %L) AS v (
+          cliente_id, descripcion_producto, producto, largo_mm, ancho_mm, alto_mm,
           cantidad_despachada, fecha_de_despacho, orden_despacho, volumen_total_m3_producto
-        ) VALUES %L RETURNING *
+        )
+        RETURNING *
       `, rows);
 
       const { rows: inserted } = await pool.query(query);

@@ -593,9 +593,9 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
         ancho_mm: toInt(r['Ancho_mm'] ?? r['Ancho'] ?? r['ancho_mm'] ?? r['ancho']),
         alto_mm: toInt(r['Alto_mm'] ?? r['Alto'] ?? r['alto_mm'] ?? r['alto']),
         cantidad_despachada: toInt(r['Cantidad'] ?? r['cantidad'] ?? r['CANTIDAD']),
-        fecha_de_despacho: toDateString(
+        fecha_de_despacho: (toDateString(
           r['Fecha_Despacho (YYYY-MM-DD)'] ?? r['Fecha_Despacho'] ?? r['fecha_despacho'] ?? r['Fecha despacho']
-        ),
+        ) || null),
         orden_despacho: r['Orden_Despacho'] || r['orden_despacho'] || r['Orden'] || r['ORDEN'] || ''
       };
 
@@ -649,7 +649,7 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
     return res.json(results);
   } catch (error) {
     console.error('Error en importación de inventario:', error);
-    res.status(500).json({ error: 'Error al importar inventario' });
+  res.status(500).json({ error: 'Error al importar inventario', details: error?.message });
   }
 });
 

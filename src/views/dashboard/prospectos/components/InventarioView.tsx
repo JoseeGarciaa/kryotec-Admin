@@ -7,6 +7,7 @@ import { Plus, Edit2, Trash2, Search, Package, Box, Save, ShoppingCart, User, La
 import { toast } from 'react-toastify';
 import { downloadInventarioTemplate } from '../../../../utils/excelTemplate';
 import { apiClient } from '../../../../services/api';
+import { formatDate as formatDateCO } from '../../../../utils/dateUtils';
 
 // Interface para productos pendientes (locales)
 interface PendingProduct extends CreateInventarioProspectoData {
@@ -294,6 +295,16 @@ const InventarioView: React.FC = () => {
   const handleEdit = (item: InventarioProspecto) => {
     setSelectedItem(item);
     setSelectedPendingItem(null);
+    const parseYYYYMMDD = (val: any): string => {
+      if (!val) return '';
+      try {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      } catch {}
+      const s = String(val);
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+    };
     setFormData({
       cliente_id: item.cliente_id,
       descripcion_producto: item.descripcion_producto || '',
@@ -302,7 +313,7 @@ const InventarioView: React.FC = () => {
       ancho_mm: item.ancho_mm,
       alto_mm: item.alto_mm,
       cantidad_despachada: item.cantidad_despachada,
-      fecha_de_despacho: item.fecha_de_despacho ? item.fecha_de_despacho.toISOString().split('T')[0] : '',
+      fecha_de_despacho: parseYYYYMMDD((item as any).fecha_de_despacho),
       orden_despacho: item.orden_despacho || ''
     });
     setShowModal(true);
@@ -716,7 +727,13 @@ const InventarioView: React.FC = () => {
                     {item.fecha_de_despacho && (
                       <div className="flex justify-between items-center">
                         <span className="text-gray-500 dark:text-gray-400 text-sm">Fecha despacho:</span>
-                        <span className="text-gray-900 dark:text-white text-sm">{item.fecha_de_despacho.toLocaleDateString()}</span>
+                        <span className="text-gray-900 dark:text-white text-sm">{formatDateCO((item as any).fecha_de_despacho)}</span>
+                      </div>
+                    )}
+                    {(item as any).fecha_registro && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Registrado:</span>
+                        <span className="text-gray-900 dark:text-white text-sm">{formatDateCO((item as any).fecha_registro)}</span>
                       </div>
                     )}
                     {item.orden_despacho && (
@@ -769,7 +786,10 @@ const InventarioView: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">{item.descripcion_producto || 'Sin descripción'}</div>
                       {item.fecha_de_despacho && (
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Fecha despacho: {item.fecha_de_despacho.toLocaleDateString()}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Fecha despacho: {formatDateCO((item as any).fecha_de_despacho)}</div>
+                      )}
+                      {(item as any).fecha_registro && (
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Registrado: {formatDateCO((item as any).fecha_registro)}</div>
                       )}
                       {item.orden_despacho && (
                         <div className="text-sm text-gray-600 dark:text-gray-400">Orden: {item.orden_despacho}</div>
