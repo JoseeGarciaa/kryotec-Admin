@@ -108,27 +108,27 @@ const ClientesView: React.FC = () => {
   });
 
   return (
-    <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
+    <div className="p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div className="text-center flex-1">
-          <h1 className="text-3xl font-bold text-white mb-2">Clientes Prospectos</h1>
-          <p className="text-gray-400 mb-6">Gestiona los clientes potenciales y existentes</p>
+          <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Clientes Prospectos</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">Gestiona los clientes potenciales y existentes</p>
         </div>
         
   <div className="flex items-center gap-4 self-stretch sm:self-auto">
           {/* Botones para cambiar el modo de vista */}
-          <div className="flex bg-gray-700 rounded-lg p-1">
+          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
               onClick={() => setViewMode('cards')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+              className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
               title="Vista de tarjetas"
             >
               <LayoutGrid size={18} />
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+              className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
               title="Vista de tabla"
             >
               <List size={18} />
@@ -176,7 +176,7 @@ const ClientesView: React.FC = () => {
             placeholder="Buscar clientes..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-3 pl-10 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white bg-gray-800 border-gray-600 text-white"
+            className="w-full p-3 pl-10 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
           />
           <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
         </div>
@@ -184,7 +184,7 @@ const ClientesView: React.FC = () => {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white bg-gray-800 border-gray-600 text-white"
+          className="p-3 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
         >
           <option value="todos">Todos los estados</option>
           <option value="Activo">Activo</option>
@@ -195,7 +195,7 @@ const ClientesView: React.FC = () => {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white bg-gray-800 border-gray-600 text-white"
+          className="p-3 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
         >
           <option value="todos">Todos los tipos</option>
           <option value="Empresa">Empresa</option>
@@ -223,11 +223,11 @@ const ClientesView: React.FC = () => {
             </div>
           ) : viewMode === 'cards' ? (
             /* Vista de tarjetas */
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredClientes.map((cliente) => (
                 <div 
                   key={cliente.cliente_id} 
-                  className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
                 >
                   {/* Cabecera de la tarjeta con gradiente */}
                   <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 relative">
@@ -256,25 +256,25 @@ const ClientesView: React.FC = () => {
                     <div className="space-y-1 mb-3">
                       <div className="flex justify-between items-center">
                         <span className="text-gray-400 text-sm">Identificación:</span>
-                        <span className="text-white text-sm">
+                        <span className="text-gray-900 dark:text-white text-sm">
                           {cliente.tipo_identificacion}: {cliente.numero_identificacion}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Email:</span>
-                        <span className="text-white text-sm truncate">
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Email:</span>
+                        <span className="text-gray-900 dark:text-white text-sm truncate">
                           {cliente.correo || 'N/A'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Teléfono:</span>
-                        <span className="text-white text-sm">
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Teléfono:</span>
+                        <span className="text-gray-900 dark:text-white text-sm">
                           {cliente.telefono || 'N/A'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Registro:</span>
-                        <span className="text-white text-sm">
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Registro:</span>
+                        <span className="text-gray-900 dark:text-white text-sm">
                           {cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString() : 'N/A'}
                         </span>
                       </div>
@@ -282,7 +282,7 @@ const ClientesView: React.FC = () => {
                   </div>
                   
                   {/* Pie de tarjeta con acciones */}
-                  <div className="border-t border-gray-700 bg-gray-900 px-4 py-2 flex justify-between">
+                  <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-4 py-2 flex justify-between">
                     <button
                       onClick={() => handleEdit(cliente)}
                       className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
@@ -321,14 +321,14 @@ const ClientesView: React.FC = () => {
                     <tr key={cliente.cliente_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">{cliente.nombre_cliente}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.contacto}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">{cliente.contacto}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_identificacion}: {cliente.numero_identificacion}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 dark:text-white">{cliente.correo}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.telefono}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">{cliente.telefono}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 dark:text-white">{cliente.tipo_cliente}</div>
@@ -342,7 +342,7 @@ const ClientesView: React.FC = () => {
                           {cliente.estado}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                         {cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -384,7 +384,7 @@ const ClientesView: React.FC = () => {
                   <select
                     value={formData.tipo_identificacion}
                     onChange={(e) => setFormData({ ...formData, tipo_identificacion: e.target.value })}
-                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
                     <option value="">Seleccione...</option>
                     <option value="CC">Cédula de Ciudadanía</option>
@@ -401,7 +401,7 @@ const ClientesView: React.FC = () => {
                     type="text"
                     value={formData.numero_identificacion}
                     onChange={(e) => setFormData({ ...formData, numero_identificacion: e.target.value })}
-                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
               </div>
@@ -415,7 +415,7 @@ const ClientesView: React.FC = () => {
                   value={formData.nombre_cliente}
                   onChange={(e) => setFormData({ ...formData, nombre_cliente: e.target.value })}
                   required
-                  className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
               </div>
 
@@ -426,7 +426,7 @@ const ClientesView: React.FC = () => {
                 <select
                   value={formData.tipo_cliente}
                   onChange={(e) => setFormData({ ...formData, tipo_cliente: e.target.value })}
-                  className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="">Seleccione...</option>
                   <option value="Empresa">Empresa</option>
@@ -444,7 +444,7 @@ const ClientesView: React.FC = () => {
                     type="text"
                     value={formData.contacto}
                     onChange={(e) => setFormData({ ...formData, contacto: e.target.value })}
-                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
                 <div>
@@ -455,7 +455,7 @@ const ClientesView: React.FC = () => {
                     type="email"
                     value={formData.correo}
                     onChange={(e) => setFormData({ ...formData, correo: e.target.value })}
-                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
               </div>
@@ -469,7 +469,7 @@ const ClientesView: React.FC = () => {
                     type="tel"
                     value={formData.telefono}
                     onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
                 <div>
@@ -479,7 +479,7 @@ const ClientesView: React.FC = () => {
                   <select
                     value={formData.estado}
                     onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
-                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full p-2 border rounded-lg bg-white border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
                     <option value="Activo">Activo</option>
                     <option value="Inactivo">Inactivo</option>
@@ -492,7 +492,7 @@ const ClientesView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 dark:text-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500"
                 >
                   Cancelar
                 </button>

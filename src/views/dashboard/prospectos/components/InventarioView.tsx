@@ -394,27 +394,27 @@ const InventarioView: React.FC = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-900 min-h-screen text-white">
+    <div className="p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div className="text-center flex-1">
-          <h1 className="text-3xl font-bold mb-2">Inventario de Productos</h1>
-          <p className="text-gray-400 mb-6">Gestiona el inventario de productos de los clientes prospectos</p>
+          <h1 className="text-3xl font-bold mb-2 text-gray-800 dark:text-white">Inventario de Productos</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">Gestiona el inventario de productos de los clientes prospectos</p>
         </div>
         
   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           {/* Botones para cambiar el modo de vista */}
-          <div className="flex bg-gray-700 rounded-lg p-1">
+          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
               onClick={() => setViewMode('cards')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+              className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
               title="Vista de tarjetas"
             >
               <LayoutGrid size={18} />
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+              className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
               title="Vista de tabla"
             >
               <List size={18} />
@@ -422,11 +422,11 @@ const InventarioView: React.FC = () => {
           </div>
 
           {/* Import/Export */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-gray-800 p-2 rounded-lg w-full sm:w-auto">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-lg w-full sm:w-auto">
             <select
               value={selectedClienteForImport}
               onChange={(e: any) => setSelectedClienteForImport(parseInt(e.target.value) || 0)}
-        className="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm w-full sm:w-auto"
+        className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-900 text-sm w-full sm:w-auto dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               title="Cliente para importar"
             >
               <option value={0}>Cliente para importar</option>
@@ -436,7 +436,7 @@ const InventarioView: React.FC = () => {
             </select>
             <button
               onClick={handleDownloadTemplate}
-        className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md flex items-center gap-2 justify-center w-full sm:w-auto"
+        className="bg-gray-100 hover:bg-gray-200 text-gray-900 dark:text-white dark:bg-gray-700 dark:hover:bg-gray-600 px-3 py-2 rounded-md flex items-center gap-2 justify-center w-full sm:w-auto"
               title="Descargar plantilla Excel"
             >
               <Download size={16} /> Plantilla
@@ -469,44 +469,44 @@ const InventarioView: React.FC = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-gray-800 p-4 rounded-lg flex items-center">
-          <div className="bg-blue-600 p-3 rounded-lg mr-4">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg flex items-center">
+          <div className="bg-blue-600 p-3 rounded-lg mr-4 text-white">
             <Package size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Total Productos</p>
-            <p className="text-2xl font-bold">{stats.totalItems}</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">Total Productos</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalItems}</p>
           </div>
         </div>
         
-        <div className="bg-gray-800 p-4 rounded-lg flex items-center">
-          <div className="bg-green-600 p-3 rounded-lg mr-4">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg flex items-center">
+          <div className="bg-green-600 p-3 rounded-lg mr-4 text-white">
             <Box size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Volumen Total</p>
-            <p className="text-2xl font-bold text-green-400">{stats.volumenTotal.toFixed(6)}</p>
-            <p className="text-xs text-gray-400">m³</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">Volumen Total</p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.volumenTotal.toFixed(6)}</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400">m³</p>
           </div>
         </div>
         
-        <div className="bg-gray-800 p-4 rounded-lg flex items-center">
-          <div className="bg-purple-600 p-3 rounded-lg mr-4">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg flex items-center">
+          <div className="bg-purple-600 p-3 rounded-lg mr-4 text-white">
             <Thermometer size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Tipos de Producto</p>
-            <p className="text-2xl font-bold">{Object.keys(stats.productosCount).length}</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">Tipos de Producto</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{Object.keys(stats.productosCount).length}</p>
           </div>
         </div>
 
-        <div className="bg-gray-800 p-4 rounded-lg flex items-center">
-          <div className="bg-orange-600 p-3 rounded-lg mr-4">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg flex items-center">
+          <div className="bg-orange-600 p-3 rounded-lg mr-4 text-white">
             <ShoppingCart size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm">En Carrito</p>
-            <p className="text-2xl font-bold text-orange-400">{stats.pendingItems}</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">En Carrito</p>
+            <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">{stats.pendingItems}</p>
           </div>
         </div>
       </div>
@@ -515,7 +515,7 @@ const InventarioView: React.FC = () => {
       {pendingProducts.length > 0 && (
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <ShoppingCart size={24} />
               Productos en Carrito ({pendingProducts.length})
             </h2>
@@ -542,7 +542,7 @@ const InventarioView: React.FC = () => {
             {pendingProducts.map((product) => (
               <div 
                 key={product.tempId} 
-                className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-orange-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-orange-300 dark:border-orange-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
               >
                 {/* Cabecera de la tarjeta con gradiente */}
                 <div className="bg-gradient-to-r from-orange-500 to-yellow-600 p-3 relative">
@@ -566,34 +566,34 @@ const InventarioView: React.FC = () => {
                   
                   <div className="space-y-1 mb-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm">Dimensiones:</span>
-                      <span className="text-white text-sm">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm">Dimensiones:</span>
+                      <span className="text-gray-900 dark:text-white text-sm">
                         {Number(product.largo_mm || 0)} × {Number(product.ancho_mm || 0)} × {Number(product.alto_mm || 0)} mm
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm">Volumen:</span>
-                      <span className="text-white text-sm">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm">Volumen:</span>
+                      <span className="text-gray-900 dark:text-white text-sm">
                         {((Number(product.largo_mm || 0) * Number(product.ancho_mm || 0) * Number(product.alto_mm || 0) * Number(product.cantidad_despachada || 0)) / 1000000000).toFixed(6)} m³
                       </span>
                     </div>
                     {product.fecha_de_despacho && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Fecha despacho:</span>
-                        <span className="text-white text-sm">{product.fecha_de_despacho}</span>
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Fecha despacho:</span>
+                        <span className="text-gray-900 dark:text-white text-sm">{product.fecha_de_despacho}</span>
                       </div>
                     )}
                     {product.orden_despacho && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Orden despacho:</span>
-                        <span className="text-white text-sm">{product.orden_despacho}</span>
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Orden despacho:</span>
+                        <span className="text-gray-900 dark:text-white text-sm">{product.orden_despacho}</span>
                       </div>
                     )}
                   </div>
                 </div>
                 
                 {/* Pie de tarjeta con acciones */}
-                <div className="border-t border-gray-700 bg-gray-900 px-4 py-2 flex justify-between">
+                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-4 py-2 flex justify-between">
                   <button
                     onClick={() => handleEditPending(product)}
                     className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
@@ -616,7 +616,7 @@ const InventarioView: React.FC = () => {
       )}
 
       {/* Filtros */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
@@ -624,14 +624,14 @@ const InventarioView: React.FC = () => {
             placeholder="Buscar en inventario..."
             value={searchTerm}
             onChange={(e: any) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+    className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder-gray-400"
           />
         </div>
         
         <select
           value={clienteFilter}
           onChange={(e: any) => setClienteFilter(e.target.value)}
-          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+      className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
         >
           <option value="todos">Todos los clientes</option>
           {clientes.map((cliente: any) => (
@@ -644,7 +644,7 @@ const InventarioView: React.FC = () => {
         <select
           value={productoFilter}
           onChange={(e: any) => setProductoFilter(e.target.value)}
-          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+      className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
         >
           <option value="todos">Todos los productos</option>
           {Object.keys(stats.productosCount).map((producto: any) => (
@@ -657,7 +657,7 @@ const InventarioView: React.FC = () => {
 
       {/* Productos guardados en la base de datos */}
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <Package size={24} />
           Productos Guardados ({filteredInventario.length})
         </h2>
@@ -671,11 +671,11 @@ const InventarioView: React.FC = () => {
             <p className="text-gray-400">No se encontraron productos guardados</p>
           </div>
         ) : viewMode === 'cards' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredInventario.map((item: any) => (
               <div 
                 key={item.inv_id} 
-                className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
               >
                 {/* Cabecera de la tarjeta con gradiente */}
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 relative">
@@ -702,34 +702,34 @@ const InventarioView: React.FC = () => {
                   
                   <div className="space-y-1 mb-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm">Dimensiones:</span>
-                      <span className="text-white text-sm">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm">Dimensiones:</span>
+                      <span className="text-gray-900 dark:text-white text-sm">
                         {Number(item.largo_mm || 0)} × {Number(item.ancho_mm || 0)} × {Number(item.alto_mm || 0)} mm
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm">Volumen:</span>
-                      <span className="text-white text-sm">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm">Volumen:</span>
+                      <span className="text-gray-900 dark:text-white text-sm">
                         {(Number(item.volumen_total_m3_producto) || 0).toFixed(6)} m³
                       </span>
                     </div>
                     {item.fecha_de_despacho && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Fecha despacho:</span>
-                        <span className="text-white text-sm">{item.fecha_de_despacho.toLocaleDateString()}</span>
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Fecha despacho:</span>
+                        <span className="text-gray-900 dark:text-white text-sm">{item.fecha_de_despacho.toLocaleDateString()}</span>
                       </div>
                     )}
                     {item.orden_despacho && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Orden despacho:</span>
-                        <span className="text-white text-sm">{item.orden_despacho}</span>
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Orden despacho:</span>
+                        <span className="text-gray-900 dark:text-white text-sm">{item.orden_despacho}</span>
                       </div>
                     )}
                   </div>
                 </div>
                 
                 {/* Pie de tarjeta con acciones */}
-                <div className="border-t border-gray-700 bg-gray-900 px-4 py-2 flex justify-between">
+                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-4 py-2 flex justify-between">
                   <button
                     onClick={() => handleEdit(item)}
                     className="p-2 rounded-full bg-yellow-50 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
@@ -750,58 +750,58 @@ const InventarioView: React.FC = () => {
           </div>
         ) : (
           /* Vista de tabla */
-          <div className="overflow-x-auto bg-gray-800 rounded-lg shadow">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-700">
+          <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">DESCRIPCIÓN</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">CLIENTE</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">PRODUCTO</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">DIMENSIONES</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">CANTIDAD</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">VOLUMEN</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">ACCIONES</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">DESCRIPCIÓN</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">CLIENTE</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">PRODUCTO</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">DIMENSIONES</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">CANTIDAD</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">VOLUMEN</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ACCIONES</th>
                 </tr>
               </thead>
-              <tbody className="bg-gray-800 divide-y divide-gray-700">
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredInventario.map((item: any) => (
-                  <tr key={item.inv_id} className="hover:bg-gray-700">
+                  <tr key={item.inv_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-white">{item.descripcion_producto || 'Sin descripción'}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">{item.descripcion_producto || 'Sin descripción'}</div>
                       {item.fecha_de_despacho && (
-                        <div className="text-sm text-gray-400">Fecha despacho: {item.fecha_de_despacho.toLocaleDateString()}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Fecha despacho: {item.fecha_de_despacho.toLocaleDateString()}</div>
                       )}
                       {item.orden_despacho && (
-                        <div className="text-sm text-gray-400">Orden: {item.orden_despacho}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Orden: {item.orden_despacho}</div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{item.nombre_cliente || 'N/A'}</div>
+                      <div className="text-sm text-gray-900 dark:text-white">{item.nombre_cliente || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{item.producto || 'No especificado'}</div>
+                      <div className="text-sm text-gray-900 dark:text-white">{item.producto || 'No especificado'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">
+                      <div className="text-sm text-gray-900 dark:text-white">
                         {Number(item.largo_mm || 0)} × {Number(item.ancho_mm || 0)} × {Number(item.alto_mm || 0)} mm
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{Number(item.cantidad_despachada || 0)}</div>
+                      <div className="text-sm text-gray-900 dark:text-white">{Number(item.cantidad_despachada || 0)}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{(Number(item.volumen_total_m3_producto) || 0).toFixed(6)} m³</div>
+                      <div className="text-sm text-gray-900 dark:text-white">{(Number(item.volumen_total_m3_producto) || 0).toFixed(6)} m³</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={() => handleEdit(item)}
-                        className="text-yellow-400 hover:text-yellow-300 mr-4"
+                        className="text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300 mr-4"
                       >
                         <Edit2 size={18} />
                       </button>
                       <button
                         onClick={() => handleDelete(item.inv_id)}
-                        className="text-red-400 hover:text-red-300"
+                        className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -817,8 +817,8 @@ const InventarioView: React.FC = () => {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4 text-white">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               {selectedItem ? 'Editar Producto Guardado' : 
                selectedPendingItem ? 'Editar Producto en Carrito' : 
                'Agregar Producto al Carrito'}
@@ -827,11 +827,11 @@ const InventarioView: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Fila 1: Cliente */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Cliente</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cliente</label>
                 <select
                   value={formData.cliente_id}
                   onChange={(e: any) => setFormData({...formData, cliente_id: parseInt(e.target.value)})}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   required
                 >
                   <option value={0}>Seleccionar cliente</option>
@@ -846,23 +846,23 @@ const InventarioView: React.FC = () => {
               {/* Fila 2: Descripción y Producto */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Descripción</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción</label>
                   <input
                     type="text"
                     value={formData.descripcion_producto}
                     onChange={(e: any) => setFormData({...formData, descripcion_producto: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     placeholder="Descripción del producto"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Producto</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Producto</label>
                   <input
                     type="text"
                     value={formData.producto}
                     onChange={(e: any) => setFormData({...formData, producto: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     placeholder="Ej: Pastillas, Jeringas, ICOPOR, TÉRMICO, etc."
                     required
                   />
@@ -871,39 +871,39 @@ const InventarioView: React.FC = () => {
               
               {/* Fila 3: Dimensiones */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Dimensiones (mm)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Dimensiones (mm)</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Largo</label>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Largo</label>
                     <input
                       type="number"
                       value={formData.largo_mm}
                       onChange={(e: any) => setFormData({...formData, largo_mm: parseInt(e.target.value) || 0})}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       required
                       min="1"
                       placeholder="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Ancho</label>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Ancho</label>
                     <input
                       type="number"
                       value={formData.ancho_mm}
                       onChange={(e: any) => setFormData({...formData, ancho_mm: parseInt(e.target.value) || 0})}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       required
                       min="1"
                       placeholder="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Alto</label>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Alto</label>
                     <input
                       type="number"
                       value={formData.alto_mm}
                       onChange={(e: any) => setFormData({...formData, alto_mm: parseInt(e.target.value) || 0})}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       required
                       min="1"
                       placeholder="0"
@@ -915,12 +915,12 @@ const InventarioView: React.FC = () => {
               {/* Fila 4: Cantidad y Fecha */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Cantidad Despachada</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cantidad Despachada</label>
                   <input
                     type="number"
                     value={formData.cantidad_despachada}
                     onChange={(e: any) => setFormData({...formData, cantidad_despachada: parseInt(e.target.value) || 0})}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     required
                     min="1"
                     placeholder="0"
@@ -928,30 +928,30 @@ const InventarioView: React.FC = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Fecha de Despacho</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Despacho</label>
                   <input
                     type="date"
                     value={formData.fecha_de_despacho}
                     onChange={(e: any) => setFormData({...formData, fecha_de_despacho: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
               </div>
               
               {/* Fila 5: Orden de Despacho */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Orden de Despacho</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Orden de Despacho</label>
                 <input
                   type="text"
                   value={formData.orden_despacho}
                   onChange={(e: any) => setFormData({...formData, orden_despacho: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   placeholder="Número de orden de despacho"
                 />
               </div>
               
               {/* Botones */}
-              <div className="flex gap-3 pt-6 border-t border-gray-600">
+              <div className="flex gap-3 pt-6 border-t border-gray-200 dark:border-gray-600">
                 {selectedItem ? (
                   // Modo edición de producto guardado
                   <>
@@ -965,7 +965,7 @@ const InventarioView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowModal(false)}
-                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors"
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:text-white dark:bg-gray-600 dark:hover:bg-gray-700 py-2 px-4 rounded-lg transition-colors"
                     >
                       Cancelar
                     </button>
@@ -983,7 +983,7 @@ const InventarioView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowModal(false)}
-                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors"
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:text-white dark:bg-gray-600 dark:hover:bg-gray-700 py-2 px-4 rounded-lg transition-colors"
                     >
                       Cancelar
                     </button>
@@ -1001,7 +1001,7 @@ const InventarioView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowModal(false)}
-                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors"
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:text-white dark:bg-gray-600 dark:hover:bg-gray-700 py-2 px-4 rounded-lg transition-colors"
                     >
                       Finalizar
                     </button>
@@ -1016,18 +1016,18 @@ const InventarioView: React.FC = () => {
       {/* Modal de previsualización de importación */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto border border-gray-700">
-            <h3 className="text-xl font-semibold mb-4 text-white">Confirmar importación desde Excel</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700">
+            <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Confirmar importación desde Excel</h3>
             {isImportingPreview || !importPreview ? (
-              <p className="text-gray-300 mb-4">Procesando archivo…</p>
+              <p className="text-gray-700 dark:text-gray-300 mb-4">Procesando archivo…</p>
             ) : (
-              <p className="text-gray-300 mb-4">
-                Filas leídas: <span className="font-semibold">{importPreview.totalRows ?? 0}</span> · Listas para insertar: <span className="font-semibold text-green-400">{importPreview.canInsert ?? 0}</span> · Duplicados: <span className="text-yellow-400 font-semibold">{importPreview.results?.skipped ?? 0}</span> · Errores: <span className="text-red-400 font-semibold">{importPreview.results?.errors ?? 0}</span>
+              <p className="text-gray-700 dark:text-gray-300 mb-4">
+                Filas leídas: <span className="font-semibold">{importPreview.totalRows ?? 0}</span> · Listas para insertar: <span className="font-semibold text-green-600 dark:text-green-400">{importPreview.canInsert ?? 0}</span> · Duplicados: <span className="text-yellow-600 dark:text-yellow-400 font-semibold">{importPreview.results?.skipped ?? 0}</span> · Errores: <span className="text-red-600 dark:text-red-400 font-semibold">{importPreview.results?.errors ?? 0}</span>
               </p>
             )}
-            <div className="overflow-x-auto bg-gray-800 rounded-lg border border-gray-700">
+            <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-700 text-gray-200">
+                <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
                   <tr>
                     <th className="px-3 py-2 text-left">Fila</th>
                     <th className="px-3 py-2 text-left">Estado</th>
@@ -1039,26 +1039,26 @@ const InventarioView: React.FC = () => {
                     <th className="px-3 py-2 text-left">Detalle</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-700">
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {isImportingPreview || !importPreview ? (
                     <tr>
-                      <td className="px-3 py-4 text-gray-400" colSpan={8}>Procesando archivo…</td>
+                      <td className="px-3 py-4 text-gray-500 dark:text-gray-400" colSpan={8}>Procesando archivo…</td>
                     </tr>
                   ) : (
                     (importPreview.preview ?? []).slice(0, 300).map((p, i) => (
-                      <tr key={`${p.row}-${i}`} className="hover:bg-gray-700">
-                        <td className="px-3 py-2 text-gray-300">{p.row}</td>
+                      <tr key={`${p.row}-${i}`} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.row}</td>
                         <td className="px-3 py-2">
-                          {p.status === 'ok' && <span className="text-green-400">OK</span>}
-                          {p.status === 'skipped' && <span className="text-yellow-400">Duplicado</span>}
-                          {p.status === 'error' && <span className="text-red-400">Error</span>}
+                          {p.status === 'ok' && <span className="text-green-700 dark:text-green-400">OK</span>}
+                          {p.status === 'skipped' && <span className="text-yellow-700 dark:text-yellow-400">Duplicado</span>}
+                          {p.status === 'error' && <span className="text-red-700 dark:text-red-400">Error</span>}
                         </td>
-                        <td className="px-3 py-2 text-gray-200">{p.record?.producto}</td>
-                        <td className="px-3 py-2 text-gray-300">{p.record?.largo_mm} × {p.record?.ancho_mm} × {p.record?.alto_mm} mm</td>
-                        <td className="px-3 py-2 text-gray-300">{p.record?.cantidad_despachada}</td>
-                        <td className="px-3 py-2 text-gray-300">{p.record?.fecha_de_despacho || '-'}</td>
-                        <td className="px-3 py-2 text-gray-300">{p.record?.orden_despacho}</td>
-                        <td className="px-3 py-2 text-gray-300">{p.errors?.join(', ') || p.reason || ''}</td>
+                        <td className="px-3 py-2 text-gray-900 dark:text-gray-200">{p.record?.producto}</td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.record?.largo_mm} × {p.record?.ancho_mm} × {p.record?.alto_mm} mm</td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.record?.cantidad_despachada}</td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.record?.fecha_de_despacho || '-'}</td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.record?.orden_despacho}</td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.errors?.join(', ') || p.reason || ''}</td>
                       </tr>
                     ))
                   )}
@@ -1066,10 +1066,10 @@ const InventarioView: React.FC = () => {
               </table>
             </div>
             {!isImportingPreview && (importPreview?.preview?.length ?? 0) > 300 && (
-              <p className="text-xs text-gray-400 mt-2">Mostrando primeras 300 filas…</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">Mostrando primeras 300 filas…</p>
             )}
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => { setShowImportModal(false); setImportPreview(null); }} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md">Cancelar</button>
+              <button onClick={() => { setShowImportModal(false); setImportPreview(null); }} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:text-white dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-md">Cancelar</button>
               <button onClick={confirmImport} disabled={loading || isImportingPreview || ((importPreview?.canInsert ?? 0) === 0)} className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-4 py-2 rounded-md">
                 {loading || isImportingPreview ? 'Importando…' : `Confirmar e insertar (${importPreview?.canInsert ?? 0})`}
               </button>

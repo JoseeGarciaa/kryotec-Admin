@@ -864,25 +864,25 @@ const SugerenciasView: React.FC = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-900 min-h-screen text-white">
+    <div className="p-6">
       {/* Header */}
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Calculadora de Sugerencias</h1>
-        <p className="text-gray-400 mb-6">Encuentra el modelo perfecto de Credocube para tus clientes</p>
+        <h1 className="text-3xl font-bold mb-2 text-gray-800 dark:text-white">Calculadora de Sugerencias</h1>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">Encuentra el modelo perfecto de Credocube para tus clientes</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Panel de Cálculo */}
-        <div className="bg-gray-800 rounded-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2 mb-6">
-            <Calculator className="text-blue-400" size={24} />
-            <h2 className="text-xl font-semibold">Calculadora</h2>
+            <Calculator className="text-blue-500 dark:text-blue-400" size={24} />
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Calculadora</h2>
           </div>
 
           <div className="space-y-4">
             {/* Selector de Modo de Cálculo */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Tipo de Cálculo
               </label>
               <div className="flex gap-4">
@@ -896,9 +896,9 @@ const SugerenciasView: React.FC = () => {
                       setSelectedOrden('');
                       setProductosOrden([]);
                     }}
-                    className="mr-2 text-blue-500 focus:ring-blue-500"
+                    className="mr-2 text-blue-600 focus:ring-blue-600"
                   />
-                  <span className="text-white">Por Producto Individual</span>
+                  <span className="text-gray-900 dark:text-white">Por Producto Individual</span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -909,16 +909,16 @@ const SugerenciasView: React.FC = () => {
                       setCalculoPorOrden(true);
                       setSelectedInventario('');
                     }}
-                    className="mr-2 text-blue-500 focus:ring-blue-500"
+                    className="mr-2 text-blue-600 focus:ring-blue-600"
                   />
-                  <span className="text-white">Por Orden de Despacho</span>
+                  <span className="text-gray-900 dark:text-white">Por Orden de Despacho</span>
                 </label>
               </div>
             </div>
 
             {/* Selección de Cliente */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Cliente *
               </label>
               <select
@@ -930,7 +930,7 @@ const SugerenciasView: React.FC = () => {
                   setProductosOrden([]);
                   setOrdenesDespacho([]);
                 }}
-                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
                 <option value="">Seleccionar cliente...</option>
                 {clientes.map(cliente => (
@@ -944,14 +944,14 @@ const SugerenciasView: React.FC = () => {
             {calculoPorOrden ? (
               /* Modo: Cálculo por Orden de Despacho */
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Orden de Despacho *
                 </label>
                 <select
                   value={selectedOrden}
                   onChange={(e) => setSelectedOrden(e.target.value)}
                   disabled={!selectedCliente}
-                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="">
                     {!selectedCliente ? 'Primero seleccione un cliente...' : 
@@ -967,9 +967,9 @@ const SugerenciasView: React.FC = () => {
                 
                 {/* Mostrar resumen de productos en la orden */}
                 {productosOrden.length > 0 && (
-                  <div className="mt-4 p-4 bg-gray-700 rounded-lg">
-                    <h4 className="font-medium text-white mb-2">Productos en la orden:</h4>
-                    <div className="space-y-1 text-sm text-gray-300">
+                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                    <h4 className="font-medium text-gray-900 dark:text-white mb-2">Productos en la orden:</h4>
+                    <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                       {productosOrden.map(producto => (
                         <div key={producto.inv_id} className="flex justify-between">
                           <span>{producto.producto} - {producto.descripcion_producto}</span>
@@ -977,7 +977,7 @@ const SugerenciasView: React.FC = () => {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-2 pt-2 border-t border-gray-600 font-medium text-white">
+                    <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 font-medium text-gray-900 dark:text-white">
                       Total: {productosOrden.reduce((sum, p) => sum + (parseInt(p.cantidad_despachada) || 0), 0)} productos
                       {' | '}
                       {productosOrden.reduce((sum, p) => sum + (parseFloat(p.volumen_total_m3_producto) || 0), 0).toFixed(3)} m³
@@ -1026,7 +1026,7 @@ const SugerenciasView: React.FC = () => {
                 value={selectedInventario}
                 onChange={(e) => setSelectedInventario(e.target.value as any)}
                 disabled={!selectedCliente}
-                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
                 <option value="">Seleccionar item...</option>
                 {filteredInventario.map(item => (
@@ -1040,7 +1040,7 @@ const SugerenciasView: React.FC = () => {
             {/* Dimensiones Requeridas */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Frente (mm) *
                 </label>
                 <input
@@ -1048,16 +1048,16 @@ const SugerenciasView: React.FC = () => {
                   value={dimensiones.frente}
                   onChange={(e) => setDimensiones(prev => ({ ...prev, frente: e.target.value }))}
                   readOnly={!!selectedInventario}
-                  className={`w-full p-3 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                     selectedInventario 
-                      ? 'bg-gray-600 cursor-not-allowed' 
-                      : 'bg-gray-700'
+                      ? 'bg-gray-200 text-gray-700 cursor-not-allowed dark:bg-gray-600 dark:text-white dark:border-gray-600' 
+                      : 'bg-white text-gray-900 border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600'
                   }`}
                   placeholder="0"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Profundo (mm) *
                 </label>
                 <input
@@ -1065,16 +1065,16 @@ const SugerenciasView: React.FC = () => {
                   value={dimensiones.profundo}
                   onChange={(e) => setDimensiones(prev => ({ ...prev, profundo: e.target.value }))}
                   readOnly={!!selectedInventario}
-                  className={`w-full p-3 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                     selectedInventario 
-                      ? 'bg-gray-600 cursor-not-allowed' 
-                      : 'bg-gray-700'
+                      ? 'bg-gray-200 text-gray-700 cursor-not-allowed dark:bg-gray-600 dark:text-white dark:border-gray-600' 
+                      : 'bg-white text-gray-900 border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600'
                   }`}
                   placeholder="0"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Alto (mm) *
                 </label>
                 <input
@@ -1082,10 +1082,10 @@ const SugerenciasView: React.FC = () => {
                   value={dimensiones.alto}
                   onChange={(e) => setDimensiones(prev => ({ ...prev, alto: e.target.value }))}
                   readOnly={!!selectedInventario}
-                  className={`w-full p-3 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                     selectedInventario 
-                      ? 'bg-gray-600 cursor-not-allowed' 
-                      : 'bg-gray-700'
+                      ? 'bg-gray-200 text-gray-700 cursor-not-allowed dark:bg-gray-600 dark:text-white dark:border-gray-600' 
+                      : 'bg-white text-gray-900 border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600'
                   }`}
                   placeholder="0"
                 />
@@ -1094,21 +1094,21 @@ const SugerenciasView: React.FC = () => {
 
             {/* Cantidad */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Cantidad
               </label>
               <input
                 type="number"
                 value={selectedInventario ? (inventario.find(inv => inv.inv_id === Number(selectedInventario))?.cantidad_despachada || 0) : ''}
                 readOnly
-                className="w-full p-3 bg-gray-600 border border-gray-600 rounded-lg text-white cursor-not-allowed"
+                className="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 cursor-not-allowed dark:bg-gray-600 dark:border-gray-600 dark:text-white"
                 placeholder="Seleccione un item del inventario"
               />
             </div>
 
             {/* Volumen Requerido */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Volumen Requerido (m³)
               </label>
               <input
@@ -1117,10 +1117,10 @@ const SugerenciasView: React.FC = () => {
                 value={volumenRequerido}
                 onChange={(e) => setVolumenRequerido(e.target.value)}
                 readOnly={!!selectedInventario}
-                className={`w-full p-3 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                   selectedInventario 
-                    ? 'bg-gray-600 cursor-not-allowed' 
-                    : 'bg-gray-700'
+                    ? 'bg-gray-200 text-gray-700 cursor-not-allowed dark:bg-gray-600 dark:text-white dark:border-gray-600' 
+                    : 'bg-white text-gray-900 border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600'
                 }`}
                 placeholder="0.000"
               />
@@ -1158,11 +1158,11 @@ const SugerenciasView: React.FC = () => {
         </div>
 
         {/* Panel de Resultados */}
-        <div className="bg-gray-800 rounded-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
-              <Package className="text-green-400" size={24} />
-              <h2 className="text-xl font-semibold">Resultados</h2>
+      <Package className="text-green-500 dark:text-green-400" size={24} />
+      <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Resultados</h2>
             </div>
             {/* Botón para limpiar recomendaciones */}
             {resultados.length > 0 && (
@@ -1178,17 +1178,17 @@ const SugerenciasView: React.FC = () => {
           </div>
 
           {resultados.length === 0 ? (
-            <div className="text-center text-gray-400 py-8">
+      <div className="text-center text-gray-600 dark:text-gray-400 py-8">
               <Package size={48} className="mx-auto mb-4 opacity-50" />
               <p>Realiza un cálculo para ver las sugerencias</p>
             </div>
           ) : (
             <div className="space-y-4">
               {resultados.map((resultado, index) => (
-                <div key={index} className={`rounded-lg p-4 border ${
+        <div key={index} className={`rounded-lg p-4 border ${
                   resultado.es_mejor_opcion 
-                    ? 'bg-gradient-to-r from-green-900/50 to-green-800/50 border-green-500' 
-                    : 'bg-gray-700 border-gray-600'
+          ? 'bg-green-50 border-green-300 dark:bg-green-900/50 dark:border-green-500' 
+          : 'bg-gray-50 border-gray-200 dark:bg-gray-700 dark:border-gray-600'
                 }`}>
                   {/* Etiqueta de mejor opción */}
                   {resultado.etiqueta_recomendacion && (
@@ -1201,8 +1201,8 @@ const SugerenciasView: React.FC = () => {
                   
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h3 className="font-semibold text-lg">{resultado.nombre_modelo}</h3>
-                      <p className="text-gray-400 text-sm">Cantidad sugerida: {resultado.cantidad_sugerida} unidades</p>
+                      <h3 className="font-semibold text-lg text-gray-900 dark:text-white">{resultado.nombre_modelo}</h3>
+                      <p className="text-gray-700 dark:text-gray-400 text-sm">Cantidad sugerida: {resultado.cantidad_sugerida} unidades</p>
                       
                       {/* Mensaje de comparación mejorado */}
                       {resultado.mensaje_comparacion && (
@@ -1225,7 +1225,7 @@ const SugerenciasView: React.FC = () => {
                       
                       {/* Detalle del espacio */}
                       {resultado.detalle_espacio && (
-                        <p className="text-gray-500 text-xs mt-1">
+                        <p className="text-gray-600 dark:text-gray-500 text-xs mt-1">
                           {resultado.detalle_espacio}
                         </p>
                       )}
@@ -1257,7 +1257,7 @@ const SugerenciasView: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-gray-400">Dimensiones internas:</p>
-                      <p className="text-white">
+                      <p className="text-gray-900 dark:text-white">
                         {resultado.dimensiones_internas ? 
                           `${resultado.dimensiones_internas.frente} × ${resultado.dimensiones_internas.profundo} × ${resultado.dimensiones_internas.alto} mm` :
                           'No disponible'
@@ -1266,17 +1266,17 @@ const SugerenciasView: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-gray-400">Volumen:</p>
-                      <p className="text-white">{resultado.volumen_litros || 'No disponible'} litros</p>
+                      <p className="text-gray-900 dark:text-white">{resultado.volumen_litros || 'No disponible'} litros</p>
                     </div>
                   </div>
                   
                   {/* Información adicional sobre espacio */}
                   {resultado.espacio_sobrante_m3 !== undefined && (
-                    <div className="mt-3 pt-3 border-t border-gray-600">
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                       <div className="grid grid-cols-2 gap-4 text-xs">
                         <div>
                           <p className="text-gray-400">Espacio utilizado:</p>
-                          <p className="text-white">{(resultado.volumen_total_productos * 1000).toFixed(1)} litros</p>
+          <p className="text-gray-900 dark:text-white">{(resultado.volumen_total_productos * 1000).toFixed(1)} litros</p>
                         </div>
                         <div>
                           <p className="text-gray-400">Espacio sobrante:</p>
@@ -1308,20 +1308,20 @@ const SugerenciasView: React.FC = () => {
       </div>
 
       {/* Historial de Sugerencias */}
-      <div className="bg-gray-800 rounded-lg p-6 mt-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mt-8 border border-gray-200 dark:border-gray-700">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-2">
-            <Clock className="text-yellow-400" size={24} />
-            <h2 className="text-xl font-semibold">Historial de Sugerencias</h2>
+              <Clock className="text-yellow-500 dark:text-yellow-400" size={24} />
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Historial de Sugerencias</h2>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             {/* Filtro por cliente */}
             <div className="flex items-center gap-2">
-              <Users className="text-gray-400" size={16} />
+                <Users className="text-gray-500 dark:text-gray-400" size={16} />
               <select
                 value={clienteHistorialFilter}
                 onChange={(e) => setClienteHistorialFilter(e.target.value as any)}
-                className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
+                  className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 w-full sm:w-auto dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
                 <option value="">Todos los clientes</option>
                 {clientes.map(cliente => (
@@ -1333,17 +1333,17 @@ const SugerenciasView: React.FC = () => {
             </div>
 
             {/* Toggle de vista */}
-            <div className="flex bg-gray-700 rounded-lg p-1 shrink-0 self-start sm:self-auto">
+            <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 shrink-0 self-start sm:self-auto">
               <button
                 onClick={() => setViewMode('cards')}
-                className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+                className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
                 title="Vista de tarjetas"
               >
                 <LayoutGrid size={18} />
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-gray-800 shadow-sm' : 'text-gray-400'}`}
+                className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
                 title="Vista de tabla"
               >
                 <List size={18} />
@@ -1413,11 +1413,11 @@ const SugerenciasView: React.FC = () => {
           </div>
         ) : viewMode === 'cards' ? (
           /* Vista de tarjetas */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredSugerencias.map((sugerencia) => (
               <div 
                 key={sugerencia.sugerencia_id} 
-                className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
               >
                 {/* Cabecera de la tarjeta con gradiente */}
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 relative">
@@ -1462,15 +1462,15 @@ const SugerenciasView: React.FC = () => {
                   <div className="space-y-2 mb-4">
                     {sugerencia.cantidad_inventario && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Cant. Productos:</span>
-                        <span className="text-white text-sm">
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">Cant. Productos:</span>
+                        <span className="text-gray-900 dark:text-white text-sm">
                           {sugerencia.cantidad_inventario} unidades
                         </span>
                       </div>
                     )}
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm">Fecha:</span>
-                      <span className="text-white text-sm">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm">Fecha:</span>
+                      <span className="text-gray-900 dark:text-white text-sm">
                         {sugerencia.fecha_sugerencia ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString('es-ES') : 'N/A'}
                       </span>
                     </div>
@@ -1478,7 +1478,7 @@ const SugerenciasView: React.FC = () => {
                 </div>
                 
                 {/* Pie de tarjeta con acciones */}
-                <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 flex justify-between">
+                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-4 py-3 flex justify-between">
                   <button
                     onClick={() => handleIndividualPDFWithPrices(sugerencia)}
                     className="p-2 rounded-full bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors"
@@ -1499,43 +1499,43 @@ const SugerenciasView: React.FC = () => {
           </div>
         ) : (
           /* Vista de tabla */
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-700">
+          <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cliente</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Producto</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cant. Productos</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Modelo Sugerido</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cantidad</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fecha</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Acciones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cliente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Producto</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cant. Productos</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Modelo Sugerido</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cantidad</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="bg-gray-800 divide-y divide-gray-700">
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredSugerencias.map((sugerencia) => (
-                  <tr key={sugerencia.sugerencia_id} className="hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                  <tr key={sugerencia.sugerencia_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {sugerencia.nombre_cliente || 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       <div>
                         <div>{sugerencia.producto || sugerencia.descripcion_inventario || 'N/A'}</div>
                         {sugerencia.descripcion_inventario && sugerencia.producto && sugerencia.descripcion_inventario !== sugerencia.producto && (
-                          <div className="text-xs text-gray-400 truncate max-w-xs">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 truncate max-w-xs">
                             {sugerencia.descripcion_inventario}
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {sugerencia.cantidad_inventario || '0'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {sugerencia.modelo_sugerido}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {sugerencia.cantidad_sugerida}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -1547,21 +1547,21 @@ const SugerenciasView: React.FC = () => {
                         {sugerencia.estado}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
                       {sugerencia.fecha_sugerencia ? new Date(sugerencia.fecha_sugerencia).toLocaleDateString() : 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleIndividualPDFWithPrices(sugerencia)}
-                          className="text-blue-400 hover:text-blue-300 transition-colors p-1 rounded"
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors p-1 rounded"
                           title="Descargar PDF"
                         >
                           <Download size={16} />
                         </button>
                         <button
                           onClick={() => handleDeleteSugerencia(sugerencia.sugerencia_id)}
-                          className="text-red-400 hover:text-red-300 transition-colors p-1 rounded"
+                          className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors p-1 rounded"
                           title="Eliminar sugerencia"
                         >
                           <Trash2 size={16} />
@@ -1579,11 +1579,11 @@ const SugerenciasView: React.FC = () => {
       {/* Modal para agregar precios de alquiler */}
       {showPriceModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto border border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               {pdfType === 'individual' ? 'Precio de Alquiler para Sugerencia' : 'Agregar Precios de Alquiler'}
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-sm text-gray-700 dark:text-gray-400 mb-6">
               {pdfType === 'individual' 
                 ? 'Ingresa el precio de alquiler para esta sugerencia específica.' 
                 : 'Ingresa el precio de alquiler para cada producto. Puedes omitir productos dejando el campo vacío.'
@@ -1598,7 +1598,7 @@ const SugerenciasView: React.FC = () => {
                       {productoInfo.producto}
                     </h4>
                     {productoInfo.descripcion && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-gray-700 dark:text-gray-400">
                         Descripción: {productoInfo.descripcion}
                       </p>
                     )}
