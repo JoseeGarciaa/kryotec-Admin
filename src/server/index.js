@@ -322,7 +322,7 @@ app.post('/api/tenants', async (req, res) => {
   } catch (error) {
     console.error('Error en POST /api/tenants:', error);
     if (error.code === '23505') { // Código de error de PostgreSQL para violación de clave única
-      res.status(409).json({ error: 'Ya existe una empresa con ese nombre, NIT, email o esquema' });
+      res.status(409).json({ error: error.message || 'Ya existe una empresa con ese nombre, NIT, email o esquema' });
     } else {
       res.status(500).json({ error: 'Error al crear empresa' });
     }
@@ -338,7 +338,7 @@ app.put('/api/tenants/:id', async (req, res) => {
     if (error.message === 'Empresa no encontrada') {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     } else if (error.code === '23505') {
-      res.status(409).json({ error: 'Ya existe una empresa con ese nombre, NIT, email o esquema' });
+      res.status(409).json({ error: error.message || 'Ya existe una empresa con ese nombre, NIT, email o esquema' });
     } else {
       res.status(500).json({ error: 'Error al actualizar empresa' });
     }

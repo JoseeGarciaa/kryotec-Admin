@@ -65,6 +65,41 @@ const createTenant = async (tenantData) => {
   try {
     await client.query('BEGIN');
     
+    // Asegurar esquema por defecto si no viene del cliente
+    const generateSchemaFromName = (name) => `tenant_${String(name || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // quitar acentos
+      .replace(/[^a-z0-9_\s-]/g, '') // caracteres seguros
+      .trim()
+      .replace(/\s+/g, '_')}`;
+    if (!tenantData.esquema) {
+      tenantData.esquema = generateSchemaFromName(tenantData.nombre);
+    }
+
+    // Verificación previa de duplicados para dar mensajes claros (evita 23505 genérico)
+    const dupCheck = await client.query(
+      `SELECT
+         EXISTS(SELECT 1 FROM admin_platform.tenants WHERE LOWER(nombre)=LOWER($1)) AS nombre_exists,
+         EXISTS(SELECT 1 FROM admin_platform.tenants WHERE nit=$2) AS nit_exists,
+         EXISTS(SELECT 1 FROM admin_platform.tenants WHERE LOWER(email_contacto)=LOWER($3)) AS email_exists,
+         EXISTS(SELECT 1 FROM admin_platform.tenants WHERE esquema=$4) AS esquema_exists
+       `,
+      [tenantData.nombre, tenantData.nit, tenantData.email_contacto, tenantData.esquema]
+    );
+    const flags = dupCheck.rows[0] || {};
+    if (flags.nombre_exists || flags.nit_exists || flags.email_exists || flags.esquema_exists) {
+      const collisions = [];
+      if (flags.nombre_exists) collisions.push('nombre');
+      if (flags.nit_exists) collisions.push('NIT');
+      if (flags.email_exists) collisions.push('email');
+      if (flags.esquema_exists) collisions.push('esquema');
+      const err = new Error(`Ya existe una empresa con ${collisions.join(', ')}`);
+      // Simular estructura de error de Postgres para que el router responda 409
+      err.code = '23505';
+      throw err;
+    }
+
     // Hashear la contraseña
     const hashedPassword = await hashPassword(tenantData.contraseña);
     
@@ -80,8 +115,8 @@ const createTenant = async (tenantData) => {
     const result = await client.query(`
       INSERT INTO admin_platform.tenants (
         nombre, nit, email_contacto, telefono_contacto, direccion, 
-        estado, contraseña, esquema
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        estado, contraseña, esquema, fecha_creacion
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (now() at time zone 'America/Bogota'))
       RETURNING id, nombre, nit, email_contacto, telefono_contacto, direccion, 
                 estado, fecha_creacion, ultimo_ingreso, esquema
     `, [

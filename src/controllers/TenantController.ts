@@ -129,10 +129,11 @@ export const useTenantController = () => {
       setShowCreateForm(false);
       setFormErrors({});
     } catch (error: any) {
+      const backendMsg = error?.response?.data?.error as string | undefined;
       setState(prev => ({ 
         ...prev, 
         loading: false, 
-        error: 'Error al crear empresa. Por favor, intente nuevamente.' 
+        error: backendMsg || 'Error al crear empresa. Por favor, intente nuevamente.' 
       }));
       console.error('Error al crear tenant:', error);
     }

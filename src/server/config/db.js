@@ -35,7 +35,21 @@ dbConfig = {
 // Crear el pool con la configuración
 const pool = new Pool(dbConfig);
 
-// Probar la conexión
+// Aplicar zona horaria por sesión y probar conexión
+pool.on('connect', (client) => {
+  client.query("SET TIME ZONE 'America/Bogota'").catch((e) => {
+    console.error('No se pudo establecer zona horaria en la sesión de PostgreSQL:', e);
+  });
+});
+
+pool.query('SHOW TIMEZONE', (err, res) => {
+  if (err) {
+    console.error('Error al verificar zona horaria de PostgreSQL:', err);
+  } else {
+    console.log('Zona horaria de PostgreSQL activa:', res.rows[0]);
+  }
+});
+
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
     console.error('Error al conectar a PostgreSQL:', err);

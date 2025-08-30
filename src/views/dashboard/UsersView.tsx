@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useUserController } from '../../controllers/UserController';
 import { AdminUser } from '../../models/UserModel';
 import { Edit, Trash2, UserPlus, Search, Users, LayoutGrid, List } from 'lucide-react';
+import { formatDate as formatDateCO } from '../../utils/dateUtils';
 
 export const UsersView: React.FC = () => {
   const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser } = useUserController();
@@ -112,10 +113,7 @@ export const UsersView: React.FC = () => {
   );
 
   // Formatear fecha
-  const formatDate = (date: Date | null | string) => {
-    if (!date) return 'N/A';
-    return new Date(date).toLocaleString('es-MX');
-  };
+  const formatDate = (date: Date | null | string) => formatDateCO(date) || 'N/A';
 
   return (
     <div className="p-6">

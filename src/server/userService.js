@@ -36,8 +36,8 @@ const userService = {
       const { nombre, correo, telefono, contraseña, rol, activo } = userData;
       const result = await pool.query(
         `INSERT INTO admin_platform.admin_users 
-         (nombre, correo, telefono, contraseña, rol, activo) 
-         VALUES ($1, $2, $3, $4, $5, $6) 
+         (nombre, correo, telefono, contraseña, rol, activo, fecha_creacion) 
+         VALUES ($1, $2, $3, $4, $5, $6, (now() at time zone 'America/Bogota')) 
          RETURNING *`,
         [nombre, correo, telefono, contraseña, rol, activo]
       );
@@ -105,7 +105,7 @@ const userService = {
   updateLastLogin: async (id) => {
     try {
       const result = await pool.query(
-        'UPDATE admin_platform.admin_users SET ultimo_ingreso = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id',
+  "UPDATE admin_platform.admin_users SET ultimo_ingreso = (now() at time zone 'America/Bogota') WHERE id = $1 RETURNING id",
         [id]
       );
       return result.rows.length > 0;
