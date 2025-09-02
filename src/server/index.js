@@ -514,10 +514,14 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
 
     // Helpers
     const normalize = (s) => String(s || '').trim().toLowerCase();
-    const toInt = (v) => {
+    const toNumber = (v) => {
       if (v === null || v === undefined || v === '') return 0;
       const n = Number(String(v).toString().replace(',', '.'));
-      return Number.isFinite(n) ? Math.round(n) : 0;
+      return Number.isFinite(n) ? n : 0;
+    };
+    const toInt = (v) => {
+      const n = toNumber(v);
+      return Math.round(n);
     };
     const toDateString = (v) => {
       if (!v) return null;
@@ -560,8 +564,8 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
       }
     }
 
-    // Parse rows starting from detected header
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', range: headerRowIdx });
+  // Parse rows starting from detected header
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', range: headerRowIdx });
     if (!rows || rows.length === 0) {
       return res.status(400).json({
         error: 'No se encontraron datos para importar. Verifica que la hoja "Inventario" tenga los encabezados esperados (Descripcion, Producto, Largo_mm, Ancho_mm, Alto_mm, Cantidad, Fecha_Despacho (YYYY-MM-DD), Orden_Despacho).'
@@ -570,6 +574,39 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
 
     // Expected headers mapping (case-insensitive)
     const results = { inserted: 0, skipped: 0, errors: 0, details: [] };
+
+    // Units handling
+    const unitsParam = (req.query && req.query.units) || (req.body && req.body.units) || 'mm';
+    const units = typeof unitsParam === 'string' ? unitsParam.toLowerCase() : 'mm';
+    const scale = units === 'cm' ? 10 : 1; // convert cm->mm
+
+    // Try to auto-detect units from data (based on raw values before scaling)
+    let dimCount = 0, smallLE100 = 0, veryLargeGT1000 = 0;
+    for (let i = 0; i < Math.min(rows.length, 200); i++) {
+      const r = rows[i] || {};
+      const rawDims = [
+        toNumber(r['Largo_mm'] ?? r['Largo'] ?? r['largo_mm'] ?? r['largo']),
+        toNumber(r['Ancho_mm'] ?? r['Ancho'] ?? r['ancho_mm'] ?? r['ancho']),
+        toNumber(r['Alto_mm'] ?? r['Alto'] ?? r['alto_mm'] ?? r['alto'])
+      ].filter((n) => Number.isFinite(n) && n > 0);
+      rawDims.forEach((n) => {
+        dimCount++;
+        if (n <= 100) smallLE100++;
+        if (n >= 1000) veryLargeGT1000++;
+      });
+    }
+    let unitGuess = 'mm';
+    let unitGuessReason = '';
+    if (dimCount > 0) {
+      const fracSmall = smallLE100 / dimCount;
+      if (fracSmall >= 0.6 && veryLargeGT1000 === 0) {
+        unitGuess = 'cm';
+        unitGuessReason = `~${Math.round(fracSmall * 100)}% de dimensiones ≤ 100 y ninguna ≥ 1000`;
+      } else {
+        unitGuess = 'mm';
+        unitGuessReason = `Valores grandes detectados o pocas dimensiones ≤ 100`;
+      }
+    }
 
     // Fetch existing items for de-duplication
     const existing = await inventarioProspectosService.getInventarioByCliente(clienteIdNum);
@@ -585,13 +622,22 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
   const baseExcelRow = (headerRowIdx + 2); // fila Excel donde inicia el primer dato (headerIdx es 0-based; +1 header, +1 primera data)
   for (let idx = 0; idx < rows.length; idx++) {
       const r = rows[idx];
+      // Leer dimensiones crudas
+      const rawL = toNumber(r['Largo_mm'] ?? r['Largo'] ?? r['largo_mm'] ?? r['largo']);
+      const rawA = toNumber(r['Ancho_mm'] ?? r['Ancho'] ?? r['ancho_mm'] ?? r['ancho']);
+      const rawH = toNumber(r['Alto_mm'] ?? r['Alto'] ?? r['alto_mm'] ?? r['alto']);
+      // Convertir a mm según unidades
+      const largoMM = Math.round(rawL * scale);
+      const anchoMM = Math.round(rawA * scale);
+      const altoMM = Math.round(rawH * scale);
+
       const record = {
         cliente_id: clienteIdNum,
         descripcion_producto: r['Descripcion'] || r['DESCRIPCION'] || r['descripcion'] || '',
         producto: r['Producto'] || r['PRODUCTO'] || r['producto'] || '',
-        largo_mm: toInt(r['Largo_mm'] ?? r['Largo'] ?? r['largo_mm'] ?? r['largo']),
-        ancho_mm: toInt(r['Ancho_mm'] ?? r['Ancho'] ?? r['ancho_mm'] ?? r['ancho']),
-        alto_mm: toInt(r['Alto_mm'] ?? r['Alto'] ?? r['alto_mm'] ?? r['alto']),
+        largo_mm: largoMM,
+        ancho_mm: anchoMM,
+        alto_mm: altoMM,
         cantidad_despachada: toInt(r['Cantidad'] ?? r['cantidad'] ?? r['CANTIDAD']),
         fecha_de_despacho: (toDateString(
           r['Fecha_Despacho (YYYY-MM-DD)'] ?? r['Fecha_Despacho'] ?? r['fecha_despacho'] ?? r['Fecha despacho']
@@ -637,7 +683,10 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
         results,
         preview: previews,
         totalRows: rows.length,
-        canInsert: toInsert.length
+        canInsert: toInsert.length,
+        unitsUsed: units,
+        unitGuess,
+        unitGuessReason
       });
     }
 
@@ -646,7 +695,7 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
       results.inserted = toInsert.length;
     }
 
-    return res.json(results);
+  return res.json({ ...results, unitsUsed: units });
   } catch (error) {
     console.error('Error en importación de inventario:', error);
   res.status(500).json({ error: 'Error al importar inventario', details: error?.message });

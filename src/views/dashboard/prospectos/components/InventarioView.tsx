@@ -34,10 +34,17 @@ const InventarioView: React.FC = () => {
     preview: Array<{ row: number; status: 'ok' | 'skipped' | 'error'; reason?: string; errors?: string[]; record: any }>,
     results: { inserted: number; skipped: number; errors: number; details: any[] },
     totalRows: number,
-    canInsert: number
+    canInsert: number,
+    unitsUsed?: 'mm' | 'cm',
+    unitGuess?: 'mm' | 'cm',
+    unitGuessReason?: string
   }>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [isImportingPreview, setIsImportingPreview] = useState(false);
+  const [importUnits, setImportUnits] = useState<'mm' | 'cm'>('mm');
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12); // default items per page
 
   // Form state
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
@@ -106,7 +113,7 @@ const InventarioView: React.FC = () => {
       form.append('file', file);
       form.append('cliente_id', String(selectedClienteForImport));
       form.append('dryRun', '1');
-      const res = await apiClient.post('/inventario-prospectos/import?dryRun=1', form, {
+      const res = await apiClient.post(`/inventario-prospectos/import?dryRun=1&units=${importUnits}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (res.data?.error) {
@@ -123,37 +130,6 @@ const InventarioView: React.FC = () => {
     } finally {
       setLoading(false);
       setIsImportingPreview(false);
-    }
-  };
-
-  const confirmImport = async () => {
-    if (!importPreview) return;
-    try {
-      setLoading(true);
-      const file = selectedFileForImport;
-      if (!file) {
-        toast.info('Vuelve a seleccionar el archivo para confirmar la importación');
-        setShowImportModal(false);
-        return;
-      }
-      const form = new FormData();
-      form.append('file', file);
-      form.append('cliente_id', String(selectedClienteForImport));
-      const res = await apiClient.post('/inventario-prospectos/import', form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      const r = res.data;
-      toast.success(`Importación completada: ${r.inserted} insertados, ${r.skipped} duplicados, ${r.errors} con error`);
-  setShowImportModal(false);
-      setImportPreview(null);
-      setSelectedFileForImport(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      await fetchInventario();
-    } catch (error) {
-      console.error('Error al confirmar importación:', error);
-      toast.error('Error al confirmar importación');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -206,6 +182,19 @@ const InventarioView: React.FC = () => {
       return matchesSearch && matchesCliente && matchesProducto;
     });
   }, [inventario, searchTerm, clienteFilter, productoFilter]);
+
+  // Reset page when filters/search change
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, clienteFilter, productoFilter, viewMode]);
+
+  // Derived pagination variables
+  const totalItems = filteredInventario.length;
+  const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [pageCount, currentPage]);
+  const startIdx = (currentPage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, totalItems);
+  const paginatedInventario = useMemo(() => filteredInventario.slice(startIdx, endIdx), [filteredInventario, startIdx, endIdx]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -336,6 +325,38 @@ const InventarioView: React.FC = () => {
     setShowModal(true);
   };
 
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    try {
+      setLoading(true);
+      const file = selectedFileForImport;
+      if (!file) {
+        toast.info('Vuelve a seleccionar el archivo para confirmar la importación');
+        setShowImportModal(false);
+        return;
+      }
+      const form = new FormData();
+      form.append('file', file);
+      form.append('cliente_id', String(selectedClienteForImport));
+      form.append('units', importUnits);
+      const res = await apiClient.post('/inventario-prospectos/import', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const r = res.data;
+      toast.success(`Importación completada: ${r.inserted} insertados, ${r.skipped} duplicados, ${r.errors} con error`);
+      setShowImportModal(false);
+      setImportPreview(null);
+      setSelectedFileForImport(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      await fetchInventario();
+    } catch (error) {
+      console.error('Error al confirmar importación:', error);
+      toast.error('Error al confirmar importación');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeletePending = (tempId: string) => {
     if (window.confirm('¿Está seguro de que desea eliminar este producto del carrito?')) {
       setPendingProducts(prev => prev.filter(item => item.tempId !== tempId));
@@ -406,76 +427,85 @@ const InventarioView: React.FC = () => {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-        <div className="text-center flex-1">
-          <h1 className="text-3xl font-bold mb-2 text-gray-800 dark:text-white">Inventario de Productos</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">Gestiona el inventario de productos de los clientes prospectos</p>
-        </div>
-        
-  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-          {/* Botones para cambiar el modo de vista */}
-          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('cards')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
-              title="Vista de tarjetas"
-            >
-              <LayoutGrid size={18} />
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
-              title="Vista de tabla"
-            >
-              <List size={18} />
-            </button>
-          </div>
+      {/* Title block */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-center text-gray-800 dark:text-white">Inventario de Productos</h1>
+        <p className="text-center text-gray-600 dark:text-gray-400 mt-1">Gestiona el inventario de productos de los clientes prospectos</p>
+      </div>
 
-          {/* Import/Export */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-lg w-full sm:w-auto">
-            <select
-              value={selectedClienteForImport}
-              onChange={(e: any) => setSelectedClienteForImport(parseInt(e.target.value) || 0)}
-        className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-900 text-sm w-full sm:w-auto dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              title="Cliente para importar"
-            >
-              <option value={0}>Cliente para importar</option>
-              {clientes.map((c: any) => (
-                <option key={c.cliente_id} value={c.cliente_id}>{c.nombre_cliente}</option>
-              ))}
-            </select>
-            <button
-              onClick={handleDownloadTemplate}
-        className="bg-gray-100 hover:bg-gray-200 text-gray-900 dark:text-white dark:bg-gray-700 dark:hover:bg-gray-600 px-3 py-2 rounded-md flex items-center gap-2 justify-center w-full sm:w-auto"
-              title="Descargar plantilla Excel"
-            >
-              <Download size={16} /> Plantilla
-            </button>
-            <button
-              onClick={openImportDialog}
-        className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md flex items-center gap-2 justify-center w-full sm:w-auto"
-              title="Importar inventario desde Excel"
-            >
-              <Upload size={16} /> Importar
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileSelected}
-              className="hidden"
-            />
-          </div>
-          
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+        {/* Botones para cambiar el modo de vista */}
+        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 order-1">
           <button
-            onClick={openCreateModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors w-full sm:w-auto justify-center"
+            onClick={() => setViewMode('cards')}
+            className={`p-2 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
+            title="Vista de tarjetas"
           >
-            <Plus size={20} />
-            Nuevo Producto
+            <LayoutGrid size={18} />
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
+            title="Vista de tabla"
+          >
+            <List size={18} />
           </button>
         </div>
+
+        {/* Import/Export */}
+        <div className="flex flex-wrap items-stretch gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-lg order-2 flex-1 min-w-[280px]">
+          <select
+            value={selectedClienteForImport}
+            onChange={(e: any) => setSelectedClienteForImport(parseInt(e.target.value) || 0)}
+            className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-900 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            title="Cliente para importar"
+          >
+            <option value={0}>Cliente para importar</option>
+            {clientes.map((c: any) => (
+              <option key={c.cliente_id} value={c.cliente_id}>{c.nombre_cliente}</option>
+            ))}
+          </select>
+          <select
+            value={importUnits}
+            onChange={(e: any) => setImportUnits((e.target.value as 'mm' | 'cm') || 'mm')}
+            className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-900 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            title="Unidades de dimensiones"
+          >
+            <option value="mm">Dimensiones en mm (recomendado)</option>
+            <option value="cm">Dimensiones en cm (convertir a mm)</option>
+          </select>
+          <button
+            onClick={handleDownloadTemplate}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-900 dark:text-white dark:bg-gray-700 dark:hover:bg-gray-600 px-3 py-2 rounded-md flex items-center gap-2 justify-center"
+            title="Descargar plantilla Excel"
+          >
+            <Download size={16} /> Plantilla
+          </button>
+          <button
+            onClick={openImportDialog}
+            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md flex items-center gap-2 justify-center"
+            title="Importar inventario desde Excel"
+          >
+            <Upload size={16} /> Importar
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileSelected}
+            className="hidden"
+          />
+        </div>
+
+        <button
+          onClick={openCreateModal}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors order-3 shrink-0 ml-auto"
+          title="Agregar nuevo producto"
+        >
+          <Plus size={20} />
+          Nuevo Producto
+        </button>
       </div>
 
       {/* Stats Cards */}
@@ -681,9 +711,9 @@ const InventarioView: React.FC = () => {
           <div className="text-center py-8">
             <p className="text-gray-400">No se encontraron productos guardados</p>
           </div>
-        ) : viewMode === 'cards' ? (
+    ) : viewMode === 'cards' ? (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredInventario.map((item: any) => (
+      {paginatedInventario.map((item: any) => (
               <div 
                 key={item.inv_id} 
         className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
@@ -781,7 +811,7 @@ const InventarioView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredInventario.map((item: any) => (
+                {paginatedInventario.map((item: any) => (
                   <tr key={item.inv_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">{item.descripcion_producto || 'Sin descripción'}</div>
@@ -833,6 +863,54 @@ const InventarioView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Pagination controls */}
+      {totalItems > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Mostrando <span className="font-semibold">{totalItems === 0 ? 0 : startIdx + 1}</span>–<span className="font-semibold">{endIdx}</span> de <span className="font-semibold">{totalItems}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+              title="Primera página"
+            >«</button>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+              title="Anterior"
+            >‹</button>
+            <span className="text-sm text-gray-700 dark:text-gray-200 px-2">{currentPage} / {pageCount}</span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
+              disabled={currentPage >= pageCount}
+              className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+              title="Siguiente"
+            >›</button>
+            <button
+              onClick={() => setCurrentPage(pageCount)}
+              disabled={currentPage >= pageCount}
+              className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+              title="Última página"
+            >»</button>
+            <select
+              value={pageSize}
+              onChange={(e: any) => { setPageSize(parseInt(e.target.value) || 10); setCurrentPage(1); }}
+              className="ml-2 px-2 py-1 bg-white border border-gray-300 rounded text-gray-900 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              title="Elementos por página"
+            >
+              <option value={8}>8</option>
+              <option value={12}>12</option>
+              <option value={20}>20</option>
+              <option value={32}>32</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (
@@ -1041,9 +1119,17 @@ const InventarioView: React.FC = () => {
             {isImportingPreview || !importPreview ? (
               <p className="text-gray-700 dark:text-gray-300 mb-4">Procesando archivo…</p>
             ) : (
-              <p className="text-gray-700 dark:text-gray-300 mb-4">
+              <>
+              <p className="text-gray-700 dark:text-gray-300 mb-2">
                 Filas leídas: <span className="font-semibold">{importPreview.totalRows ?? 0}</span> · Listas para insertar: <span className="font-semibold text-green-600 dark:text-green-400">{importPreview.canInsert ?? 0}</span> · Duplicados: <span className="text-yellow-600 dark:text-yellow-400 font-semibold">{importPreview.results?.skipped ?? 0}</span> · Errores: <span className="text-red-600 dark:text-red-400 font-semibold">{importPreview.results?.errors ?? 0}</span>
               </p>
+              {importPreview.unitGuess && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Sugerencia de unidades detectadas: <span className="font-semibold">{importPreview.unitGuess}</span>
+                  {importPreview.unitGuessReason ? ` — ${importPreview.unitGuessReason}` : ''}
+                </p>
+              )}
+              </>
             )}
             <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <table className="min-w-full text-sm">
