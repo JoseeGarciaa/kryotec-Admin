@@ -50,6 +50,7 @@ export interface ResultadoSugerencia {
   porcentaje_espacio_sobrante?: number;
   eficiencia?: number; // Para compatibilidad con cálculo individual
   eficiencia_porcentaje?: number; // Para cálculo por orden
+  porcentaje_recomendacion?: number; // 0-100, normalizado (top=100)
   mensaje_comparacion?: string;
   recomendacion?: string; // Para compatibilidad con cálculo individual
   recomendacion_nivel?: string; // Para cálculo por orden
@@ -58,6 +59,8 @@ export interface ResultadoSugerencia {
   nivel_recomendacion?: 'EXCELENTE' | 'BUENO' | 'ACEPTABLE' | 'MALO' | 'EVITAR';
   es_mejor_opcion?: boolean;
   etiqueta_recomendacion?: string;
+  es_recomendable?: boolean;
+  motivo_no_recomendable?: string;
   dimensiones_internas?: {
     frente: number;
     profundo: number;
@@ -69,6 +72,16 @@ export interface ResultadoSugerencia {
   resumen_productos?: any[];
   detalle_contenedores_por_producto?: any[]; // Nueva propiedad para detalles específicos
   es_calculo_por_orden?: boolean;
+  combinaciones_alternativas?: Array<{
+    items: Array<{ modelo_id: number; nombre_modelo: string; cantidad: number; volumen_m3: number }>;
+    total_contenedores: number;
+    volumen_total_disponible: number;
+    eficiencia_porcentaje: number;
+    espacio_sobrante_m3: number;
+    etiqueta: string;
+  }>;
+  es_combinacion?: boolean;
+  combinacion_items?: Array<{ modelo_id: number | null; nombre_modelo: string; cantidad: number; volumen_m3: number }>;
   // Campos obsoletos mantenidos por compatibilidad
   cajas_por_modelo?: number;
   total_cajas_guardadas?: number;

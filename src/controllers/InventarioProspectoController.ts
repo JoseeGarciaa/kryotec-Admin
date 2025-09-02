@@ -46,9 +46,9 @@ export class InventarioProspectoController {
     }
   }
 
-  static async getInventarioByCliente(clienteId: number): Promise<InventarioProspecto[]> {
+  static async getInventarioByCliente(clienteId: number, opts?: { limit?: number; offset?: number; search?: string }): Promise<{ total: number; items: InventarioProspecto[] }> {
     try {
-      return await InventarioProspectoModel.getInventarioByCliente(clienteId);
+      return await InventarioProspectoModel.getInventarioByCliente(clienteId, opts);
     } catch (error) {
       console.error('Error en el controlador al obtener inventario por cliente:', error);
       throw error;

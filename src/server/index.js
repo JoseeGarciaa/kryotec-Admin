@@ -437,6 +437,22 @@ app.get('/api/inventario-prospectos', async (req, res) => {
   }
 });
 
+// Inventario por cliente con paginación opcional
+app.get('/api/inventario-prospectos/cliente/:clienteId', async (req, res) => {
+  try {
+    const clienteId = parseInt(req.params.clienteId);
+    if (!clienteId) return res.status(400).json({ error: 'clienteId inválido' });
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit), 1000) : 200; // límite por defecto 200
+    const offset = req.query.offset ? Math.max(parseInt(req.query.offset), 0) : 0;
+    const search = req.query.search ? String(req.query.search) : '';
+    const result = await inventarioProspectosService.getInventarioByCliente(clienteId, { limit, offset, search });
+    res.json(result);
+  } catch (error) {
+    console.error('Error al obtener inventario por cliente:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 app.post('/api/inventario-prospectos', async (req, res) => {
   try {
     const nuevoItem = await inventarioProspectosService.createInventario(req.body);
@@ -479,9 +495,12 @@ app.delete('/api/inventario-prospectos/:id', async (req, res) => {
 // Nuevas rutas para órdenes de despacho
 app.get('/api/inventario-prospectos/ordenes-despacho', async (req, res) => {
   try {
-    const clienteId = req.query.cliente_id ? parseInt(req.query.cliente_id) : null;
-    const ordenes = await inventarioProspectosService.getOrdenesDespacho(clienteId);
-    res.json(ordenes);
+  const clienteId = req.query.cliente_id ? parseInt(req.query.cliente_id) : null;
+  const limit = req.query.limit ? Math.min(parseInt(req.query.limit), 1000) : 200;
+  const offset = req.query.offset ? Math.max(parseInt(req.query.offset), 0) : 0;
+  const search = req.query.search ? String(req.query.search) : '';
+  const ordenes = await inventarioProspectosService.getOrdenesDespacho(clienteId, { limit, offset, search });
+  res.json(ordenes);
   } catch (error) {
     console.error('Error al obtener órdenes de despacho:', error);
     res.status(500).json({ error: 'Error interno del servidor' });

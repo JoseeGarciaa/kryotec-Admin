@@ -10,7 +10,7 @@ import jsPDF from 'jspdf';
 const SugerenciasView: React.FC = () => {
   const { sugerencias, loading, error, calcularSugerencias, createSugerencia, deleteSugerencia } = useSugerenciasController();
   const { clientes } = useClienteProspectoController();
-  const { inventario } = useInventarioProspectoController();
+  const { inventario, total, getInventarioByCliente } = useInventarioProspectoController();
   
   const [selectedCliente, setSelectedCliente] = useState<number | ''>('');
   const [selectedInventario, setSelectedInventario] = useState<number | ''>('');
@@ -31,7 +31,19 @@ const SugerenciasView: React.FC = () => {
   const [ordenesDespacho, setOrdenesDespacho] = useState<any[]>([]);
   const [selectedOrden, setSelectedOrden] = useState<string>('');
   const [productosOrden, setProductosOrden] = useState<any[]>([]);
+  // Paginación y búsqueda de órdenes
+  const [ordenesPage, setOrdenesPage] = useState(0);
+  const ordenesLimit = 50;
+  const [ordenesTotal, setOrdenesTotal] = useState(0);
+  const [ordenesSearch, setOrdenesSearch] = useState('');
+  const [ordenesLoading, setOrdenesLoading] = useState(false);
   
+  // Paginación y búsqueda de items
+  const [invPage, setInvPage] = useState(0);
+  const invLimit = 100;
+  const [invSearch, setInvSearch] = useState('');
+  const [invLoading, setInvLoading] = useState(false);
+
   // Estados para precios de alquiler
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [preciosAlquiler, setPreciosAlquiler] = useState<{ [key: string]: string }>({});
@@ -54,14 +66,25 @@ const SugerenciasView: React.FC = () => {
 
   // Filtrar inventario por cliente seleccionado
   useEffect(() => {
-    if (selectedCliente) {
-      const inventarioCliente = inventario.filter((item: InventarioProspecto) => item.cliente_id === Number(selectedCliente));
-      setFilteredInventario(inventarioCliente);
-      setSelectedInventario('');
-    } else {
-      setFilteredInventario([]);
-    }
-  }, [selectedCliente, inventario]);
+    const cargar = async () => {
+      if (selectedCliente) {
+        try {
+          setInvLoading(true);
+          const res = await getInventarioByCliente(Number(selectedCliente), { limit: invLimit, offset: invPage * invLimit, search: invSearch });
+          setFilteredInventario(res.items);
+          setSelectedInventario('');
+        } catch (e) {
+          console.error('Error al cargar inventario del cliente:', e);
+          setFilteredInventario([]);
+        } finally {
+          setInvLoading(false);
+        }
+      } else {
+        setFilteredInventario([]);
+      }
+    };
+    cargar();
+  }, [selectedCliente, invPage, invSearch]);
 
   // Auto-llenar dimensiones cuando se selecciona un item de inventario
   useEffect(() => {
@@ -84,14 +107,14 @@ const SugerenciasView: React.FC = () => {
   // Cargar órdenes de despacho cuando se activa el modo por orden o cambia el cliente
   useEffect(() => {
     if (calculoPorOrden && selectedCliente) {
-      cargarOrdenesDespacho(Number(selectedCliente));
+      cargarOrdenesDespacho(Number(selectedCliente), ordenesPage, ordenesSearch);
     } else if (calculoPorOrden && !selectedCliente) {
       // Limpiar órdenes si no hay cliente seleccionado
       setOrdenesDespacho([]);
       setSelectedOrden('');
       setProductosOrden([]);
     }
-  }, [calculoPorOrden, selectedCliente]);
+  }, [calculoPorOrden, selectedCliente, ordenesPage, ordenesSearch]);
 
   // Cargar productos cuando se selecciona una orden
   useEffect(() => {
@@ -100,20 +123,32 @@ const SugerenciasView: React.FC = () => {
     }
   }, [selectedOrden, calculoPorOrden]);
 
-  const cargarOrdenesDespacho = async (clienteId: number) => {
+  const cargarOrdenesDespacho = async (clienteId: number, page = 0, search = '') => {
     try {
       const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
-      const response = await fetch(`${API_URL}/inventario-prospectos/ordenes-despacho?cliente_id=${clienteId}`);
+      setOrdenesLoading(true);
+      const params = new URLSearchParams({
+        cliente_id: String(clienteId),
+        limit: String(ordenesLimit),
+        offset: String(page * ordenesLimit),
+        ...(search ? { search } : {})
+      });
+      const response = await fetch(`${API_URL}/inventario-prospectos/ordenes-despacho?${params.toString()}`);
       if (response.ok) {
-        const ordenes = await response.json();
-        setOrdenesDespacho(ordenes);
+        const data = await response.json();
+        setOrdenesDespacho(data.items || []);
+        setOrdenesTotal(data.total || 0);
       } else {
         console.error('Error al cargar órdenes de despacho:', response.statusText);
         setOrdenesDespacho([]);
+        setOrdenesTotal(0);
       }
     } catch (error) {
       console.error('Error al cargar órdenes de despacho:', error);
       setOrdenesDespacho([]);
+      setOrdenesTotal(0);
+    } finally {
+      setOrdenesLoading(false);
     }
   };
 
@@ -154,7 +189,9 @@ const SugerenciasView: React.FC = () => {
         
         if (response.ok) {
           const sugerencias = await response.json();
-          setResultados(sugerencias);
+          // Ordenar de mayor a menor eficiencia por seguridad
+          const ordenados = [...sugerencias].sort((a: any, b: any) => ((b.porcentaje_recomendacion ?? b.eficiencia_porcentaje ?? b.eficiencia ?? 0) - (a.porcentaje_recomendacion ?? a.eficiencia_porcentaje ?? a.eficiencia ?? 0)));
+          setResultados(ordenados);
         } else {
           alert('Error al calcular sugerencias por orden');
         }
@@ -186,7 +223,7 @@ const SugerenciasView: React.FC = () => {
     setCalculando(true);
     try {
       // Obtener la cantidad del item de inventario seleccionado
-      const item = inventario.find((inv: InventarioProspecto) => inv.inv_id === Number(selectedInventario));
+  const item = inventario.find((inv: InventarioProspecto) => inv.inv_id === Number(selectedInventario));
       const cantidadCajas = item?.cantidad_despachada || 1;
 
       const calculo: CalculoSugerencia = {
@@ -202,9 +239,10 @@ const SugerenciasView: React.FC = () => {
       };
 
       console.log('Enviando datos de cálculo:', calculo);
-      const resultadosCalculo = await calcularSugerencias(calculo);
-      console.log('Resultados recibidos:', resultadosCalculo);
-      setResultados(resultadosCalculo);
+  const resultadosCalculo = await calcularSugerencias(calculo);
+  console.log('Resultados recibidos:', resultadosCalculo);
+  const ordenados = [...resultadosCalculo].sort((a: any, b: any) => ((b.porcentaje_recomendacion ?? b.eficiencia_porcentaje ?? b.eficiencia ?? 0) - (a.porcentaje_recomendacion ?? a.eficiencia_porcentaje ?? a.eficiencia ?? 0)));
+  setResultados(ordenados);
     } catch (err) {
       console.error('Error al calcular sugerencias:', err);
       alert('Error al calcular sugerencias. Por favor intente nuevamente.');
@@ -947,6 +985,40 @@ const SugerenciasView: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Orden de Despacho *
                 </label>
+
+                {/* Barra de búsqueda y paginación de órdenes */}
+                <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={ordenesSearch}
+                      onChange={(e) => { setOrdenesSearch(e.target.value); setOrdenesPage(0); }}
+                      placeholder="Buscar orden..."
+                      className="w-full p-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    <button
+                      type="button"
+                      onClick={() => setOrdenesPage(p => Math.max(0, p - 1))}
+                      disabled={ordenesPage === 0 || ordenesLoading}
+                      className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 dark:bg-gray-600"
+                    >
+                      Anterior
+                    </button>
+                    <span>
+                      {ordenesPage * ordenesLimit + 1}-{Math.min((ordenesPage + 1) * ordenesLimit, ordenesTotal)} de {ordenesTotal}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setOrdenesPage(p => ((p + 1) * ordenesLimit < ordenesTotal ? p + 1 : p))}
+                      disabled={(ordenesPage + 1) * ordenesLimit >= ordenesTotal || ordenesLoading}
+                      className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 dark:bg-gray-600"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                </div>
                 <select
                   value={selectedOrden}
                   onChange={(e) => setSelectedOrden(e.target.value)}
@@ -955,6 +1027,7 @@ const SugerenciasView: React.FC = () => {
                 >
                   <option value="">
                     {!selectedCliente ? 'Primero seleccione un cliente...' : 
+                     ordenesLoading ? 'Cargando órdenes...' :
                      ordenesDespacho.length === 0 ? 'No hay órdenes para este cliente...' : 
                      'Seleccionar orden...'}
                   </option>
@@ -1022,6 +1095,40 @@ const SugerenciasView: React.FC = () => {
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Item de Inventario *
               </label>
+
+              {/* Barra de búsqueda y paginación de items */}
+              <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={invSearch}
+                    onChange={(e) => { setInvSearch(e.target.value); setInvPage(0); }}
+                    placeholder="Buscar producto o descripción..."
+                    className="w-full p-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <button
+                    type="button"
+                    onClick={() => setInvPage(p => Math.max(0, p - 1))}
+                    disabled={invPage === 0 || invLoading}
+                    className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 dark:bg-gray-600"
+                  >
+                    Anterior
+                  </button>
+                  <span>
+                    {invPage * invLimit + 1}-{Math.min((invPage + 1) * invLimit, total || 0)} de {total || 0}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setInvPage(p => ((p + 1) * invLimit < (total || 0) ? p + 1 : p))}
+                    disabled={(invPage + 1) * invLimit >= (total || 0) || invLoading}
+                    className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 dark:bg-gray-600"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
               <select
                 value={selectedInventario}
                 onChange={(e) => setSelectedInventario(e.target.value as any)}
@@ -1031,7 +1138,7 @@ const SugerenciasView: React.FC = () => {
                 <option value="">Seleccionar item...</option>
                 {filteredInventario.map(item => (
                   <option key={item.inv_id} value={item.inv_id}>
-                    {item.descripcion_producto} - {item.producto}
+                    {item.descripcion_producto || item.producto} - {item.producto}
                   </option>
                 ))}
               </select>
@@ -1231,7 +1338,14 @@ const SugerenciasView: React.FC = () => {
                       )}
                     </div>
                     <div className="text-right">
-                      <div className={`text-white px-2 py-1 rounded text-sm ${
+                      {/* Porcentaje de recomendación (top=100). Mostrar solo si es recomendable */}
+                      {resultado.es_recomendable && (
+                        <div className="text-white px-2 py-1 rounded text-sm bg-indigo-600">
+                          {(resultado.porcentaje_recomendacion ?? 0).toFixed(1)}% recomendado
+                        </div>
+                      )}
+                      {/* Banda de eficiencia como detalle secundario */}
+                      <div className={`mt-1 text-white px-2 py-1 rounded text-[11px] ${
                         ((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0) >= 95 ? 'bg-green-600' :
                         ((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0) >= 85 ? 'bg-blue-600' :
                         ((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0) >= 70 ? 'bg-yellow-600' :
@@ -1239,6 +1353,14 @@ const SugerenciasView: React.FC = () => {
                       }`}>
                         {((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0).toFixed(1)}% eficiencia
                       </div>
+                      {resultado.es_recomendable === false && (
+                        <div className="text-xs mt-1 px-2 py-1 rounded bg-red-900 text-red-200">
+                          No recomendable {resultado.motivo_no_recomendable ? `- ${resultado.motivo_no_recomendable}` : ''}
+                        </div>
+                      )}
+                      {resultado.es_recomendable && (
+                        <div className="text-xs mt-1 px-2 py-1 rounded bg-green-900 text-green-200">Recomendable</div>
+                      )}
                       {(resultado.recomendacion_nivel || resultado.nivel_recomendacion) && (
                         <div className={`text-xs mt-1 px-2 py-1 rounded ${
                           (resultado.recomendacion_nivel || resultado.nivel_recomendacion || '').includes('EXCELENTE') ? 'bg-green-800 text-green-200' :
@@ -1269,6 +1391,18 @@ const SugerenciasView: React.FC = () => {
                       <p className="text-gray-900 dark:text-white">{resultado.volumen_litros || 'No disponible'} litros</p>
                     </div>
                   </div>
+
+                  {/* Mostrar detalle de combinación cuando aplique */}
+                  {resultado.es_combinacion && resultado.combinacion_items && resultado.combinacion_items.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 text-sm">
+                      <p className="text-gray-400 mb-1">Composición de la combinación:</p>
+                      <ul className="list-disc pl-5 text-gray-900 dark:text-white">
+                        {resultado.combinacion_items.map((it, idx) => (
+                          <li key={idx}>{it.nombre_modelo} x{it.cantidad}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   
                   {/* Información adicional sobre espacio */}
                   {resultado.espacio_sobrante_m3 !== undefined && (
@@ -1285,20 +1419,49 @@ const SugerenciasView: React.FC = () => {
                           </p>
                         </div>
                       </div>
+                      {resultado.detalle_espacio && (
+                        <p className="text-[11px] mt-2 text-gray-600 dark:text-gray-400">{resultado.detalle_espacio}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Combinaciones alternativas (cuando existan) */}
+                  {resultado.combinaciones_alternativas && resultado.combinaciones_alternativas.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">Combinaciones alternativas</p>
+                      <div className="space-y-2">
+                        {resultado.combinaciones_alternativas.map((combo, idx) => (
+                          <div key={idx} className="text-xs flex items-center justify-between bg-gray-100 dark:bg-gray-700 rounded p-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2 py-0.5 rounded bg-blue-600 text-white text-[10px]">{combo.etiqueta}</span>
+                              {combo.items.map((it, k) => (
+                                <span key={k} className="text-gray-900 dark:text-white">
+                                  {it.nombre_modelo} x{it.cantidad}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[11px] text-gray-800 dark:text-gray-200">Eficiencia: {combo.eficiencia_porcentaje.toFixed(1)}%</div>
+                              <div className="text-[11px] text-gray-600 dark:text-gray-300">Sobra: {(combo.espacio_sobrante_m3 * 1000).toFixed(1)} L</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   
                   <button
                     onClick={() => calculoPorOrden ? handleGuardarSugerenciaOrden(resultado) : handleGuardarSugerencia(resultado)}
+                    disabled={resultado.es_recomendable === false}
                     className={`w-full mt-4 py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                      resultado.es_mejor_opcion 
-                        ? 'bg-green-600 hover:bg-green-700 text-white' 
+                      resultado.es_recomendable === false
+                        ? 'bg-gray-500 text-white cursor-not-allowed opacity-70'
                         : 'bg-green-600 hover:bg-green-700 text-white'
                     }`}
-                    title="Al guardar, las recomendaciones se limpiarán automáticamente"
+                    title={resultado.es_recomendable === false ? 'No recomendable: eficiencia baja (<80%)' : 'Al guardar, las recomendaciones se limpiarán automáticamente'}
                   >
                     <CheckCircle size={16} />
-                    {resultado.es_mejor_opcion ? 'Seleccionar Mejor Opción' : 'Guardar Sugerencia'}
+                    {resultado.es_mejor_opcion ? 'Seleccionar Mejor Opción' : (resultado.es_recomendable === false ? 'No recomendable' : 'Guardar Sugerencia')}
                   </button>
                 </div>
               ))}

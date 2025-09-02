@@ -80,17 +80,32 @@ const inventarioProspectosService = {
   },
 
   // Obtener inventario por cliente (para deduplicación en importaciones)
-  getInventarioByCliente: async (clienteId) => {
+  getInventarioByCliente: async (clienteId, options = {}) => {
     try {
-      const query = `
-        SELECT inv_id, cliente_id, descripcion_producto, producto,
-               largo_mm, ancho_mm, alto_mm, cantidad_despachada,
-               fecha_de_despacho, orden_despacho
-        FROM admin_platform.inventario_prospecto
-        WHERE cliente_id = $1
+      const { limit = 200, offset = 0, search = '' } = options;
+      const params = [clienteId];
+      let where = `WHERE i.cliente_id = $1`;
+      if (search) {
+        params.push(`%${search}%`);
+        where += ` AND (LOWER(i.producto) LIKE LOWER($${params.length}) OR LOWER(i.descripcion_producto) LIKE LOWER($${params.length}))`;
+      }
+      const countQuery = `SELECT COUNT(*)::int as total FROM admin_platform.inventario_prospecto i ${where}`;
+      const dataQuery = `
+        SELECT 
+          i.inv_id, i.cliente_id, i.descripcion_producto, i.producto,
+          i.largo_mm, i.ancho_mm, i.alto_mm, i.cantidad_despachada,
+          i.volumen_total_m3_producto, i.fecha_registro, i.fecha_de_despacho,
+          i.orden_despacho, c.nombre_cliente
+        FROM admin_platform.inventario_prospecto i
+        LEFT JOIN admin_platform.clientes_prospectos c ON i.cliente_id = c.cliente_id
+        ${where}
+        ORDER BY i.fecha_registro DESC
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
       `;
-      const { rows } = await pool.query(query, [clienteId]);
-      return rows;
+      const { rows: countRows } = await pool.query(countQuery, params);
+      const total = countRows[0]?.total || 0;
+      const { rows } = await pool.query(dataQuery, [...params, limit, offset]);
+      return { total, items: rows };
     } catch (error) {
       console.error('Error al obtener inventario por cliente:', error);
       throw error;
@@ -148,42 +163,47 @@ const inventarioProspectosService = {
     }
   },
 
-  // Obtener todas las órdenes de despacho únicas
-  getOrdenesDespacho: async (clienteId = null) => {
+  // Obtener órdenes de despacho con paginación y búsqueda
+  getOrdenesDespacho: async (clienteId = null, options = {}) => {
     try {
-      let query = `
-        SELECT DISTINCT orden_despacho, 
+      const { limit = 200, offset = 0, search = '' } = options;
+      const params = [];
+      let where = `WHERE orden_despacho IS NOT NULL AND orden_despacho != ''`;
+      if (clienteId) {
+        params.push(clienteId);
+        where += ` AND cliente_id = $${params.length}`;
+      }
+      if (search) {
+        params.push(`%${search}%`);
+        where += ` AND LOWER(orden_despacho) LIKE LOWER($${params.length})`;
+      }
+      // total de órdenes únicas
+      const countQuery = `SELECT COUNT(DISTINCT orden_despacho)::int as total FROM admin_platform.inventario_prospecto ${where}`;
+      const { rows: countRows } = await pool.query(countQuery, params);
+      const total = countRows[0]?.total || 0;
+
+      // datos agregados por orden
+      const dataQuery = `
+        SELECT orden_despacho, 
                COUNT(*) as cantidad_productos,
                SUM(cantidad_despachada) as total_productos,
                CAST(SUM(volumen_total_m3_producto) AS DECIMAL) as volumen_total
         FROM admin_platform.inventario_prospecto 
-        WHERE orden_despacho IS NOT NULL AND orden_despacho != ''
-      `;
-      
-      const queryParams = [];
-      
-      // Si se proporciona un cliente_id, filtrar por él
-      if (clienteId) {
-        query += ` AND cliente_id = $1`;
-        queryParams.push(clienteId);
-      }
-      
-      query += `
+        ${where}
         GROUP BY orden_despacho
         ORDER BY orden_despacho
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
       `;
-      
-      const { rows } = await pool.query(query, queryParams);
-      
-      // Asegurar que los números sean números
-      const processedRows = rows.map(row => ({
+      const { rows } = await pool.query(dataQuery, [...params, limit, offset]);
+
+      const items = rows.map(row => ({
         ...row,
         cantidad_productos: parseInt(row.cantidad_productos),
         total_productos: parseInt(row.total_productos),
         volumen_total: parseFloat(row.volumen_total)
       }));
-      
-      return processedRows;
+
+      return { total, items };
     } catch (error) {
       console.error('Error al obtener órdenes de despacho:', error);
       throw error;

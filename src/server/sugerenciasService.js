@@ -145,8 +145,8 @@ const sugerenciasService = {
         return [];
       }
       
-      // Calcular sugerencias sumando los contenedores necesarios para cada producto
-      const sugerencias = modelos.map((modelo, index) => {
+  // Calcular sugerencias sumando los contenedores necesarios para cada producto
+  const sugerenciasPorProducto = modelos.map((modelo, index) => {
         console.log(`Evaluando modelo ${index + 1}/${modelos.length}:`, modelo.nombre_modelo);
         
         // Convertir volumen del modelo de litros a metros cúbicos
@@ -311,16 +311,234 @@ const sugerenciasService = {
           es_calculo_por_orden: true
         };
       }).filter(sugerencia => sugerencia !== null);
+
+      // Alternativa: calcular por volumen total de la orden (una sola vez por modelo) para minimizar el redondeo acumulado
+      const sugerenciasPorVolumenTotal = modelos.map((modelo, index) => {
+        const volumenModeloM3 = (modelo.volumen_litros || 0) / 1000;
+        if (!volumenModeloM3) return null;
+        // Validar que TODOS los productos caben por dimensiones en este modelo
+        const todosCaben = inventarioItems.every(item => (
+          (parseInt(item.largo_mm) <= modelo.dim_int_frente) &&
+          (parseInt(item.ancho_mm) <= modelo.dim_int_profundo) &&
+          (parseInt(item.alto_mm) <= modelo.dim_int_alto)
+        ));
+        if (!todosCaben) return null;
+        const modelosNecesarios = Math.ceil(volumenTotalOrden / volumenModeloM3);
+        const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
+        const eficiencia = Math.max(0, Math.min(100, (volumenTotalOrden / volumenTotalDisponible) * 100));
+        const espacioSobrante = volumenTotalDisponible - volumenTotalOrden;
+        let mensajeComparacion;
+        let recomendacion = "";
+        if (eficiencia >= 95) {
+          mensajeComparacion = `✅ Aprovechamiento excelente del espacio`;
+          recomendacion = "MUY RECOMENDADO - Mínimo desperdicio";
+        } else if (eficiencia >= 85) {
+          mensajeComparacion = `✅ Buen aprovechamiento del volumen`;
+          recomendacion = "RECOMENDADO - Poco espacio desperdiciado";
+        } else if (eficiencia >= 70) {
+          mensajeComparacion = `📦 Aprovechamiento moderado`;
+          recomendacion = "ACEPTABLE - Espacio moderadamente desperdiciado";
+        } else if (eficiencia >= 50) {
+          mensajeComparacion = `⚠️ Mucho espacio sobrante`;
+          recomendacion = "NO RECOMENDADO - Mucho desperdicio";
+        } else {
+          mensajeComparacion = `❌ Contenedor muy grande para esta orden`;
+          recomendacion = "EVITAR - Excesivo desperdicio de espacio";
+        }
+        return {
+          modelo_id: modelo.modelo_id,
+          nombre_modelo: modelo.nombre_modelo,
+          volumen_litros: modelo.volumen_litros,
+          cantidad_sugerida: modelosNecesarios,
+          total_productos_transportados: cantidadTotalProductos,
+          volumen_total_productos: volumenTotalOrden,
+          volumen_total_contenedores: volumenTotalDisponible,
+          espacio_sobrante_m3: espacioSobrante,
+          porcentaje_espacio_sobrante: Math.round(((espacioSobrante / volumenTotalOrden) * 100) * 10) / 10,
+          eficiencia: Math.round(eficiencia * 10) / 10,
+          mensaje_comparacion: mensajeComparacion,
+          recomendacion: recomendacion,
+          nivel_recomendacion: eficiencia >= 95 ? 'EXCELENTE' : 
+                             eficiencia >= 85 ? 'BUENO' : 
+                             eficiencia >= 70 ? 'ACEPTABLE' : 
+                             eficiencia >= 50 ? 'MALO' : 'EVITAR',
+          dimensiones_internas: {
+            frente: modelo.dim_int_frente,
+            profundo: modelo.dim_int_profundo,
+            alto: modelo.dim_int_alto
+          },
+          orden_despacho: orden_despacho,
+          resumen_productos: resumenProductos,
+          es_calculo_por_orden: true
+        };
+      }).filter(sugerencia => sugerencia !== null);
+
+      // Fusionar por modelo: quedarnos con la variante de mayor eficiencia; empates -> menos contenedores -> menor volumen
+      const porModelo = new Map();
+      [...sugerenciasPorProducto, ...sugerenciasPorVolumenTotal].forEach(s => {
+        const key = s.modelo_id;
+        const prev = porModelo.get(key);
+        if (!prev) porModelo.set(key, s);
+        else {
+          const d = (s.eficiencia || 0) - (prev.eficiencia || 0);
+          if (d > 0) porModelo.set(key, s);
+          else if (d === 0) {
+            if ((s.cantidad_sugerida || 0) < (prev.cantidad_sugerida || 0)) porModelo.set(key, s);
+            else if ((s.cantidad_sugerida || 0) === (prev.cantidad_sugerida || 0) && (s.volumen_total_contenedores || 0) < (prev.volumen_total_contenedores || 0)) porModelo.set(key, s);
+          }
+        }
+      });
+
+      const sugerencias = Array.from(porModelo.values());
       
-      // Ordenar por eficiencia (mayor a menor)
-      sugerencias.sort((a, b) => b.eficiencia - a.eficiencia);
+  // Ordenar por eficiencia (mayor a menor); empates -> menos contenedores -> menor volumen total
+  sugerencias.sort((a, b) => {
+        const d = (b.eficiencia || 0) - (a.eficiencia || 0);
+        if (d !== 0) return d;
+        if ((a.cantidad_sugerida || 0) !== (b.cantidad_sugerida || 0)) return (a.cantidad_sugerida || 0) - (b.cantidad_sugerida || 0);
+        return (a.volumen_total_contenedores || 0) - (b.volumen_total_contenedores || 0);
+      });
       
-      // Marcar la mejor opción
+      // Marcar mejor opción por defecto (solo si cumple umbral)
       if (sugerencias.length > 0) {
-        sugerencias[0].es_mejor_opcion = true;
-        sugerencias[0].etiqueta_recomendacion = "🏆 MEJOR OPCIÓN";
+        const UMBRAL = 80;
+        for (const s of sugerencias) {
+          const eff = s.eficiencia || 0;
+          s.es_recomendable = eff >= UMBRAL;
+          if (!s.es_recomendable) s.motivo_no_recomendable = 'Eficiencia baja (<80%)';
+        }
+        if ((sugerencias[0].eficiencia || 0) >= UMBRAL) {
+          sugerencias[0].es_mejor_opcion = true;
+          sugerencias[0].etiqueta_recomendacion = '🏆 MEJOR OPCIÓN';
+        } else {
+          sugerencias[0].es_mejor_opcion = false;
+          sugerencias[0].etiqueta_recomendacion = undefined;
+        }
       }
       
+      // Combinaciones alternativas (pares de modelos) para la orden completa
+      try {
+        // Modelos donde TODOS los productos caben por dimensiones
+        const modelosViables = modelos.filter(m => {
+          return inventarioItems.every(item => (
+            (parseInt(item.largo_mm) <= m.dim_int_frente) &&
+            (parseInt(item.ancho_mm) <= m.dim_int_profundo) &&
+            (parseInt(item.alto_mm) <= m.dim_int_alto)
+          ));
+        }).map(m => ({
+          modelo_id: m.modelo_id,
+          nombre_modelo: m.nombre_modelo,
+          volumen_m3: (m.volumen_litros || 0) / 1000
+        })).filter(m => m.volumen_m3 > 0);
+
+        const topModelos = modelosViables.slice(0, Math.min(5, modelosViables.length));
+        const combos = [];
+        for (let i = 0; i < topModelos.length; i++) {
+          for (let j = i; j < topModelos.length; j++) {
+            const A = topModelos[i];
+            const B = topModelos[j];
+            const maxA = Math.ceil(volumenTotalOrden / A.volumen_m3) + 2;
+            const maxB = Math.ceil(volumenTotalOrden / B.volumen_m3) + 2;
+            for (let a = 0; a <= maxA; a++) {
+              for (let b = 0; b <= maxB; b++) {
+                if (a + b === 0) continue;
+                const volumenTotal = a * A.volumen_m3 + b * B.volumen_m3;
+                if (volumenTotal + 1e-9 < volumenTotalOrden) continue;
+                const eficienciaCombo = (volumenTotalOrden / volumenTotal) * 100;
+                const sobrante = volumenTotal - volumenTotalOrden;
+                combos.push({
+                  items: [
+                    ...(a > 0 ? [{ modelo_id: A.modelo_id, nombre_modelo: A.nombre_modelo, cantidad: a, volumen_m3: A.volumen_m3 }] : []),
+                    ...(b > 0 ? [{ modelo_id: B.modelo_id, nombre_modelo: B.nombre_modelo, cantidad: b, volumen_m3: B.volumen_m3 }] : []),
+                  ],
+                  total_contenedores: a + b,
+                  volumen_total_disponible: volumenTotal,
+                  eficiencia_porcentaje: Math.max(0, Math.min(100, eficienciaCombo)),
+                  espacio_sobrante_m3: sobrante
+                });
+              }
+            }
+          }
+        }
+
+        combos.sort((x, y) => {
+          if (y.eficiencia_porcentaje !== x.eficiencia_porcentaje) return y.eficiencia_porcentaje - x.eficiencia_porcentaje;
+          if (x.total_contenedores !== y.total_contenedores) return x.total_contenedores - y.total_contenedores;
+          return x.volumen_total_disponible - y.volumen_total_disponible;
+        });
+
+        const seen = new Set();
+        const unicos = [];
+        for (const c of combos) {
+          const key = c.items
+            .slice()
+            .sort((a, b) => a.modelo_id - b.modelo_id)
+            .map(it => `${it.modelo_id}x${it.cantidad}`)
+            .join('+');
+          if (!seen.has(key) && c.items.length >= 2) {
+            seen.add(key);
+            unicos.push(c);
+          }
+        }
+        const top3 = unicos.slice(0, 3).map(c => ({
+          ...c,
+          etiqueta: c.eficiencia_porcentaje >= 90 ? 'ALTA EFICIENCIA' : c.eficiencia_porcentaje >= 80 ? 'RECOMENDADA' : 'ALTERNATIVA'
+        }));
+        if (sugerencias.length > 0 && top3.length > 0) {
+          const bestSingle = sugerencias[0];
+          const bestCombo = top3[0];
+          const UMBRAL = 80;
+      if ((bestCombo.eficiencia_porcentaje || 0) >= UMBRAL && (bestCombo.eficiencia_porcentaje || 0) >= (bestSingle.eficiencia || 0)) {
+            const sugerenciaCombinada = {
+              modelo_id: null,
+              nombre_modelo: 'Combinación de modelos',
+              cantidad_sugerida: bestCombo.total_contenedores,
+              total_productos_transportados: cantidadTotalProductos,
+              volumen_total_productos: volumenTotalOrden,
+              volumen_total_contenedores: bestCombo.volumen_total_disponible,
+              espacio_sobrante_m3: bestCombo.espacio_sobrante_m3,
+              porcentaje_espacio_sobrante: Math.max(0, ((bestCombo.espacio_sobrante_m3 || 0) / volumenTotalOrden) * 100),
+              eficiencia: Math.max(0, Math.min(100, bestCombo.eficiencia_porcentaje)),
+              mensaje_comparacion: '✅ Combinación con alto aprovechamiento',
+              recomendacion: bestCombo.eficiencia_porcentaje >= 95 ? 'MUY RECOMENDADO - Mínimo desperdicio' : 'RECOMENDADO - Buen aprovechamiento',
+              nivel_recomendacion: bestCombo.eficiencia_porcentaje >= 95 ? 'EXCELENTE' : bestCombo.eficiencia_porcentaje >= 85 ? 'BUENO' : 'ACEPTABLE',
+              es_mejor_opcion: true,
+              etiqueta_recomendacion: '🏆 MEJOR OPCIÓN (COMBINACIÓN)',
+              es_combinacion: true,
+              combinacion_items: bestCombo.items,
+              combinaciones_alternativas: top3,
+        es_recomendable: (bestCombo.eficiencia_porcentaje || 0) >= UMBRAL,
+        motivo_no_recomendable: (bestCombo.eficiencia_porcentaje || 0) >= UMBRAL ? undefined : 'Eficiencia baja (<80%)',
+              es_calculo_por_orden: true
+            };
+            sugerencias[0].es_mejor_opcion = false;
+            sugerencias.unshift(sugerenciaCombinada);
+          } else {
+            sugerencias[0].combinaciones_alternativas = top3;
+          }
+        }
+      } catch (e) {
+        console.warn('No se pudieron generar combinaciones alternativas para orden:', e.message || e);
+      }
+
+      // Calcular porcentaje de recomendación normalizado (top = 100) con desempate por menos contenedores
+      if (sugerencias.length > 0) {
+        const maxEff = Math.max(...sugerencias.map(s => (s.eficiencia || 0)));
+        const conts = sugerencias.map(s => s.cantidad_sugerida || 0).filter(n => n > 0);
+        const minCont = conts.length ? Math.min(...conts) : 1;
+        const composites = sugerencias.map(s => {
+          const effNorm = maxEff > 0 ? (s.eficiencia || 0) / maxEff : 0;
+          const cont = s.cantidad_sugerida || minCont;
+          const contFactor = cont > 0 ? Math.min(1, minCont / cont) : 1; // 1 para el mínimo
+          return 0.9 * effNorm + 0.1 * contFactor;
+        });
+        const maxComp = Math.max(...composites);
+        sugerencias.forEach((s, i) => {
+          s.porcentaje_recomendacion = maxComp > 0 ? Math.round((composites[i] / maxComp) * 1000) / 10 : 0;
+        });
+        sugerencias[0].porcentaje_recomendacion = 100;
+      }
+
       console.log(`Generadas ${sugerencias.length} sugerencias para orden ${orden_despacho}`);
       return sugerencias;
       
@@ -422,13 +640,45 @@ const sugerenciasService = {
         };
       }).filter(sugerencia => sugerencia !== null);
       
-      // Ordenar por eficiencia (mayor a menor) para mostrar las mejores opciones primero
-      sugerencias.sort((a, b) => b.eficiencia_porcentaje - a.eficiencia_porcentaje);
+  // Ordenar por eficiencia (mayor a menor) para mostrar las mejores opciones primero; empates -> menos contenedores -> menor volumen total
+  sugerencias.sort((a, b) => {
+        const d = (b.eficiencia_porcentaje || 0) - (a.eficiencia_porcentaje || 0);
+        if (d !== 0) return d;
+        if ((a.cantidad_sugerida || 0) !== (b.cantidad_sugerida || 0)) return (a.cantidad_sugerida || 0) - (b.cantidad_sugerida || 0);
+        return (a.volumen_total_disponible || 0) - (b.volumen_total_disponible || 0);
+      });
       
-      // Marcar la mejor opción
+      // Marcar la mejor opción y calcular porcentaje de recomendación
       if (sugerencias.length > 0) {
-        sugerencias[0].es_mejor_opcion = true;
-        sugerencias[0].recomendacion_nivel = "MEJOR OPCIÓN - " + sugerencias[0].recomendacion_nivel;
+        const UMBRAL = 80;
+        for (const s of sugerencias) {
+          const eff = s.eficiencia_porcentaje || 0;
+          s.es_recomendable = eff >= UMBRAL;
+          if (!s.es_recomendable) s.motivo_no_recomendable = 'Eficiencia baja (<80%)';
+        }
+        if ((sugerencias[0].eficiencia_porcentaje || 0) >= UMBRAL) {
+          sugerencias[0].es_mejor_opcion = true;
+          sugerencias[0].etiqueta_recomendacion = '🏆 MEJOR OPCIÓN';
+        } else {
+          sugerencias[0].es_mejor_opcion = false;
+          sugerencias[0].etiqueta_recomendacion = undefined;
+        }
+
+        // Recomposición con desempate por menos contenedores
+        const maxEff = Math.max(...sugerencias.map(s => (s.eficiencia_porcentaje || 0)));
+        const conts = sugerencias.map(s => s.cantidad_sugerida || 0).filter(n => n > 0);
+        const minCont = conts.length ? Math.min(...conts) : 1;
+        const composites = sugerencias.map(s => {
+          const effNorm = maxEff > 0 ? (s.eficiencia_porcentaje || 0) / maxEff : 0;
+          const cont = s.cantidad_sugerida || minCont;
+          const contFactor = cont > 0 ? Math.min(1, minCont / cont) : 1;
+          return 0.9 * effNorm + 0.1 * contFactor;
+        });
+        const maxComp = Math.max(...composites);
+        sugerencias.forEach((s, i) => {
+          s.porcentaje_recomendacion = maxComp > 0 ? Math.round((composites[i] / maxComp) * 1000) / 10 : 0;
+        });
+        sugerencias[0].porcentaje_recomendacion = 100;
       }
       
       console.log(`Generadas ${sugerencias.length} sugerencias para orden ${orden_despacho}`);
@@ -513,7 +763,7 @@ const sugerenciasService = {
         return [];
       }
       
-      // Calcular sugerencias para cada modelo
+  // Calcular sugerencias para cada modelo
       const sugerencias = modelos.map((modelo, index) => {
         console.log(`Evaluando modelo ${index + 1}/${modelos.length}:`, modelo.nombre_modelo);
         
@@ -581,7 +831,7 @@ const sugerenciasService = {
         
         console.log(`Modelo ${modelo.nombre_modelo}: ${modelosNecesarios} contenedores, ${eficiencia.toFixed(1)}% eficiencia`);
         
-        // Calcular espacio sobrante o faltante
+  // Calcular espacio sobrante o faltante
         const espacioSobrante = volumenTotalDisponible - volumenTotalUtilizado;
         const porcentajeEspacio = (espacioSobrante / volumenTotalUtilizado) * 100;
         
@@ -616,20 +866,20 @@ const sugerenciasService = {
           }
         }
         
-        // Agregar información sobre la proporción
+        // Agregar información sobre la proporción y dejar claro el sobrante
         let detalleEspacio = "";
         if (porcentajeEspacio < 1) {
-          detalleEspacio = "Se ajusta casi perfectamente";
+          detalleEspacio = `Se ajusta casi perfectamente. Sobra ${(espacioSobrante * 1000).toFixed(1)} litros (${(Math.max(0, porcentajeEspacio)).toFixed(1)}%)`;
         } else if (porcentajeEspacio <= 10) {
-          detalleEspacio = "Sobra muy poco espacio";
+          detalleEspacio = `Sobra muy poco espacio: ${(espacioSobrante * 1000).toFixed(1)} litros (${(Math.max(0, porcentajeEspacio)).toFixed(1)}%)`;
         } else if (porcentajeEspacio <= 25) {
-          detalleEspacio = "Sobra poco espacio";
+          detalleEspacio = `Sobra poco espacio: ${(espacioSobrante * 1000).toFixed(1)} litros (${(Math.max(0, porcentajeEspacio)).toFixed(1)}%)`;
         } else if (porcentajeEspacio <= 50) {
-          detalleEspacio = "Sobra espacio moderado";
+          detalleEspacio = `Sobra espacio moderado: ${(espacioSobrante * 1000).toFixed(1)} litros (${(Math.max(0, porcentajeEspacio)).toFixed(1)}%)`;
         } else if (porcentajeEspacio <= 100) {
-          detalleEspacio = "Sobra mucho espacio";
+          detalleEspacio = `Sobra mucho espacio: ${(espacioSobrante * 1000).toFixed(1)} litros (${(Math.max(0, porcentajeEspacio)).toFixed(1)}%)`;
         } else {
-          detalleEspacio = "Sobra demasiado espacio";
+          detalleEspacio = `Sobra demasiado espacio: ${(espacioSobrante * 1000).toFixed(1)} litros (${(Math.max(0, porcentajeEspacio)).toFixed(1)}%)`;
         }
         
         return {
@@ -682,14 +932,159 @@ const sugerenciasService = {
         return a.volumen_total_contenedores - b.volumen_total_contenedores;
       });
       
-      // Marcar la mejor opción (la de mayor eficiencia)
+      // Por defecto, marcar mejor single-model solo si cumple umbral
       if (sugerenciasOrdenadas.length > 0) {
-        sugerenciasOrdenadas[0].es_mejor_opcion = true;
-        sugerenciasOrdenadas[0].etiqueta_recomendacion = "🏆 MEJOR OPCIÓN";
+        const UMBRAL = 80;
+        if ((sugerenciasOrdenadas[0].eficiencia || 0) >= UMBRAL) {
+          sugerenciasOrdenadas[0].es_mejor_opcion = true;
+          sugerenciasOrdenadas[0].etiqueta_recomendacion = '🏆 MEJOR OPCIÓN';
+        } else {
+          sugerenciasOrdenadas[0].es_mejor_opcion = false;
+          sugerenciasOrdenadas[0].etiqueta_recomendacion = undefined;
+        }
       }
       
+      // Generar combinaciones alternativas (mezcla de 2 modelos) para cubrir el volumen con mejor aprovechamiento
+      try {
+        const volumenRequerido = parseFloat(producto.volumen_total_m3_producto);
+
+        // Filtrar solo modelos en los que el producto cabe
+        const modelosViables = modelos.filter((m) => (
+          productoFrente <= m.dim_int_frente &&
+          productoAncho <= m.dim_int_profundo &&
+          productoAlto <= m.dim_int_alto
+        ));
+
+        const combos = [];
+        // Precalcular volúmenes m3 de modelos
+        const modelosVol = modelosViables.map(m => ({
+          modelo_id: m.modelo_id,
+          nombre_modelo: m.nombre_modelo,
+          volumen_m3: (m.volumen_litros || 0) / 1000
+        })).filter(m => m.volumen_m3 > 0);
+
+        // Limitar pares para rendimiento: tomar hasta 5 modelos más cercanos al volumen unitario
+        const topModelos = modelosVol.slice(0, Math.min(5, modelosVol.length));
+
+        // Explorar pares (incluyendo mismo modelo dos veces) con búsqueda acotada
+        for (let i = 0; i < topModelos.length; i++) {
+          for (let j = i; j < topModelos.length; j++) {
+            const A = topModelos[i];
+            const B = topModelos[j];
+            const maxA = Math.ceil(volumenRequerido / A.volumen_m3) + 2;
+            const maxB = Math.ceil(volumenRequerido / B.volumen_m3) + 2;
+
+            for (let a = 0; a <= maxA; a++) {
+              for (let b = 0; b <= maxB; b++) {
+                if (a + b === 0) continue; // al menos un contenedor
+                // Evitar combos que usen un solo modelo si ya evaluamos como sugerencia individual
+                if (i === j && b > 0 && a === 0) continue;
+                const volumenTotal = a * A.volumen_m3 + b * B.volumen_m3;
+                if (volumenTotal <= 0) continue;
+                if (volumenTotal + 1e-9 < volumenRequerido) continue; // no alcanza
+
+                const eficienciaCombo = (volumenRequerido / volumenTotal) * 100;
+                const sobrante = volumenTotal - volumenRequerido;
+
+                combos.push({
+                  items: [
+                    ...(a > 0 ? [{ modelo_id: A.modelo_id, nombre_modelo: A.nombre_modelo, cantidad: a, volumen_m3: A.volumen_m3 }] : []),
+                    ...(b > 0 ? [{ modelo_id: B.modelo_id, nombre_modelo: B.nombre_modelo, cantidad: b, volumen_m3: B.volumen_m3 }] : []),
+                  ],
+                  total_contenedores: a + b,
+                  volumen_total_disponible: volumenTotal,
+                  eficiencia_porcentaje: Math.max(0, Math.min(100, eficienciaCombo)),
+                  espacio_sobrante_m3: sobrante
+                });
+              }
+            }
+          }
+        }
+
+        // Ordenar combos: mayor eficiencia, luego menos contenedores, luego menor volumen total
+        combos.sort((x, y) => {
+          if (y.eficiencia_porcentaje !== x.eficiencia_porcentaje) return y.eficiencia_porcentaje - x.eficiencia_porcentaje;
+          if (x.total_contenedores !== y.total_contenedores) return x.total_contenedores - y.total_contenedores;
+          return x.volumen_total_disponible - y.volumen_total_disponible;
+        });
+
+        // Quitar duplicados equivalentes (mismos modelos y cantidades)
+        const seen = new Set();
+        const unicos = [];
+        for (const c of combos) {
+          const key = c.items
+            .slice()
+            .sort((a, b) => a.modelo_id - b.modelo_id)
+            .map(it => `${it.modelo_id}x${it.cantidad}`)
+            .join('+');
+          if (!seen.has(key) && c.items.length >= 2) { // mantener solo combinaciones (>=2 modelos)
+            seen.add(key);
+            unicos.push(c);
+          }
+        }
+
+        const top3 = unicos.slice(0, 3).map(c => ({
+          ...c,
+          etiqueta: c.eficiencia_porcentaje >= 90 ? 'ALTA EFICIENCIA' : c.eficiencia_porcentaje >= 80 ? 'RECOMENDADA' : 'ALTERNATIVA'
+        }));
+        // Promocionar combinación si supera a la mejor single-model y cumple umbral
+        if (sugerenciasOrdenadas.length > 0 && top3.length > 0) {
+          const bestSingle = sugerenciasOrdenadas[0];
+          const bestCombo = top3[0];
+          const UMBRAL = 80; // mínimo 80% para recomendar
+          if ((bestCombo.eficiencia_porcentaje || 0) >= UMBRAL && (bestCombo.eficiencia_porcentaje || 0) >= (bestSingle.eficiencia || 0)) {
+            // Crear sugerencia sintética de combinación
+            const sugerenciaCombinada = {
+              modelo_id: null,
+              nombre_modelo: 'Combinación de modelos',
+              cantidad_sugerida: bestCombo.total_contenedores,
+              total_productos_transportados: cantidadProductos,
+              volumen_total_productos: volumenTotalRequeridoM3,
+              volumen_total_contenedores: bestCombo.volumen_total_disponible,
+              espacio_sobrante_m3: bestCombo.espacio_sobrante_m3,
+              porcentaje_espacio_sobrante: Math.max(0, ((bestCombo.espacio_sobrante_m3 || 0) / volumenTotalRequeridoM3) * 100),
+              eficiencia: Math.max(0, Math.min(100, bestCombo.eficiencia_porcentaje)),
+              mensaje_comparacion: '✅ Combinación con alto aprovechamiento',
+              recomendacion: bestCombo.eficiencia_porcentaje >= 95 ? 'MUY RECOMENDADO - Mínimo desperdicio' : 'RECOMENDADO - Buen aprovechamiento',
+              nivel_recomendacion: bestCombo.eficiencia_porcentaje >= 95 ? 'EXCELENTE' : bestCombo.eficiencia_porcentaje >= 85 ? 'BUENO' : 'ACEPTABLE',
+              es_mejor_opcion: true,
+              etiqueta_recomendacion: '🏆 MEJOR OPCIÓN (COMBINACIÓN)',
+              es_combinacion: true,
+              combinacion_items: bestCombo.items,
+              combinaciones_alternativas: top3,
+            };
+            // Quitar la marca de mejor opción al single-model y anteponer combinación
+            if (sugerenciasOrdenadas[0]) sugerenciasOrdenadas[0].es_mejor_opcion = false;
+            sugerenciasOrdenadas.unshift(sugerenciaCombinada);
+          } else {
+            // Si no se promociona, igualmente adjuntar las alternativas al primero
+            sugerenciasOrdenadas[0].combinaciones_alternativas = top3;
+          }
+        }
+      } catch (e) {
+        console.warn('No se pudieron generar combinaciones alternativas:', e.message || e);
+      }
+
+      // Calcular porcentaje de recomendación normalizado (top = 100) con desempate por menos contenedores
+      if (sugerenciasOrdenadas.length > 0) {
+        const maxEff = Math.max(...sugerenciasOrdenadas.map(s => (s.eficiencia || 0)));
+        const conts = sugerenciasOrdenadas.map(s => s.cantidad_sugerida || 0).filter(n => n > 0);
+        const minCont = conts.length ? Math.min(...conts) : 1;
+        const composites = sugerenciasOrdenadas.map(s => {
+          const effNorm = maxEff > 0 ? (s.eficiencia || 0) / maxEff : 0;
+          const cont = s.cantidad_sugerida || minCont;
+          const contFactor = cont > 0 ? Math.min(1, minCont / cont) : 1;
+          return 0.9 * effNorm + 0.1 * contFactor;
+        });
+        const maxComp = Math.max(...composites);
+        sugerenciasOrdenadas.forEach((s, i) => {
+          s.porcentaje_recomendacion = maxComp > 0 ? Math.round((composites[i] / maxComp) * 1000) / 10 : 0;
+        });
+        sugerenciasOrdenadas[0].porcentaje_recomendacion = 100;
+      }
+
       console.log('Sugerencias calculadas y ordenadas exitosamente');
-      console.log(`Mejor opción: ${sugerenciasOrdenadas[0]?.nombre_modelo} (${sugerenciasOrdenadas[0]?.eficiencia}% eficiencia)`);
+      console.log(`Mejor opción: ${sugerenciasOrdenadas[0]?.nombre_modelo} (${sugerenciasOrdenadas[0]?.porcentaje_recomendacion}% recomendación)`);
       return sugerenciasOrdenadas;
       
     } catch (error) {

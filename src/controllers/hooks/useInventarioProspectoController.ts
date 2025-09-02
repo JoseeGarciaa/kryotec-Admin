@@ -1,19 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { InventarioProspectoController } from '../InventarioProspectoController';
 import { InventarioProspecto, CreateInventarioProspectoData } from '../../models/InventarioProspectoModel';
 
 export const useInventarioProspectoController = () => {
   const [inventario, setInventario] = useState<InventarioProspecto[]>([]);
+  const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<'idle' | 'loading' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar todo el inventario
+  // Cargar todo el inventario (evitar usar con datasets enormes)
   const loadInventario = async () => {
     setLoading('loading');
     setError(null);
     try {
       const data = await InventarioProspectoController.getAllInventario();
       setInventario(data);
+      setTotal(data.length);
       setLoading('idle');
     } catch (err) {
       setError('Error al cargar el inventario');
@@ -62,22 +64,25 @@ export const useInventarioProspectoController = () => {
     }
   };
 
-  // Obtener inventario por cliente
-  const getInventarioByCliente = async (clienteId: number): Promise<InventarioProspecto[]> => {
+  // Obtener inventario por cliente (paginado)
+  const getInventarioByCliente = async (clienteId: number, opts?: { limit?: number; offset?: number; search?: string }): Promise<{ total: number; items: InventarioProspecto[] }> => {
     try {
-      return await InventarioProspectoController.getInventarioByCliente(clienteId);
+      const res = await InventarioProspectoController.getInventarioByCliente(clienteId, opts);
+      // Estado interno opcional si se quiere almacenar en caché la página actual
+      setInventario(res.items);
+      setTotal(res.total);
+      return res;
     } catch (err) {
       setError('Error al obtener inventario del cliente');
       throw err;
     }
   };
 
-  useEffect(() => {
-    loadInventario();
-  }, []);
+  // Nota: ya no cargamos automáticamente todo el inventario al montar para evitar traer 13k filas
 
   return {
     inventario,
+  total,
     loading,
     error,
     loadInventario,

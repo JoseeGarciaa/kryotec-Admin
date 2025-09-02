@@ -32,8 +32,8 @@ export type CreateInventarioProspectoData = {
 export class InventarioProspectoModel {
   static async getAllInventario(): Promise<InventarioProspecto[]> {
     try {
-      const response = await apiClient.get('/inventario-prospectos');
-      return response.data.map((item: any) => ({
+  const response = await apiClient.get('/inventario-prospectos');
+  return response.data.map((item: any) => ({
         ...item,
         cliente_id: Number(item.cliente_id),
         largo_mm: Number(item.largo_mm),
@@ -123,20 +123,29 @@ export class InventarioProspectoModel {
     }
   }
 
-  static async getInventarioByCliente(clienteId: number): Promise<InventarioProspecto[]> {
+  static async getInventarioByCliente(clienteId: number, opts?: { limit?: number; offset?: number; search?: string }): Promise<{ total: number; items: InventarioProspecto[] }> {
     try {
-      const response = await apiClient.get(`/inventario-prospectos/cliente/${clienteId}`);
-      return response.data.map((item: any) => ({
-        ...item,
-        cliente_id: Number(item.cliente_id),
-        largo_mm: Number(item.largo_mm),
-        ancho_mm: Number(item.ancho_mm),
-        alto_mm: Number(item.alto_mm),
-        cantidad_despachada: Number(item.cantidad_despachada),
-        volumen_total_m3_producto: Number(item.volumen_total_m3_producto) || 0,
-        fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null,
-        fecha_de_despacho: item.fecha_de_despacho ? new Date(item.fecha_de_despacho) : null
-      }));
+      const params = new URLSearchParams();
+      if (opts?.limit) params.append('limit', String(opts.limit));
+      if (opts?.offset) params.append('offset', String(opts.offset));
+      if (opts?.search) params.append('search', opts.search);
+      const q = params.toString();
+      const response = await apiClient.get(`/inventario-prospectos/cliente/${clienteId}${q ? `?${q}` : ''}`);
+      const payload = response.data as { total: number; items: any[] };
+      return {
+        total: payload.total,
+        items: (payload.items || []).map((item: any) => ({
+          ...item,
+          cliente_id: Number(item.cliente_id),
+          largo_mm: Number(item.largo_mm),
+          ancho_mm: Number(item.ancho_mm),
+          alto_mm: Number(item.alto_mm),
+          cantidad_despachada: Number(item.cantidad_despachada),
+          volumen_total_m3_producto: Number(item.volumen_total_m3_producto) || 0,
+          fecha_registro: item.fecha_registro ? new Date(item.fecha_registro) : null,
+          fecha_de_despacho: item.fecha_de_despacho ? new Date(item.fecha_de_despacho) : null
+        }))
+      };
     } catch (error) {
       console.error(`Error al obtener inventario del cliente ${clienteId}:`, error);
       throw error;
