@@ -9,6 +9,7 @@ const sugerenciasService = {
           s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
           s.cantidad_sugerida, s.fecha_sugerencia, 
           s.modelo_id, s.estado,
+          COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
           i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
@@ -27,29 +28,219 @@ const sugerenciasService = {
     }
   },
 
+  // Obtener sugerencias con paginación y búsqueda opcional
+  getSugerenciasPaginated: async ({ limit = 50, offset = 0, search = '', clienteId = null } = {}) => {
+    try {
+      const params = [];
+      let whereClauses = [];
+
+      if (clienteId) {
+        params.push(clienteId);
+        whereClauses.push(`s.cliente_id = $${params.length}`);
+      }
+
+      if (search && search.trim()) {
+        // Búsqueda en varios campos
+        params.push(`%${search.trim().toLowerCase()}%`);
+        const p = `$${params.length}`;
+        whereClauses.push(`(
+          LOWER(COALESCE(c.nombre_cliente, '')) ILIKE ${p} OR
+          LOWER(COALESCE(i.producto, '')) ILIKE ${p} OR
+          LOWER(COALESCE(i.descripcion_producto, '')) ILIKE ${p} OR
+          LOWER(COALESCE(m.nombre_modelo, '')) ILIKE ${p} OR
+          LOWER(COALESCE(s.estado, '')) ILIKE ${p}
+        )`);
+      }
+
+      const whereSQL = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+      // Total
+      const countQuery = `
+        SELECT COUNT(*) AS total
+        FROM admin_platform.sugerencias_reemplazo s
+        LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
+        LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
+        LEFT JOIN admin_platform.inventario_prospecto i ON s.inv_id = i.inv_id
+        ${whereSQL}
+      `;
+      const { rows: countRows } = await pool.query(countQuery, params);
+      const total = parseInt(countRows?.[0]?.total || '0', 10);
+
+      // Items
+      const itemsParams = [...params, limit, offset];
+      const itemsQuery = `
+        SELECT 
+          s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
+          s.cantidad_sugerida, s.fecha_sugerencia, 
+          s.modelo_id, s.estado,
+          COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
+          c.nombre_cliente,
+          m.nombre_modelo, m.volumen_litros,
+          i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
+          i.largo_mm, i.ancho_mm, i.alto_mm
+        FROM admin_platform.sugerencias_reemplazo s
+        LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
+        LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
+        LEFT JOIN admin_platform.inventario_prospecto i ON s.inv_id = i.inv_id
+        ${whereSQL}
+        ORDER BY s.fecha_sugerencia DESC
+        LIMIT $${itemsParams.length - 1} OFFSET $${itemsParams.length}
+      `;
+      const { rows } = await pool.query(itemsQuery, itemsParams);
+      return { total, items: rows };
+    } catch (error) {
+      console.error('Error al obtener sugerencias paginadas:', error);
+      throw error;
+    }
+  },
+
+  // Calcular recomendaciones agregadas por rango de fechas (fecha_de_despacho)
+  calcularSugerenciasPorRangoTotal: async ({ cliente_id, startDate, endDate }) => {
+    try {
+      if (!cliente_id) throw new Error('cliente_id es requerido');
+      if (!startDate || !endDate) throw new Error('startDate y endDate son requeridos');
+
+      // Traer items del cliente dentro del rango por fecha de despacho (cast a date)
+      const q = `
+        SELECT inv_id, producto, descripcion_producto, cantidad_despachada, largo_mm, ancho_mm, alto_mm,
+               volumen_total_m3_producto, fecha_de_despacho, orden_despacho
+        FROM admin_platform.inventario_prospecto
+        WHERE cliente_id = $1
+          AND fecha_de_despacho::date BETWEEN $2::date AND $3::date
+      `;
+  const { rows: items } = await pool.query(q, [cliente_id, startDate, endDate]);
+
+      const totalRegistros = items.length;
+      const totalProductos = items.reduce((acc, it) => acc + (parseInt(it.cantidad_despachada) || 0), 0);
+      const totalM3 = items.reduce((acc, it) => acc + (parseFloat(it.volumen_total_m3_producto) || 0), 0);
+  // Contar órdenes incluyendo repetidas (no únicas)
+  const totalOrdenes = items.filter(it => !!it.orden_despacho).length;
+
+  // Resumen simple por producto para mostrar (limitado para UI/logs)
+  const resumenProductos = items.slice(0, 50).map(it => ({
+        inv_id: it.inv_id,
+        producto: it.producto,
+        descripcion: it.descripcion_producto,
+        cantidad: parseInt(it.cantidad_despachada) || 0,
+        volumen_individual: (parseFloat(it.volumen_total_m3_producto) || 0) / Math.max(1, parseInt(it.cantidad_despachada) || 1),
+        volumen_total_producto: parseFloat(it.volumen_total_m3_producto) || 0,
+        dimensiones: { largo_mm: it.largo_mm, ancho_mm: it.ancho_mm, alto_mm: it.alto_mm }
+      }));
+
+      // Reusar la lógica basada en volumen total
+      let sugerencias = await sugerenciasService.calcularConVolumenTotal(
+        totalM3,
+        Math.max(1, totalProductos || 1),
+        cliente_id,
+        `RANGO ${startDate}..${endDate}`,
+        resumenProductos
+      );
+
+      // Enriquecer cada sugerencia con detalle por producto usando TODOS los items del rango
+      if (Array.isArray(sugerencias) && sugerencias.length > 0) {
+        sugerencias = sugerencias.map(s => {
+          const volumenModeloM3 = Number(s.volumen_modelo_m3 || 0);
+          const detalle = items.map(it => {
+            const cantidadProducto = parseInt(it.cantidad_despachada) || 0;
+            const volumenTotalProducto = parseFloat(it.volumen_total_m3_producto) || 0;
+            const volumenUnitario = cantidadProducto > 0 ? (volumenTotalProducto / cantidadProducto) : 0;
+            const contenedoresNecesarios = volumenModeloM3 > 0 ? Math.max(1, Math.ceil(volumenTotalProducto / volumenModeloM3)) : 0;
+            return {
+              inv_id: it.inv_id,
+              producto: it.producto,
+              descripcion_producto: it.descripcion_producto,
+              cantidad_productos: cantidadProducto,
+              contenedores_necesarios: contenedoresNecesarios,
+              tipo_ajuste: 'volumetrico',
+              volumen_unitario: volumenUnitario,
+              volumen_total_producto: volumenTotalProducto
+            };
+          });
+          // Para el rango total, la cantidad sugerida debe ser la suma por producto (no por volumen global)
+          const cantidadSugeridaSumada = detalle.reduce((acc, d) => acc + (parseInt(d.contenedores_necesarios) || 0), 0);
+          return {
+            ...s,
+            detalle_contenedores_por_producto: detalle,
+            cantidad_sugerida: cantidadSugeridaSumada
+          };
+        });
+      }
+
+      return {
+        resumen: {
+          startDate,
+          endDate,
+          total_ordenes: totalOrdenes,
+          total_registros: totalRegistros,
+          total_productos: totalProductos,
+          volumen_total_m3: totalM3
+        },
+  sugerencias
+      };
+    } catch (error) {
+      console.error('Error en calcularSugerenciasPorRangoTotal:', error);
+      throw error;
+    }
+  },
+
   // Crear una nueva sugerencia
   createSugerencia: async (data) => {
     try {
-      const query = `
-        INSERT INTO admin_platform.sugerencias_reemplazo (
-          cliente_id, inv_id, modelo_sugerido, cantidad_sugerida, 
-          modelo_id, estado
-        ) VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING sugerencia_id
-      `;
-      const values = [
-        data.cliente_id, data.inv_id, data.modelo_sugerido,
-        data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente'
-      ];
-      const { rows } = await pool.query(query, values);
-      const sugerenciaId = rows[0].sugerencia_id;
-      
+      // Derivar orden_despacho desde inventario si no viene explícito
+      let ordenDespacho = data.orden_despacho || null;
+      if (!ordenDespacho && data.inv_id) {
+        try {
+          const { rows: invRows } = await pool.query(
+            'SELECT orden_despacho FROM admin_platform.inventario_prospecto WHERE inv_id = $1',
+            [data.inv_id]
+          );
+          ordenDespacho = invRows?.[0]?.orden_despacho || null;
+        } catch (e) {
+          console.warn('No se pudo obtener orden_despacho desde inventario:', e?.message);
+        }
+      }
+
+      // Intentar insertar incluyendo orden_despacho (si la columna existe)
+      let sugerenciaId;
+      try {
+        const insertWithOrden = `
+          INSERT INTO admin_platform.sugerencias_reemplazo (
+            cliente_id, inv_id, modelo_sugerido, cantidad_sugerida, 
+            modelo_id, estado, orden_despacho
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING sugerencia_id
+        `;
+        const valuesWithOrden = [
+          data.cliente_id, data.inv_id, data.modelo_sugerido,
+          data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente', ordenDespacho
+        ];
+        const { rows } = await pool.query(insertWithOrden, valuesWithOrden);
+        sugerenciaId = rows[0].sugerencia_id;
+      } catch (e) {
+        // Compatibilidad si aún no existe la columna orden_despacho
+        console.warn('Insert con orden_despacho falló, reintentando sin esa columna:', e?.message);
+        const insertWithoutOrden = `
+          INSERT INTO admin_platform.sugerencias_reemplazo (
+            cliente_id, inv_id, modelo_sugerido, cantidad_sugerida, 
+            modelo_id, estado
+          ) VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING sugerencia_id
+        `;
+        const valuesWithoutOrden = [
+          data.cliente_id, data.inv_id, data.modelo_sugerido,
+          data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente'
+        ];
+        const { rows } = await pool.query(insertWithoutOrden, valuesWithoutOrden);
+        sugerenciaId = rows[0].sugerencia_id;
+      }
+
       // Ahora obtener la sugerencia completa con todos los JOINs
       const selectQuery = `
         SELECT 
           s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
           s.cantidad_sugerida, s.fecha_sugerencia, 
           s.modelo_id, s.estado,
+          COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
           i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
@@ -323,6 +514,23 @@ const sugerenciasService = {
           (parseInt(item.alto_mm) <= modelo.dim_int_alto)
         ));
         if (!todosCaben) return null;
+        // Construir detalle por producto para soporte de guardado en frontend (fallback)
+        const detalleContenedoresPorProducto = inventarioItems.map(item => {
+          const cantidadProducto = parseInt(item.cantidad_despachada) || 0;
+          const volumenTotalProducto = parseFloat(item.volumen_total_m3_producto) || 0;
+          const volumenUnitario = cantidadProducto > 0 ? (volumenTotalProducto / cantidadProducto) : 0;
+          const contenedoresNecesarios = volumenModeloM3 > 0 ? Math.max(1, Math.ceil(volumenTotalProducto / volumenModeloM3)) : 0;
+          return {
+            inv_id: item.inv_id,
+            producto: item.producto,
+            descripcion_producto: item.descripcion_producto,
+            cantidad_productos: cantidadProducto,
+            contenedores_necesarios: contenedoresNecesarios,
+            tipo_ajuste: 'volumetrico',
+            volumen_unitario: volumenUnitario,
+            volumen_total_producto: volumenTotalProducto
+          };
+        });
         const modelosNecesarios = Math.ceil(volumenTotalOrden / volumenModeloM3);
         const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
         const eficiencia = Math.max(0, Math.min(100, (volumenTotalOrden / volumenTotalDisponible) * 100));
@@ -369,6 +577,8 @@ const sugerenciasService = {
           },
           orden_despacho: orden_despacho,
           resumen_productos: resumenProductos,
+          volumen_modelo_m3: volumenModeloM3,
+          detalle_contenedores_por_producto: detalleContenedoresPorProducto,
           es_calculo_por_orden: true
         };
       }).filter(sugerencia => sugerencia !== null);
@@ -416,110 +626,7 @@ const sugerenciasService = {
         }
       }
       
-      // Combinaciones alternativas (pares de modelos) para la orden completa
-      try {
-        // Modelos donde TODOS los productos caben por dimensiones
-        const modelosViables = modelos.filter(m => {
-          return inventarioItems.every(item => (
-            (parseInt(item.largo_mm) <= m.dim_int_frente) &&
-            (parseInt(item.ancho_mm) <= m.dim_int_profundo) &&
-            (parseInt(item.alto_mm) <= m.dim_int_alto)
-          ));
-        }).map(m => ({
-          modelo_id: m.modelo_id,
-          nombre_modelo: m.nombre_modelo,
-          volumen_m3: (m.volumen_litros || 0) / 1000
-        })).filter(m => m.volumen_m3 > 0);
-
-        const topModelos = modelosViables.slice(0, Math.min(5, modelosViables.length));
-        const combos = [];
-        for (let i = 0; i < topModelos.length; i++) {
-          for (let j = i; j < topModelos.length; j++) {
-            const A = topModelos[i];
-            const B = topModelos[j];
-            const maxA = Math.ceil(volumenTotalOrden / A.volumen_m3) + 2;
-            const maxB = Math.ceil(volumenTotalOrden / B.volumen_m3) + 2;
-            for (let a = 0; a <= maxA; a++) {
-              for (let b = 0; b <= maxB; b++) {
-                if (a + b === 0) continue;
-                const volumenTotal = a * A.volumen_m3 + b * B.volumen_m3;
-                if (volumenTotal + 1e-9 < volumenTotalOrden) continue;
-                const eficienciaCombo = (volumenTotalOrden / volumenTotal) * 100;
-                const sobrante = volumenTotal - volumenTotalOrden;
-                combos.push({
-                  items: [
-                    ...(a > 0 ? [{ modelo_id: A.modelo_id, nombre_modelo: A.nombre_modelo, cantidad: a, volumen_m3: A.volumen_m3 }] : []),
-                    ...(b > 0 ? [{ modelo_id: B.modelo_id, nombre_modelo: B.nombre_modelo, cantidad: b, volumen_m3: B.volumen_m3 }] : []),
-                  ],
-                  total_contenedores: a + b,
-                  volumen_total_disponible: volumenTotal,
-                  eficiencia_porcentaje: Math.max(0, Math.min(100, eficienciaCombo)),
-                  espacio_sobrante_m3: sobrante
-                });
-              }
-            }
-          }
-        }
-
-        combos.sort((x, y) => {
-          if (y.eficiencia_porcentaje !== x.eficiencia_porcentaje) return y.eficiencia_porcentaje - x.eficiencia_porcentaje;
-          if (x.total_contenedores !== y.total_contenedores) return x.total_contenedores - y.total_contenedores;
-          return x.volumen_total_disponible - y.volumen_total_disponible;
-        });
-
-        const seen = new Set();
-        const unicos = [];
-        for (const c of combos) {
-          const key = c.items
-            .slice()
-            .sort((a, b) => a.modelo_id - b.modelo_id)
-            .map(it => `${it.modelo_id}x${it.cantidad}`)
-            .join('+');
-          if (!seen.has(key) && c.items.length >= 2) {
-            seen.add(key);
-            unicos.push(c);
-          }
-        }
-        const top3 = unicos.slice(0, 3).map(c => ({
-          ...c,
-          etiqueta: c.eficiencia_porcentaje >= 90 ? 'ALTA EFICIENCIA' : c.eficiencia_porcentaje >= 80 ? 'RECOMENDADA' : 'ALTERNATIVA'
-        }));
-        if (sugerencias.length > 0 && top3.length > 0) {
-          const bestSingle = sugerencias[0];
-          const bestCombo = top3[0];
-          const UMBRAL = 80;
-      if ((bestCombo.eficiencia_porcentaje || 0) >= UMBRAL && (bestCombo.eficiencia_porcentaje || 0) >= (bestSingle.eficiencia || 0)) {
-            const sugerenciaCombinada = {
-              modelo_id: null,
-              nombre_modelo: 'Combinación de modelos',
-              cantidad_sugerida: bestCombo.total_contenedores,
-              total_productos_transportados: cantidadTotalProductos,
-              volumen_total_productos: volumenTotalOrden,
-              volumen_total_contenedores: bestCombo.volumen_total_disponible,
-              espacio_sobrante_m3: bestCombo.espacio_sobrante_m3,
-              porcentaje_espacio_sobrante: Math.max(0, ((bestCombo.espacio_sobrante_m3 || 0) / volumenTotalOrden) * 100),
-              eficiencia: Math.max(0, Math.min(100, bestCombo.eficiencia_porcentaje)),
-              mensaje_comparacion: '✅ Combinación con alto aprovechamiento',
-              recomendacion: bestCombo.eficiencia_porcentaje >= 95 ? 'MUY RECOMENDADO - Mínimo desperdicio' : 'RECOMENDADO - Buen aprovechamiento',
-              nivel_recomendacion: bestCombo.eficiencia_porcentaje >= 95 ? 'EXCELENTE' : bestCombo.eficiencia_porcentaje >= 85 ? 'BUENO' : 'ACEPTABLE',
-              es_mejor_opcion: true,
-              etiqueta_recomendacion: '🏆 MEJOR OPCIÓN (COMBINACIÓN)',
-              es_combinacion: true,
-              combinacion_items: bestCombo.items,
-              combinaciones_alternativas: top3,
-        es_recomendable: (bestCombo.eficiencia_porcentaje || 0) >= UMBRAL,
-        motivo_no_recomendable: (bestCombo.eficiencia_porcentaje || 0) >= UMBRAL ? undefined : 'Eficiencia baja (<80%)',
-              es_calculo_por_orden: true
-            };
-            sugerencias[0].es_mejor_opcion = false;
-            sugerencias.unshift(sugerenciaCombinada);
-          } else {
-            sugerencias[0].combinaciones_alternativas = top3;
-          }
-        }
-      } catch (e) {
-        console.warn('No se pudieron generar combinaciones alternativas para orden:', e.message || e);
-      }
+  // Se deshabilitan combinaciones de modelos: solo recomendaciones de un solo modelo por solicitud
 
       // Calcular porcentaje de recomendación normalizado (top = 100) con desempate por menos contenedores
       if (sugerencias.length > 0) {
@@ -944,126 +1051,7 @@ const sugerenciasService = {
         }
       }
       
-      // Generar combinaciones alternativas (mezcla de 2 modelos) para cubrir el volumen con mejor aprovechamiento
-      try {
-        const volumenRequerido = parseFloat(producto.volumen_total_m3_producto);
-
-        // Filtrar solo modelos en los que el producto cabe
-        const modelosViables = modelos.filter((m) => (
-          productoFrente <= m.dim_int_frente &&
-          productoAncho <= m.dim_int_profundo &&
-          productoAlto <= m.dim_int_alto
-        ));
-
-        const combos = [];
-        // Precalcular volúmenes m3 de modelos
-        const modelosVol = modelosViables.map(m => ({
-          modelo_id: m.modelo_id,
-          nombre_modelo: m.nombre_modelo,
-          volumen_m3: (m.volumen_litros || 0) / 1000
-        })).filter(m => m.volumen_m3 > 0);
-
-        // Limitar pares para rendimiento: tomar hasta 5 modelos más cercanos al volumen unitario
-        const topModelos = modelosVol.slice(0, Math.min(5, modelosVol.length));
-
-        // Explorar pares (incluyendo mismo modelo dos veces) con búsqueda acotada
-        for (let i = 0; i < topModelos.length; i++) {
-          for (let j = i; j < topModelos.length; j++) {
-            const A = topModelos[i];
-            const B = topModelos[j];
-            const maxA = Math.ceil(volumenRequerido / A.volumen_m3) + 2;
-            const maxB = Math.ceil(volumenRequerido / B.volumen_m3) + 2;
-
-            for (let a = 0; a <= maxA; a++) {
-              for (let b = 0; b <= maxB; b++) {
-                if (a + b === 0) continue; // al menos un contenedor
-                // Evitar combos que usen un solo modelo si ya evaluamos como sugerencia individual
-                if (i === j && b > 0 && a === 0) continue;
-                const volumenTotal = a * A.volumen_m3 + b * B.volumen_m3;
-                if (volumenTotal <= 0) continue;
-                if (volumenTotal + 1e-9 < volumenRequerido) continue; // no alcanza
-
-                const eficienciaCombo = (volumenRequerido / volumenTotal) * 100;
-                const sobrante = volumenTotal - volumenRequerido;
-
-                combos.push({
-                  items: [
-                    ...(a > 0 ? [{ modelo_id: A.modelo_id, nombre_modelo: A.nombre_modelo, cantidad: a, volumen_m3: A.volumen_m3 }] : []),
-                    ...(b > 0 ? [{ modelo_id: B.modelo_id, nombre_modelo: B.nombre_modelo, cantidad: b, volumen_m3: B.volumen_m3 }] : []),
-                  ],
-                  total_contenedores: a + b,
-                  volumen_total_disponible: volumenTotal,
-                  eficiencia_porcentaje: Math.max(0, Math.min(100, eficienciaCombo)),
-                  espacio_sobrante_m3: sobrante
-                });
-              }
-            }
-          }
-        }
-
-        // Ordenar combos: mayor eficiencia, luego menos contenedores, luego menor volumen total
-        combos.sort((x, y) => {
-          if (y.eficiencia_porcentaje !== x.eficiencia_porcentaje) return y.eficiencia_porcentaje - x.eficiencia_porcentaje;
-          if (x.total_contenedores !== y.total_contenedores) return x.total_contenedores - y.total_contenedores;
-          return x.volumen_total_disponible - y.volumen_total_disponible;
-        });
-
-        // Quitar duplicados equivalentes (mismos modelos y cantidades)
-        const seen = new Set();
-        const unicos = [];
-        for (const c of combos) {
-          const key = c.items
-            .slice()
-            .sort((a, b) => a.modelo_id - b.modelo_id)
-            .map(it => `${it.modelo_id}x${it.cantidad}`)
-            .join('+');
-          if (!seen.has(key) && c.items.length >= 2) { // mantener solo combinaciones (>=2 modelos)
-            seen.add(key);
-            unicos.push(c);
-          }
-        }
-
-        const top3 = unicos.slice(0, 3).map(c => ({
-          ...c,
-          etiqueta: c.eficiencia_porcentaje >= 90 ? 'ALTA EFICIENCIA' : c.eficiencia_porcentaje >= 80 ? 'RECOMENDADA' : 'ALTERNATIVA'
-        }));
-        // Promocionar combinación si supera a la mejor single-model y cumple umbral
-        if (sugerenciasOrdenadas.length > 0 && top3.length > 0) {
-          const bestSingle = sugerenciasOrdenadas[0];
-          const bestCombo = top3[0];
-          const UMBRAL = 80; // mínimo 80% para recomendar
-          if ((bestCombo.eficiencia_porcentaje || 0) >= UMBRAL && (bestCombo.eficiencia_porcentaje || 0) >= (bestSingle.eficiencia || 0)) {
-            // Crear sugerencia sintética de combinación
-            const sugerenciaCombinada = {
-              modelo_id: null,
-              nombre_modelo: 'Combinación de modelos',
-              cantidad_sugerida: bestCombo.total_contenedores,
-              total_productos_transportados: cantidadProductos,
-              volumen_total_productos: volumenTotalRequeridoM3,
-              volumen_total_contenedores: bestCombo.volumen_total_disponible,
-              espacio_sobrante_m3: bestCombo.espacio_sobrante_m3,
-              porcentaje_espacio_sobrante: Math.max(0, ((bestCombo.espacio_sobrante_m3 || 0) / volumenTotalRequeridoM3) * 100),
-              eficiencia: Math.max(0, Math.min(100, bestCombo.eficiencia_porcentaje)),
-              mensaje_comparacion: '✅ Combinación con alto aprovechamiento',
-              recomendacion: bestCombo.eficiencia_porcentaje >= 95 ? 'MUY RECOMENDADO - Mínimo desperdicio' : 'RECOMENDADO - Buen aprovechamiento',
-              nivel_recomendacion: bestCombo.eficiencia_porcentaje >= 95 ? 'EXCELENTE' : bestCombo.eficiencia_porcentaje >= 85 ? 'BUENO' : 'ACEPTABLE',
-              es_mejor_opcion: true,
-              etiqueta_recomendacion: '🏆 MEJOR OPCIÓN (COMBINACIÓN)',
-              es_combinacion: true,
-              combinacion_items: bestCombo.items,
-              combinaciones_alternativas: top3,
-            };
-            // Quitar la marca de mejor opción al single-model y anteponer combinación
-            if (sugerenciasOrdenadas[0]) sugerenciasOrdenadas[0].es_mejor_opcion = false;
-            sugerenciasOrdenadas.unshift(sugerenciaCombinada);
-          } else {
-            // Si no se promociona, igualmente adjuntar las alternativas al primero
-            sugerenciasOrdenadas[0].combinaciones_alternativas = top3;
-          }
-        }
-      } catch (e) {
-        console.warn('No se pudieron generar combinaciones alternativas:', e.message || e);
-      }
+  // Se deshabilitan combinaciones de modelos en modo individual: solo single-model
 
       // Calcular porcentaje de recomendación normalizado (top = 100) con desempate por menos contenedores
       if (sugerenciasOrdenadas.length > 0) {

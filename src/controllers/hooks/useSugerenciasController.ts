@@ -4,6 +4,7 @@ import { SugerenciaReemplazo, CreateSugerenciaData, CalculoSugerencia, Resultado
 
 export const useSugerenciasController = () => {
   const [sugerencias, setSugerencias] = useState<SugerenciaReemplazo[]>([]);
+  const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<'idle' | 'loading' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -19,6 +20,24 @@ export const useSugerenciasController = () => {
       setError('Error al cargar las sugerencias');
       setLoading('error');
       console.error('Error loading sugerencias:', err);
+    }
+  };
+
+  // Cargar sugerencias paginadas
+  const loadSugerenciasPaginated = async (opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null }) => {
+    setLoading('loading');
+    setError(null);
+    try {
+      const res = await SugerenciasController.getSugerenciasPaginated(opts);
+      setSugerencias(res.items);
+      setTotal(res.total);
+      setLoading('idle');
+      return res;
+    } catch (err) {
+      setError('Error al cargar las sugerencias');
+      setLoading('error');
+      console.error('Error loading sugerencias paginadas:', err);
+      throw err;
     }
   };
 
@@ -82,9 +101,11 @@ export const useSugerenciasController = () => {
 
   return {
     sugerencias,
+  total,
     loading,
     error,
     loadSugerencias,
+  loadSugerenciasPaginated,
     calcularSugerencias,
     createSugerencia,
     updateSugerencia,

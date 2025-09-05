@@ -499,11 +499,61 @@ app.get('/api/inventario-prospectos/ordenes-despacho', async (req, res) => {
   const limit = req.query.limit ? Math.min(parseInt(req.query.limit), 1000) : 200;
   const offset = req.query.offset ? Math.max(parseInt(req.query.offset), 0) : 0;
   const search = req.query.search ? String(req.query.search) : '';
-  const ordenes = await inventarioProspectosService.getOrdenesDespacho(clienteId, { limit, offset, search });
+  const startDate = req.query.startDate ? String(req.query.startDate) : null;
+  const endDate = req.query.endDate ? String(req.query.endDate) : null;
+  const ordenes = await inventarioProspectosService.getOrdenesDespacho(clienteId, { limit, offset, search, startDate, endDate });
   res.json(ordenes);
   } catch (error) {
     console.error('Error al obtener órdenes de despacho:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Nueva ruta: recomendaciones por rango de fechas, agrupadas por orden
+app.post('/api/sugerencias/calcular-por-rango', async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+
+    // Traer órdenes en el rango
+    const { items: ordenes } = await inventarioProspectosService.getOrdenesDespacho(parseInt(cliente_id), {
+      limit: 1000,
+      offset: 0,
+      search: '',
+      startDate,
+      endDate
+    });
+
+    const resultados = [];
+    for (const ord of ordenes) {
+      const orden = ord.orden_despacho;
+      const sugerencias = await sugerenciasService.calcularSugerenciasPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden });
+      resultados.push({ orden_despacho: orden, resumen: ord, sugerencias });
+    }
+    res.json({ total_ordenes: ordenes.length, resultados });
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/calcular-por-rango:', error);
+    res.status(500).json({ error: 'Error al calcular sugerencias por rango de fechas' });
+  }
+});
+
+// Nueva ruta: recomendaciones agregadas por rango (suma total de m3 en el rango)
+app.post('/api/sugerencias/calcular-por-rango-total', async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+
+    const result = await sugerenciasService.calcularSugerenciasPorRangoTotal({
+      cliente_id: parseInt(cliente_id),
+      startDate,
+      endDate
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/calcular-por-rango-total:', error);
+    res.status(500).json({ error: 'Error al calcular sugerencias por rango total' });
   }
 });
 
@@ -724,6 +774,17 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
 // Rutas para sugerencias - MOVER AQUÍ ANTES DEL app.listen()
 app.get('/api/sugerencias', async (req, res) => {
   try {
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit), 1000) : null;
+    const offset = req.query.offset ? Math.max(parseInt(req.query.offset), 0) : 0;
+    const search = req.query.search ? String(req.query.search) : '';
+    const clienteId = req.query.cliente_id ? parseInt(req.query.cliente_id) : null;
+
+    // Si se especifica limit, usar la versión paginada; de lo contrario devolver todo (compatibilidad)
+    if (limit !== null) {
+      const result = await sugerenciasService.getSugerenciasPaginated({ limit, offset, search, clienteId });
+      return res.json(result);
+    }
+
     const sugerencias = await sugerenciasService.getAllSugerencias();
     res.json(sugerencias);
   } catch (error) {

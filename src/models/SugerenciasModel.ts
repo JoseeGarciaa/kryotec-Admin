@@ -108,6 +108,24 @@ export const SugerenciasModel = {
     }
   },
 
+  // Obtener sugerencias paginadas (con filtro opcional por cliente y búsqueda)
+  getSugerenciasPaginated: async (opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null }): Promise<{ total: number; items: SugerenciaReemplazo[] }> => {
+    try {
+      const limit = opts?.limit ?? 50;
+      const offset = opts?.offset ?? 0;
+      const search = opts?.search ?? '';
+      const clienteId = opts?.clienteId ?? null;
+      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (search) params.set('search', search);
+      if (clienteId) params.set('cliente_id', String(clienteId));
+      const response = await axios.get(`${API_URL}/sugerencias?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error al obtener sugerencias paginadas:', error);
+      throw error;
+    }
+  },
+
   // Obtener sugerencias por cliente
   getSugerenciasByCliente: async (clienteId: number): Promise<SugerenciaReemplazo[]> => {
     try {

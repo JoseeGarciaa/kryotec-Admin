@@ -8,7 +8,7 @@ import { InventarioProspecto } from '../../../../models/InventarioProspectoModel
 import jsPDF from 'jspdf';
 
 const SugerenciasView: React.FC = () => {
-  const { sugerencias, loading, error, calcularSugerencias, createSugerencia, deleteSugerencia } = useSugerenciasController();
+  const { sugerencias, total: sugerenciasTotal, loading, error, loadSugerenciasPaginated, calcularSugerencias, createSugerencia, deleteSugerencia } = useSugerenciasController();
   const { clientes } = useClienteProspectoController();
   const { inventario, total, getInventarioByCliente } = useInventarioProspectoController();
   
@@ -24,13 +24,33 @@ const SugerenciasView: React.FC = () => {
   const [calculando, setCalculando] = useState(false);
   const [filteredInventario, setFilteredInventario] = useState<InventarioProspecto[]>([]);
   const [clienteHistorialFilter, setClienteHistorialFilter] = useState<number | ''>('');
+  const [sugPage, setSugPage] = useState(0);
+  const sugLimit = 50;
+  const [sugSearch, setSugSearch] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   
   // Estados para cálculo por orden de despacho
   const [calculoPorOrden, setCalculoPorOrden] = useState(false);
+  // Estado para cálculo por rango de fechas
+  const [calculoPorRango, setCalculoPorRango] = useState(false);
   const [ordenesDespacho, setOrdenesDespacho] = useState<any[]>([]);
   const [selectedOrden, setSelectedOrden] = useState<string>('');
   const [productosOrden, setProductosOrden] = useState<any[]>([]);
+  // Filtro por rango de fechas
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  // Resultado agregado por rango total (suma de m³)
+  const [resultadoRangoTotal, setResultadoRangoTotal] = useState<{ resumen: any; sugerencias: ResultadoSugerencia[] } | null>(null);
+  // Resumen previo (preview) para rango, mostrado bajo los filtros antes de calcular sugerencias
+  const [rangoResumenPreview, setRangoResumenPreview] = useState<{
+    total_ordenes: number;
+    total_productos: number;
+    volumen_total_m3: number;
+    startDate?: string;
+    endDate?: string;
+  } | null>(null);
+  const [rangoResumenLoading, setRangoResumenLoading] = useState(false);
+  const [rangoResumenError, setRangoResumenError] = useState<string | null>(null);
   // Paginación y búsqueda de órdenes
   const [ordenesPage, setOrdenesPage] = useState(0);
   const ordenesLimit = 50;
@@ -59,10 +79,31 @@ const SugerenciasView: React.FC = () => {
   // Estados para PDF individual
   const [sugerenciaIndividual, setSugerenciaIndividual] = useState<any>(null);
 
+  // Derivados para mostrar resumen del rango total (con llaves alternativas)
+  const rangoResumen: any = (resultadoRangoTotal && (resultadoRangoTotal as any).resumen) || null;
+  const rangoStart = rangoResumen?.startDate ?? rangoResumen?.start_date ?? rangoResumen?.desde ?? '';
+  const rangoEnd = rangoResumen?.endDate ?? rangoResumen?.end_date ?? rangoResumen?.hasta ?? '';
+  const rangoTotalProductos = Number(
+    rangoResumen?.total_productos ?? rangoResumen?.cantidad_productos ?? rangoResumen?.totalProductos ?? rangoResumen?.cantidad_total ?? 0
+  );
+  const rangoTotalM3 = Number(
+    rangoResumen?.volumen_total_m3 ?? rangoResumen?.volumen_total ?? rangoResumen?.total_m3 ?? rangoResumen?.m3_total ?? 0
+  );
+
   // Filtrar sugerencias por cliente seleccionado
-  const filteredSugerencias = clienteHistorialFilter 
-    ? sugerencias.filter(s => s.cliente_id === Number(clienteHistorialFilter))
-    : sugerencias;
+  const filteredSugerencias = sugerencias; // ya se traen paginadas del servidor
+
+  // Cargar historial paginado al montar y cuando cambien filtros
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        await loadSugerenciasPaginated({ limit: sugLimit, offset: sugPage * sugLimit, search: sugSearch, clienteId: clienteHistorialFilter ? Number(clienteHistorialFilter) : null });
+      } catch {
+        // error ya manejado en hook
+      }
+    };
+    cargar();
+  }, [sugPage, sugSearch, clienteHistorialFilter]);
 
   // Filtrar inventario por cliente seleccionado
   useEffect(() => {
@@ -149,6 +190,86 @@ const SugerenciasView: React.FC = () => {
       setOrdenesTotal(0);
     } finally {
       setOrdenesLoading(false);
+    }
+  };
+
+  // Eliminado cálculo por rango agrupado; se usa solo rango total
+
+  // Preview automático del resumen por rango (órdenes, productos, m3) al seleccionar cliente y fechas
+  useEffect(() => {
+    // Solo ejecutar en modo rango y cuando existan filtros completos
+    if (!calculoPorRango || !selectedCliente || !startDate || !endDate) {
+      setRangoResumenPreview(null);
+      setRangoResumenError(null);
+      setRangoResumenLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setRangoResumenLoading(true);
+    setRangoResumenError(null);
+
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+
+    // Debounce breve para no disparar múltiples requests al tipear
+    const timer = setTimeout(async () => {
+      try {
+        const resp = await fetch(`${API_URL}/sugerencias/calcular-por-rango-total`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cliente_id: Number(selectedCliente), startDate, endDate }),
+          signal: controller.signal
+        });
+        if (!resp.ok) throw new Error('Error obteniendo resumen');
+        const data = await resp.json();
+        const resumen = data.resumen || {};
+        setRangoResumenPreview({
+          total_ordenes: Number(resumen.total_ordenes ?? 0),
+          total_productos: Number(resumen.total_productos ?? 0),
+          volumen_total_m3: Number(resumen.volumen_total_m3 ?? 0),
+          startDate: resumen.startDate ?? resumen.start_date ?? startDate,
+          endDate: resumen.endDate ?? resumen.end_date ?? endDate,
+        });
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') {
+          setRangoResumenError('No se pudo obtener el resumen del rango.');
+          setRangoResumenPreview(null);
+        }
+      } finally {
+        setRangoResumenLoading(false);
+      }
+    }, 400);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [calculoPorRango, selectedCliente, startDate, endDate]);
+
+  const handleCalcularPorRangoTotal = async () => {
+    if (!selectedCliente || !startDate || !endDate) {
+      alert('Seleccione cliente y rango de fechas');
+      return;
+    }
+    setCalculando(true);
+    try {
+      const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+      const resp = await fetch(`${API_URL}/sugerencias/calcular-por-rango-total`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cliente_id: Number(selectedCliente), startDate, endDate })
+      });
+      if (!resp.ok) throw new Error('Error en cálculo por rango total');
+      const data = await resp.json();
+      const sugs = (data.sugerencias || []) as ResultadoSugerencia[];
+      const ordenados = [...sugs].sort((a: any, b: any) => ((b.porcentaje_recomendacion ?? b.eficiencia_porcentaje ?? b.eficiencia ?? 0) - (a.porcentaje_recomendacion ?? a.eficiencia_porcentaje ?? a.eficiencia ?? 0)));
+  setResultadoRangoTotal({ resumen: data.resumen, sugerencias: ordenados });
+      setResultados([]);
+    } catch (e) {
+      console.error(e);
+      alert('No se pudieron calcular recomendaciones por rango total');
+    } finally {
+      setCalculando(false);
     }
   };
 
@@ -266,7 +387,7 @@ const SugerenciasView: React.FC = () => {
         return;
       }
 
-      await createSugerencia({
+  await createSugerencia({
         cliente_id: Number(selectedCliente),
         inv_id: Number(selectedInventario),
         modelo_sugerido: resultado.nombre_modelo,
@@ -277,6 +398,8 @@ const SugerenciasView: React.FC = () => {
       
       // Limpiar las recomendaciones después de guardar exitosamente
       setResultados([]);
+  // Refrescar historial paginado
+  await loadSugerenciasPaginated({ limit: sugLimit, offset: sugPage * sugLimit, search: sugSearch, clienteId: clienteHistorialFilter ? Number(clienteHistorialFilter) : null });
       alert('Sugerencia guardada exitosamente. Las recomendaciones se han limpiado.');
     } catch (err) {
       console.error('Error al guardar sugerencia:', err);
@@ -286,49 +409,167 @@ const SugerenciasView: React.FC = () => {
 
   const handleGuardarSugerenciaOrden = async (resultado: ResultadoSugerencia) => {
     try {
-      // Para cada producto, calcular exactamente cuántos contenedores necesita usando la información del resultado
-      const detalleProductos = resultado.detalle_contenedores_por_producto || [];
-      
-      // Verificar si ya existen sugerencias duplicadas para cualquiera de los productos
-      const duplicados = [];
+      // Evitar guardar combinaciones (se requiere un único modelo)
+      if ((resultado as any).es_combinacion || resultado.modelo_id == null) {
+        alert('No se puede guardar una "Combinación de modelos" como sugerencia. Selecciona una opción de un único modelo.');
+        return;
+      }
+
+      // Detalle por producto calculado en backend (si está disponible)
+      let detalleProductos: any[] = (resultado as any).detalle_contenedores_por_producto || [];
+
+      // Fallback: calcular detalle desde resumen y volumen del modelo
+      if ((!detalleProductos || detalleProductos.length === 0) && (resultado as any).resumen_productos) {
+        const resumen: any[] = (resultado as any).resumen_productos || [];
+        const volumenModeloM3: number = (resultado as any).volumen_modelo_m3 || ((resultado as any).volumen_litros ? ((resultado as any).volumen_litros / 1000) : 0);
+        if (volumenModeloM3 > 0) {
+          detalleProductos = resumen.map((it: any) => {
+            const cantidad = Number(it.cantidad || 0);
+            const volTotal = (it.volumen_total_producto != null)
+              ? Number(it.volumen_total_producto)
+              : Number(it.volumen_individual || 0) * cantidad;
+            const necesarios = Math.max(1, Math.ceil((volTotal || 0) / volumenModeloM3));
+            return {
+              inv_id: it.inv_id,
+              producto: it.producto,
+              descripcion_producto: it.descripcion,
+              cantidad_productos: cantidad,
+              contenedores_necesarios: necesarios,
+              tipo_ajuste: 'volumetrico',
+              volumen_total_producto: volTotal
+            };
+          }).filter((d: any) => d.inv_id);
+        }
+      }
+
+      if (!detalleProductos || detalleProductos.length === 0) {
+        alert('No se pudo determinar el detalle por producto para guardar.');
+        return;
+      }
+
+      // Evitar duplicados
+      const duplicados: string[] = [];
       for (const detalle of detalleProductos) {
-        const existeSugerencia = sugerencias.some(s => 
+        const existeSugerencia = sugerencias.some(s =>
           s.cliente_id === Number(selectedCliente) &&
           s.inv_id === Number(detalle.inv_id) &&
           s.modelo_sugerido === resultado.nombre_modelo &&
           s.cantidad_sugerida === detalle.contenedores_necesarios
         );
-        
         if (existeSugerencia) {
           duplicados.push(detalle.producto || `Producto ID: ${detalle.inv_id}`);
         }
       }
-
       if (duplicados.length > 0) {
-        alert(`Las siguientes sugerencias ya han sido guardadas anteriormente y no se pueden duplicar:\n- ${duplicados.join('\n- ')}`);
+        alert(`Las siguientes sugerencias ya fueron guardadas y no se duplicarán:\n- ${duplicados.join('\n- ')}`);
         return;
       }
-      
-      // Crear una sugerencia individual para cada producto con su cantidad específica
-      const promesasGuardado = detalleProductos.map(async (detalle: any) => {
-        return createSugerencia({
-          cliente_id: Number(selectedCliente),
-          inv_id: Number(detalle.inv_id),
-          modelo_sugerido: resultado.nombre_modelo,
-          cantidad_sugerida: detalle.contenedores_necesarios, // Usar la cantidad específica calculada
-          modelo_id: resultado.modelo_id,
-          estado: 'pendiente'
-        });
-      });
-      
-      await Promise.all(promesasGuardado);
-      
-      // Limpiar las recomendaciones después de guardar exitosamente
+
+      // Guardar una sugerencia por producto
+  await Promise.all(detalleProductos.map((detalle: any) => createSugerencia({
+        cliente_id: Number(selectedCliente),
+        inv_id: Number(detalle.inv_id),
+        modelo_sugerido: resultado.nombre_modelo,
+        cantidad_sugerida: detalle.contenedores_necesarios,
+        modelo_id: resultado.modelo_id,
+        estado: 'pendiente'
+      })));
+
       setResultados([]);
-      alert(`Sugerencias guardadas exitosamente: ${detalleProductos.length} productos con cantidades específicas de contenedores. Las recomendaciones se han limpiado.`);
+  await loadSugerenciasPaginated({ limit: sugLimit, offset: sugPage * sugLimit, search: sugSearch, clienteId: clienteHistorialFilter ? Number(clienteHistorialFilter) : null });
+      alert(`Sugerencias guardadas: ${detalleProductos.length} productos.`);
     } catch (err) {
-      console.error('Error al guardar sugerencia:', err);
-      alert('Error al guardar la sugerencia');
+      console.error('Error al guardar sugerencia (orden):', err);
+      alert('Error al guardar la sugerencia de la orden');
+    }
+  };
+
+  const handleGuardarSugerenciaRangoTotal = async (resultado: any) => {
+    try {
+      if (!selectedCliente) {
+        alert('Seleccione un cliente para guardar.');
+        return;
+      }
+
+      // Solo guardar opciones de un único modelo
+      if (resultado?.es_combinacion || resultado?.modelo_id == null) {
+        alert('No se puede guardar una "Combinación de modelos" como sugerencia. Selecciona una opción de un único modelo.');
+        return;
+      }
+
+      // Preferir detalle desde backend
+      let detalleProductos: any[] = resultado?.detalle_contenedores_por_producto || [];
+
+      // Fallback con resumen + volumen del modelo
+      if ((!detalleProductos || detalleProductos.length === 0) && resultado?.resumen_productos) {
+        const resumen: any[] = resultado.resumen_productos || [];
+        const volumenModeloM3: number = resultado.volumen_modelo_m3 || (resultado.volumen_litros ? (resultado.volumen_litros / 1000) : 0);
+        if (volumenModeloM3 > 0) {
+          detalleProductos = resumen.map((it: any) => {
+            const cantidad = Number(it.cantidad || 0);
+            const volTotal = (it.volumen_total_producto != null)
+              ? Number(it.volumen_total_producto)
+              : Number(it.volumen_individual || 0) * cantidad;
+            const necesarios = Math.max(1, Math.ceil((volTotal || 0) / volumenModeloM3));
+            return {
+              inv_id: it.inv_id,
+              producto: it.producto,
+              descripcion_producto: it.descripcion,
+              cantidad_productos: cantidad,
+              contenedores_necesarios: necesarios,
+              tipo_ajuste: 'volumetrico',
+              volumen_total_producto: volTotal
+            };
+          }).filter((d: any) => d.inv_id);
+        }
+      }
+
+      if (!detalleProductos || detalleProductos.length === 0) {
+        alert('No se pudo determinar el detalle por producto para guardar.');
+        return;
+      }
+
+      // Evitar duplicados existentes
+      const aGuardar: any[] = [];
+      const duplicados: string[] = [];
+      for (const detalle of detalleProductos) {
+        const yaExiste = sugerencias.some(s =>
+          s.cliente_id === Number(selectedCliente) &&
+          s.inv_id === Number(detalle.inv_id) &&
+          s.modelo_sugerido === resultado.nombre_modelo &&
+          s.cantidad_sugerida === detalle.contenedores_necesarios
+        );
+        if (yaExiste) {
+          duplicados.push(detalle.producto || `Producto ID: ${detalle.inv_id}`);
+        } else {
+          aGuardar.push(detalle);
+        }
+      }
+
+      if (aGuardar.length === 0) {
+        alert('Todas las sugerencias ya estaban guardadas.');
+        return;
+      }
+      if (duplicados.length > 0) {
+        console.warn('Sugerencias duplicadas omitidas:', duplicados);
+      }
+
+      // Guardar por producto
+  await Promise.all(aGuardar.map((detalle: any) => createSugerencia({
+        cliente_id: Number(selectedCliente),
+        inv_id: Number(detalle.inv_id),
+        modelo_sugerido: resultado.nombre_modelo,
+        cantidad_sugerida: detalle.contenedores_necesarios,
+        modelo_id: resultado.modelo_id,
+        estado: 'pendiente'
+      })));
+
+      setResultados([]);
+  await loadSugerenciasPaginated({ limit: sugLimit, offset: sugPage * sugLimit, search: sugSearch, clienteId: clienteHistorialFilter ? Number(clienteHistorialFilter) : null });
+      alert(`Sugerencias guardadas: ${aGuardar.length} productos.${duplicados.length ? `\nOmitidos por duplicado: ${duplicados.length}` : ''}`);
+    } catch (err) {
+      console.error('Error al guardar sugerencia (rango):', err);
+      alert('Error al guardar las sugerencias del rango');
     }
   };
 
@@ -345,7 +586,8 @@ const SugerenciasView: React.FC = () => {
   const handleDeleteSugerencia = async (id: number) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar esta sugerencia?')) {
       try {
-        await deleteSugerencia(id);
+  await deleteSugerencia(id);
+  await loadSugerenciasPaginated({ limit: sugLimit, offset: sugPage * sugLimit, search: sugSearch, clienteId: clienteHistorialFilter ? Number(clienteHistorialFilter) : null });
         alert('Sugerencia eliminada exitosamente');
       } catch (err) {
         console.error('Error al eliminar sugerencia:', err);
@@ -457,6 +699,15 @@ const SugerenciasView: React.FC = () => {
   };
 
   const generatePDF = async () => {
+    // Traer todas las sugerencias (ignorando paginación) para el PDF completo
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+    let allSugerencias = sugerencias;
+    try {
+      const resp = await fetch(`${API_URL}/sugerencias`);
+      if (resp.ok) {
+        allSugerencias = await resp.json();
+      }
+    } catch {}
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
@@ -476,15 +727,15 @@ const SugerenciasView: React.FC = () => {
     pdf.setFont('helvetica', 'normal');
     pdf.text('Reporte de Sugerencias', 20, 35);
     
-    // Fecha
-    pdf.setTextColor(200, 200, 200);
-    pdf.setFontSize(10);
-    const fecha = new Date().toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    pdf.text(`Generado el: ${fecha}`, pageWidth - 60, 25);
+        // Fecha - Ajustado el espaciado
+        pdf.setTextColor(200, 200, 200);
+        pdf.setFontSize(10);
+        const fecha = new Date().toLocaleDateString('es-ES', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        pdf.text(`Generado el: ${fecha}`, pageWidth - 100, 25);
     
     let yPosition = 60;
     
@@ -511,15 +762,16 @@ const SugerenciasView: React.FC = () => {
     
     yPosition += 15;
     
-    // Datos de las sugerencias
+  // Datos de las sugerencias
     pdf.setTextColor(0, 0, 0);
     pdf.setFont('helvetica', 'normal');
     
-    sugerencias.forEach((sugerencia, index) => {
+  allSugerencias.forEach((sugerencia: any, index: number) => {
       // Alternar colores de fila
       if (index % 2 === 0) {
         pdf.setFillColor(248, 250, 252); // bg-slate-50
-        pdf.rect(20, yPosition - 2, pageWidth - 40, 18, 'F');
+        // Aumentar altura para incluir línea de Orden de despacho
+        pdf.rect(20, yPosition - 2, pageWidth - 40, 22, 'F');
       }
       
       pdf.setFontSize(8);
@@ -539,7 +791,7 @@ const SugerenciasView: React.FC = () => {
       const productoTruncado = producto.length > 20 ? producto.substring(0, 17) + '...' : producto;
       pdf.text(productoTruncado, 50, yPosition + 3);
       
-      // Mostrar descripción en línea separada con estilo diferente
+  // Mostrar descripción en línea separada con estilo diferente
       if (descripcion && descripcion.trim() !== '' && descripcion !== producto) {
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(7);
@@ -548,6 +800,16 @@ const SugerenciasView: React.FC = () => {
         pdf.text(descripcionTruncada, 50, yPosition + 11);
         pdf.setTextColor(0, 0, 0);
       }
+
+  // Orden de despacho (debajo de la descripción)
+  const orden = sugerencia.orden_despacho || '-';
+  pdf.setFont('helvetica', 'italic');
+  pdf.setFontSize(7);
+  pdf.setTextColor(100, 100, 100);
+  const ordenText = `Orden: ${orden}`;
+  pdf.text(ordenText, 50, yPosition + 15);
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFont('helvetica', 'normal');
       
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(8);
@@ -562,17 +824,17 @@ const SugerenciasView: React.FC = () => {
       pdf.text(precioTruncado, 135, yPosition + 5);
       
       // Modelo sugerido
-      const modelo = sugerencia.modelo_sugerido || 'N/A';
-      const modeloTruncado = modelo.length > 15 ? modelo.substring(0, 12) + '...' : modelo;
-      pdf.text(modeloTruncado, 155, yPosition + 5);
+  const modelo = sugerencia.modelo_sugerido || 'N/A';
+  // Mostrar el nombre completo del modelo sin truncar
+  pdf.text(modelo, 155, yPosition + 5);
       
       // Cantidad sugerida
       pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 180, yPosition + 5);
       
-      yPosition += 18; // Espacio mayor entre filas para acomodar descripción
+  yPosition += 22; // Espacio mayor entre filas para acomodar descripción y orden
       
       // Nueva página si es necesario
-      if (yPosition > pageHeight - 30) {
+  if (yPosition > pageHeight - 30) {
         pdf.addPage();
         currentPage++;
         yPosition = 30;
@@ -599,7 +861,18 @@ const SugerenciasView: React.FC = () => {
     }
 
     const clienteSeleccionado = clientes.find(c => c.cliente_id === Number(clienteHistorialFilter));
-    const sugerenciasCliente = filteredSugerencias;
+    // Traer todas las sugerencias del cliente (ignorando paginación de UI)
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+    let sugerenciasCliente = filteredSugerencias;
+    try {
+      const params = new URLSearchParams({ cliente_id: String(clienteSeleccionado?.cliente_id || '') });
+      const resp = await fetch(`${API_URL}/sugerencias?${params.toString()}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        // Si viene paginado (tiene items), tomar items; si viene array, usarlo
+        sugerenciasCliente = Array.isArray(data) ? data : (data.items || []);
+      }
+    } catch {}
 
     if (sugerenciasCliente.length === 0) {
       alert('Este cliente no tiene sugerencias guardadas');
@@ -633,7 +906,8 @@ const SugerenciasView: React.FC = () => {
       month: 'long',
       day: 'numeric'
     });
-    pdf.text(`Generado el: ${fecha}`, pageWidth - 60, 25);
+  // Mover más a la izquierda
+  pdf.text(`Generado el: ${fecha}`, pageWidth - 100, 25);
     
     let yPosition = 60;
     
@@ -685,7 +959,7 @@ const SugerenciasView: React.FC = () => {
     pdf.setTextColor(0, 0, 0);
     pdf.setFont('helvetica', 'normal');
     
-    sugerenciasCliente.forEach((sugerencia, index) => {
+  sugerenciasCliente.forEach((sugerencia, index) => {
       // Debug: Verificar datos de la sugerencia
       console.log('Datos de sugerencia para PDF Cliente:', {
         producto: sugerencia.producto,
@@ -696,7 +970,8 @@ const SugerenciasView: React.FC = () => {
       // Alternar colores de fila
       if (index % 2 === 0) {
         pdf.setFillColor(248, 250, 252); // bg-slate-50
-        pdf.rect(20, yPosition - 5, pageWidth - 40, 15, 'F'); // Aumentar altura para 2 líneas
+        // Aumentar altura para incluir línea de Orden de despacho
+        pdf.rect(20, yPosition - 5, pageWidth - 40, 22, 'F');
       }
       
       pdf.setFontSize(7);
@@ -709,7 +984,7 @@ const SugerenciasView: React.FC = () => {
       const productoTruncado = producto.length > 18 ? producto.substring(0, 15) + '...' : producto;
       pdf.text(productoTruncado, 25, yPosition + 2);
       
-      // Mostrar descripción en segunda línea si existe
+  // Mostrar descripción en segunda línea si existe
       if (descripcion && descripcion.trim() !== '') {
         pdf.setFontSize(6);
         pdf.setTextColor(100, 100, 100);
@@ -718,6 +993,15 @@ const SugerenciasView: React.FC = () => {
         pdf.setTextColor(0, 0, 0);
         pdf.setFontSize(7);
       }
+
+  // Orden de despacho (tercera línea)
+  const orden = (sugerencia as any).orden_despacho || '-';
+  pdf.setFont('helvetica', 'italic');
+  pdf.setFontSize(6);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text(`Orden: ${orden}`, 25, yPosition + 13);
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFont('helvetica', 'normal');
       
       pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 80, yPosition + 2);
       
@@ -727,9 +1011,9 @@ const SugerenciasView: React.FC = () => {
       pdf.text(precioTruncado, 95, yPosition + 2);
       
       // Modelo sugerido
-      const modelo = sugerencia.modelo_sugerido || 'N/A';
-      const modeloTruncado = modelo.length > 12 ? modelo.substring(0, 9) + '...' : modelo;
-      pdf.text(modeloTruncado, 125, yPosition + 2);
+  const modelo = sugerencia.modelo_sugerido || 'N/A';
+  // Mostrar el nombre completo del modelo sin truncar
+  pdf.text(modelo, 125, yPosition + 2);
       
       pdf.text(sugerencia.cantidad_sugerida?.toString() || '0', 160, yPosition + 2);
       
@@ -745,7 +1029,7 @@ const SugerenciasView: React.FC = () => {
       pdf.text(estado, 175, yPosition + 2);
       pdf.setTextColor(0, 0, 0); // Resetear color
       
-      yPosition += 15; // Aumentar espacio entre filas
+  yPosition += 22; // Aumentar espacio entre filas para acomodar la orden
       
       // Nueva página si es necesario
       if (yPosition > pageHeight - 30) {
@@ -841,11 +1125,18 @@ const SugerenciasView: React.FC = () => {
       yPosition += lines.length * 5 + 10;
     }
     
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Modelo Sugerido:', 20, yPosition);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(sugerencia.modelo_sugerido || 'N/A', 80, yPosition);
-    yPosition += 15;
+  // Orden de Despacho
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Orden de Despacho:', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(sugerencia.orden_despacho || '-', 80, yPosition);
+  yPosition += 15;
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Modelo Sugerido:', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(sugerencia.modelo_sugerido || 'N/A', 80, yPosition);
+  yPosition += 15;
     
     // Precio de alquiler
     pdf.setFont('helvetica', 'bold');
@@ -928,9 +1219,10 @@ const SugerenciasView: React.FC = () => {
                   <input
                     type="radio"
                     name="tipoCalculo"
-                    checked={!calculoPorOrden}
+                    checked={!calculoPorOrden && !calculoPorRango}
                     onChange={() => {
                       setCalculoPorOrden(false);
+                      setCalculoPorRango(false);
                       setSelectedOrden('');
                       setProductosOrden([]);
                     }}
@@ -945,11 +1237,28 @@ const SugerenciasView: React.FC = () => {
                     checked={calculoPorOrden}
                     onChange={() => {
                       setCalculoPorOrden(true);
+                      setCalculoPorRango(false);
                       setSelectedInventario('');
                     }}
                     className="mr-2 text-blue-600 focus:ring-blue-600"
                   />
                   <span className="text-gray-900 dark:text-white">Por Orden de Despacho</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="tipoCalculo"
+                    checked={calculoPorRango}
+                    onChange={() => {
+                      setCalculoPorRango(true);
+                      setCalculoPorOrden(false);
+                      setSelectedInventario('');
+                      setSelectedOrden('');
+                      setProductosOrden([]);
+                    }}
+                    className="mr-2 text-blue-600 focus:ring-blue-600"
+                  />
+                  <span className="text-gray-900 dark:text-white">Por Rango de Fechas</span>
                 </label>
               </div>
             </div>
@@ -982,13 +1291,14 @@ const SugerenciasView: React.FC = () => {
             {calculoPorOrden ? (
               /* Modo: Cálculo por Orden de Despacho */
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Orden de Despacho *
+                <label className="block text-sm font-medium text-gray-200 mb-2">
+                  Filtros de órdenes
                 </label>
 
-                {/* Barra de búsqueda y paginación de órdenes */}
-                <div className="flex flex-col sm:flex-row gap-2 mb-2">
-                  <div className="flex-1">
+                {/* Búsqueda, filtros por fecha y paginación (separados para mejor usabilidad) */}
+                <div className="flex flex-col gap-3 mb-2">
+                  {/* Búsqueda */}
+                  <div className="w-full">
                     <input
                       type="text"
                       value={ordenesSearch}
@@ -997,7 +1307,11 @@ const SugerenciasView: React.FC = () => {
                       className="w-full p-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+
+                  {/* Se removieron filtros por fecha para este modo */}
+
+                  {/* Paginación */}
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mt-1">
                     <button
                       type="button"
                       onClick={() => setOrdenesPage(p => Math.max(0, p - 1))}
@@ -1019,6 +1333,7 @@ const SugerenciasView: React.FC = () => {
                     </button>
                   </div>
                 </div>
+                <label className="block text-sm font-medium text-gray-200 mb-2 mt-3">Orden de Despacho *</label>
                 <select
                   value={selectedOrden}
                   onChange={(e) => setSelectedOrden(e.target.value)}
@@ -1058,13 +1373,106 @@ const SugerenciasView: React.FC = () => {
                   </div>
                 )}
 
-                {/* Botón Calcular para orden de despacho */}
-                {selectedCliente && selectedOrden && (
+                {/* Botones de cálculo: por orden */}
+                {selectedCliente && (
+                  <div className="flex gap-4 pt-4">
+          {selectedOrden && (
+                      <button
+                        onClick={handleCalcular}
+                        disabled={calculando}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow"
+                      >
+                        {calculando ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                            Calculando...
+                          </>
+                        ) : (
+                          <>
+                            <Calculator size={20} />
+                            Calcular orden
+                          </>
+                        )}
+                      </button>
+                    )}
+                    <button
+                      onClick={resetForm}
+                      className="bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded-lg font-medium transition-colors"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : calculoPorRango ? (
+              /* Modo: Cálculo por Rango de Fechas */
+              <div>
+                <label className="block text-sm font-medium text-gray-200 mb-2">
+                  Rango de Fechas (Fecha de despacho)
+                </label>
+                <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-3 sm:p-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="w-full">
+                      <label className="block text-xs text-gray-400 mb-1">Desde</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full h-10 p-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div className="w-full">
+                      <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full h-10 p-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div className="col-span-1 sm:col-span-2 flex items-center justify-between">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Selecciona un cliente y el rango de fechas para calcular el total de m³.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setStartDate(''); setEndDate(''); }}
+                        className="px-3 py-2 text-xs rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50"
+                        title="Limpiar fechas"
+                        disabled={!startDate && !endDate}
+                      >
+                        Limpiar fechas
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {/* Resumen previo debajo de filtros */}
+                {selectedCliente && startDate && endDate && (
+                  <div className="mt-3 p-3 rounded-lg border border-gray-200 bg-white text-gray-800 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100">
+                    {rangoResumenLoading ? (
+                      <div className="text-xs">Cargando resumen del rango...</div>
+                    ) : rangoResumenError ? (
+                      <div className="text-xs text-red-300">{rangoResumenError}</div>
+                    ) : rangoResumenPreview ? (
+                      <div className="text-xs flex flex-wrap gap-2 items-center">
+                        <span className="font-semibold">Resumen:</span>
+                        <span>Órdenes: {rangoResumenPreview.total_ordenes}</span>
+                        <span>|</span>
+                        <span>Productos: {rangoResumenPreview.total_productos}</span>
+                        <span>|</span>
+                        <span>Total: {rangoResumenPreview.volumen_total_m3.toFixed(3)} m³</span>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500">Selecciona un cliente y el rango de fechas para ver el resumen.</div>
+                    )}
+                  </div>
+                )}
+                {selectedCliente && (
                   <div className="flex gap-4 pt-4">
                     <button
-                      onClick={handleCalcular}
-                      disabled={calculando}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                      onClick={handleCalcularPorRangoTotal}
+                      disabled={calculando || !startDate || !endDate}
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow"
                     >
                       {calculando ? (
                         <>
@@ -1074,7 +1482,7 @@ const SugerenciasView: React.FC = () => {
                       ) : (
                         <>
                           <Calculator size={20} />
-                          Calcular
+                          Calcular rango total (m³)
                         </>
                       )}
                     </button>
@@ -1284,10 +1692,72 @@ const SugerenciasView: React.FC = () => {
             )}
           </div>
 
-          {resultados.length === 0 ? (
+          {resultados.length === 0 && !resultadoRangoTotal ? (
       <div className="text-center text-gray-600 dark:text-gray-400 py-8">
               <Package size={48} className="mx-auto mb-4 opacity-50" />
               <p>Realiza un cálculo para ver las sugerencias</p>
+            </div>
+          ) : resultadoRangoTotal ? (
+            <div className="space-y-4">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="px-4 py-3 bg-gray-100 dark:bg-gray-700 rounded-t-lg flex items-center justify-between">
+                  <div className="text-sm text-gray-900 dark:text-white font-semibold">Rango total: {rangoStart} → {rangoEnd}</div>
+                  <div className="text-xs text-gray-700 dark:text-gray-300">
+                    {/* Mostrar total de órdenes y productos */}
+                    {resultadoRangoTotal?.resumen?.total_ordenes ?? 0} órdenes | {rangoTotalProductos} productos | {rangoTotalM3.toFixed(3)} m³
+                  </div>
+                </div>
+                <div className="p-4 space-y-4">
+                  {resultadoRangoTotal.sugerencias.map((resultado, index) => (
+                    <div key={index} className={`rounded-lg p-4 border ${
+                      resultado.es_mejor_opcion 
+                        ? 'bg-green-50 border-green-300 dark:bg-green-900/50 dark:border-green-500' 
+                        : 'bg-gray-50 border-gray-200 dark:bg-gray-700 dark:border-gray-600'
+                    }`}>
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h3 className="font-semibold text-lg text-gray-900 dark:text-white">{resultado.nombre_modelo}</h3>
+                          <p className="text-gray-700 dark:text-gray-400 text-sm">Cantidad sugerida: {resultado.cantidad_sugerida} unidades</p>
+                          {resultado.mensaje_comparacion && (
+                            <p className="text-blue-400 text-sm mt-1 font-medium">{resultado.mensaje_comparacion}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {resultado.es_recomendable && (
+                            <div className="text-white px-2 py-1 rounded text-sm bg-indigo-600">
+                              {(resultado.porcentaje_recomendacion ?? 0).toFixed(1)}% recomendado
+                            </div>
+                          )}
+                          <div className={`mt-1 text-white px-2 py-1 rounded text-[11px] ${
+                            ((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0) >= 95 ? 'bg-green-600' :
+                            ((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0) >= 85 ? 'bg-blue-600' :
+                            ((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0) >= 70 ? 'bg-yellow-600' :
+                            ((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0) >= 50 ? 'bg-orange-600' : 'bg-red-600'
+                          }`}>
+                            {((resultado.eficiencia_porcentaje || resultado.eficiencia) || 0).toFixed(1)}% eficiencia
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleGuardarSugerenciaRangoTotal(resultado)}
+                        disabled={resultado.es_recomendable === false}
+                        className={`w-full mt-4 py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                          resultado.es_recomendable === false
+                            ? 'bg-gray-500 text-white cursor-not-allowed opacity-70'
+                            : 'bg-green-600 hover:bg-green-700 text-white'
+                        }`}
+                        title={resultado.es_recomendable === false ? 'No recomendable: eficiencia baja (<80%)' : 'Al guardar, se crean sugerencias por producto del rango'}
+                      >
+                        <CheckCircle size={16} />
+                        Guardar sugerencias del rango
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => setResultadoRangoTotal(null)} className="mt-2 text-sm text-gray-300 underline">Limpiar resultados de rango total</button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1483,7 +1953,7 @@ const SugerenciasView: React.FC = () => {
                 <Users className="text-gray-500 dark:text-gray-400" size={16} />
               <select
                 value={clienteHistorialFilter}
-                onChange={(e) => setClienteHistorialFilter(e.target.value as any)}
+                onChange={(e) => { setClienteHistorialFilter(e.target.value as any); setSugPage(0); }}
                   className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 w-full sm:w-auto dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
                 <option value="">Todos los clientes</option>
@@ -1493,6 +1963,17 @@ const SugerenciasView: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Búsqueda en historial */}
+            <div className="w-full sm:w-64">
+              <input
+                type="text"
+                value={sugSearch}
+                onChange={(e) => { setSugSearch(e.target.value); setSugPage(0); }}
+                placeholder="Buscar en historial..."
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              />
             </div>
 
             {/* Toggle de vista */}
@@ -1537,6 +2018,29 @@ const SugerenciasView: React.FC = () => {
           </div>
         </div>
 
+        {/* Paginación del historial */}
+        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-4">
+          <button
+            type="button"
+            onClick={() => setSugPage(p => Math.max(0, p - 1))}
+            disabled={sugPage === 0 || loading === 'loading'}
+            className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 dark:bg-gray-600"
+          >
+            Anterior
+          </button>
+          <span>
+            {sugPage * sugLimit + 1}-{Math.min((sugPage + 1) * sugLimit, sugerenciasTotal || 0)} de {sugerenciasTotal || 0}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSugPage(p => ((p + 1) * sugLimit < (sugerenciasTotal || 0) ? p + 1 : p))}
+            disabled={(sugPage + 1) * sugLimit >= (sugerenciasTotal || 0) || loading === 'loading'}
+            className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 dark:bg-gray-600"
+          >
+            Siguiente
+          </button>
+        </div>
+
         {/* Mostrar información del filtro activo */}
         {clienteHistorialFilter && (
           <div className="mb-4 p-3 bg-blue-900/50 border border-blue-700 rounded-lg">
@@ -1547,7 +2051,7 @@ const SugerenciasView: React.FC = () => {
                   Mostrando sugerencias de: <strong>{clientes.find(c => c.cliente_id === Number(clienteHistorialFilter))?.nombre_cliente}</strong>
                 </span>
                 <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
-                  {filteredSugerencias.length} registros
+                  {sugerenciasTotal} registros
                 </span>
               </div>
               <button

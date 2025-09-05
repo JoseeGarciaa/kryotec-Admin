@@ -30,4 +30,9 @@ export class SugerenciasController {
   static async deleteSugerencia(id: number): Promise<boolean> {
     return await SugerenciasModel.deleteSugerencia(id);
   }
+
+  // Paginado
+  static async getSugerenciasPaginated(opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null }): Promise<{ total: number; items: SugerenciaReemplazo[] }> {
+    return await SugerenciasModel.getSugerenciasPaginated(opts);
+  }
 }

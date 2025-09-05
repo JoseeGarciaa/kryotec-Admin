@@ -163,15 +163,27 @@ const inventarioProspectosService = {
     }
   },
 
-  // Obtener órdenes de despacho con paginación y búsqueda
+  // Obtener órdenes de despacho con paginación, búsqueda y filtro por rango de fechas
   getOrdenesDespacho: async (clienteId = null, options = {}) => {
     try {
-      const { limit = 200, offset = 0, search = '' } = options;
+      const { limit = 200, offset = 0, search = '', startDate = null, endDate = null } = options;
       const params = [];
       let where = `WHERE orden_despacho IS NOT NULL AND orden_despacho != ''`;
       if (clienteId) {
         params.push(clienteId);
         where += ` AND cliente_id = $${params.length}`;
+      }
+      // Filtro por rango de fechas (fecha_de_despacho)
+      if (startDate && endDate) {
+        params.push(startDate);
+        params.push(endDate);
+        where += ` AND fecha_de_despacho::date BETWEEN $${params.length - 1}::date AND $${params.length}::date`;
+      } else if (startDate) {
+        params.push(startDate);
+        where += ` AND fecha_de_despacho::date >= $${params.length}::date`;
+      } else if (endDate) {
+        params.push(endDate);
+        where += ` AND fecha_de_despacho::date <= $${params.length}::date`;
       }
       if (search) {
         params.push(`%${search}%`);
