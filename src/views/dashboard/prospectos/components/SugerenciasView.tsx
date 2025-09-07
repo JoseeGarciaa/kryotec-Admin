@@ -597,39 +597,29 @@ const SugerenciasView: React.FC = () => {
   };
 
   // Función para obtener productos únicos de las sugerencias
-  const getProductosUnicos = (sugerenciasToCheck = sugerencias) => {
-    const productosMap = new Map<string, any>();
-    
-    sugerenciasToCheck.forEach(sugerencia => {
-      const producto = sugerencia.producto || 'N/A';
-      const descripcion = sugerencia.descripcion_inventario || '';
-      const modelo = sugerencia.modelo_sugerido || 'N/A';
-      const cantidad = sugerencia.cantidad_sugerida || 0;
-      
-      // Crear una clave única basada en producto + descripción + modelo
-      const key = `${producto}_${descripcion}_${modelo}`;
-      
-      if (!productosMap.has(key) && producto !== 'N/A') {
-        productosMap.set(key, {
-          id: key,
-          producto: producto,
-          descripcion: descripcion,
-          modelo_sugerido: modelo,
-          cantidad_sugerida: cantidad
-        });
-      }
-    });
-    
-    return Array.from(productosMap.values());
+  // Generar listado para precios: ahora SIN deduplicar (una fila por sugerencia)
+  const getListadoPrecios = (sugerenciasToCheck = sugerencias) => {
+    return sugerenciasToCheck.map((s: any) => ({
+      id: `id_${s.sugerencia_id}`,
+      producto: s.producto || 'N/A',
+      descripcion: s.descripcion_inventario || '',
+      modelo_sugerido: s.modelo_sugerido || 'N/A',
+      cantidad_sugerida: s.cantidad_sugerida || 0,
+      orden: s.orden_despacho || ''
+    }));
   };
 
   // Función helper para obtener el precio de alquiler de una sugerencia
   const getPrecioAlquiler = (sugerencia: any) => {
+    // Nuevo: priorizar clave por sugerencia_id para permitir precios por cada registro
+    const keyById = sugerencia.sugerencia_id ? `id_${sugerencia.sugerencia_id}` : null;
+    if (keyById && preciosAlquiler[keyById]) return preciosAlquiler[keyById];
+    // Fallback a la clave compuesta anterior si el usuario generó PDFs antiguos
     const producto = sugerencia.producto || 'N/A';
     const descripcion = sugerencia.descripcion_inventario || '';
     const modelo = sugerencia.modelo_sugerido || 'N/A';
-    const key = `${producto}_${descripcion}_${modelo}`;
-    return preciosAlquiler[key] || 'N/A';
+    const legacyKey = `${producto}_${descripcion}_${modelo}`;
+    return preciosAlquiler[keyById || ''] || preciosAlquiler[legacyKey] || 'N/A';
   };
 
   // Función para abrir modal de precios
@@ -646,7 +636,7 @@ const SugerenciasView: React.FC = () => {
       return;
     }
 
-    const productos = getProductosUnicos(sugerenciasToCheck);
+  const productos = getListadoPrecios(sugerenciasToCheck);
     setProductosUnicos(productos);
     setPdfType(type);
     
@@ -663,7 +653,7 @@ const SugerenciasView: React.FC = () => {
   const handleIndividualPDFWithPrices = (sugerencia: any) => {
     // Crear array con solo esta sugerencia
     const sugerenciasArray = [sugerencia];
-    const productos = getProductosUnicos(sugerenciasArray);
+  const productos = getListadoPrecios(sugerenciasArray);
     
     setProductosUnicos(productos);
     setPdfType('individual');
@@ -766,6 +756,7 @@ const SugerenciasView: React.FC = () => {
     pdf.setTextColor(0, 0, 0);
     pdf.setFont('helvetica', 'normal');
     
+  let totalAlquiler = 0;
   allSugerencias.forEach((sugerencia: any, index: number) => {
       // Alternar colores de fila
       if (index % 2 === 0) {
@@ -817,11 +808,14 @@ const SugerenciasView: React.FC = () => {
       // Cantidad
       pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 120, yPosition + 5);
       
-      // Precio de alquiler
-      const precioAlquiler = getPrecioAlquiler(sugerencia);
-      const precioDisplay = precioAlquiler === 'N/A' ? '-' : precioAlquiler;
-      const precioTruncado = precioDisplay.length > 8 ? precioDisplay.substring(0, 6) + '..' : precioDisplay;
-      pdf.text(precioTruncado, 135, yPosition + 5);
+  // Precio de alquiler
+  const precioAlquiler = getPrecioAlquiler(sugerencia);
+  const precioDisplay = precioAlquiler === 'N/A' ? '-' : precioAlquiler;
+  const precioTruncado = precioDisplay.length > 8 ? precioDisplay.substring(0, 6) + '..' : precioDisplay;
+  pdf.text(precioTruncado, 135, yPosition + 5);
+  // Sumar al total si es numérico
+  const precioNum = parseFloat(precioAlquiler.replace(/[^\d\.]/g, ''));
+  if (!isNaN(precioNum)) totalAlquiler += precioNum;
       
       // Modelo sugerido
   const modelo = sugerencia.modelo_sugerido || 'N/A';
@@ -841,7 +835,15 @@ const SugerenciasView: React.FC = () => {
       }
     });
     
-    // Footer
+  // Mostrar total de alquiler al final de la tabla
+  pdf.setFontSize(11);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(59, 130, 246);
+  pdf.text(`Total Alquiler: $${totalAlquiler.toFixed(2)}`, 135, yPosition + 8);
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFont('helvetica', 'normal');
+
+  // Footer
     pdf.setFillColor(30, 41, 59);
     pdf.rect(0, pageHeight - 20, pageWidth, 20, 'F');
     
@@ -959,6 +961,7 @@ const SugerenciasView: React.FC = () => {
     pdf.setTextColor(0, 0, 0);
     pdf.setFont('helvetica', 'normal');
     
+  let totalAlquilerCliente = 0;
   sugerenciasCliente.forEach((sugerencia, index) => {
       // Debug: Verificar datos de la sugerencia
       console.log('Datos de sugerencia para PDF Cliente:', {
@@ -1005,10 +1008,13 @@ const SugerenciasView: React.FC = () => {
       
       pdf.text(sugerencia.cantidad_inventario?.toString() || '0', 80, yPosition + 2);
       
-      // Precio de alquiler usando la función helper
-      const precioAlquiler = getPrecioAlquiler(sugerencia);
-      const precioTruncado = precioAlquiler.length > 10 ? precioAlquiler.substring(0, 7) + '...' : precioAlquiler;
-      pdf.text(precioTruncado, 95, yPosition + 2);
+  // Precio de alquiler usando la función helper
+  const precioAlquiler = getPrecioAlquiler(sugerencia);
+  const precioTruncado = precioAlquiler.length > 10 ? precioAlquiler.substring(0, 7) + '...' : precioAlquiler;
+  pdf.text(precioTruncado, 95, yPosition + 2);
+  // Sumar al total si es numérico
+  const precioNum = parseFloat(precioAlquiler.replace(/[^\d\.]/g, ''));
+  if (!isNaN(precioNum)) totalAlquilerCliente += precioNum;
       
       // Modelo sugerido
   const modelo = sugerencia.modelo_sugerido || 'N/A';
@@ -1039,7 +1045,15 @@ const SugerenciasView: React.FC = () => {
       }
     });
     
-    // Footer
+  // Mostrar total de alquiler al final de la tabla
+  pdf.setFontSize(11);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(59, 130, 246);
+  pdf.text(`Total Alquiler: $${totalAlquilerCliente.toFixed(2)}`, 95, yPosition + 8);
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFont('helvetica', 'normal');
+
+  // Footer
     pdf.setFillColor(30, 41, 59);
     pdf.rect(0, pageHeight - 20, pageWidth, 20, 'F');
     
@@ -2275,6 +2289,9 @@ const SugerenciasView: React.FC = () => {
                     <p className="text-sm text-green-600 dark:text-green-400">
                       Cantidad Sugerida: {productoInfo.cantidad_sugerida} contenedores
                     </p>
+                    {(productoInfo as any).orden && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Orden: {(productoInfo as any).orden}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
