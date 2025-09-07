@@ -557,6 +557,241 @@ app.post('/api/sugerencias/calcular-por-rango-total', async (req, res) => {
   }
 });
 
+// Nueva ruta: distribución real (100%) por rango (asigna modelo mínimo por línea)
+app.post('/api/sugerencias/distribucion-real-rango', async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+
+    const result = await sugerenciasService.calcularDistribucionRealPorRango({
+      cliente_id: parseInt(cliente_id),
+      startDate,
+      endDate
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/distribucion-real-rango:', error);
+    res.status(500).json({ error: 'Error al calcular distribución real por rango' });
+  }
+});
+
+// Nueva ruta: proyección mensual (estimado diario futuro)
+app.post('/api/sugerencias/proyeccion-mensual', async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate, percentil_stock } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+    const result = await sugerenciasService.calcularProyeccionMensual({
+      cliente_id: parseInt(cliente_id),
+      startDate,
+      endDate,
+      percentil_stock: percentil_stock || 0.95
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/proyeccion-mensual:', error);
+    res.status(500).json({ error: 'Error al calcular proyección mensual' });
+  }
+});
+
+// Nueva ruta: agregado orden a orden (toma la mejor opción de cada orden y suma por modelo)
+app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+
+    // Calcular días inclusivos
+    let totalDias = 1;
+    try {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      const diffMs = e.getTime() - s.getTime();
+      const d = Math.floor(diffMs / (1000*60*60*24)) + 1;
+      if (d > 0 && Number.isFinite(d)) totalDias = d;
+    } catch (e) {
+      console.warn('Fallo calculando días, usando 1', e?.message);
+    }
+
+    // Traer órdenes (únicas) del rango
+    const { items: ordenes } = await inventarioProspectosService.getOrdenesDespacho(parseInt(cliente_id), {
+      limit: 10000,
+      offset: 0,
+      search: '',
+      startDate,
+      endDate
+    });
+
+    // Traer todos los movimientos (filas) para totales reales (independientes de si un modelo cabe o no)
+    let totalProductosReales = 0;
+    let volumenTotalReales = 0;
+    try {
+      const movQuery = `
+        SELECT cantidad_despachada, volumen_total_m3_producto
+        FROM admin_platform.inventario_prospecto
+        WHERE cliente_id = $1
+          AND fecha_de_despacho::date BETWEEN $2::date AND $3::date
+      `;
+      const { rows: movs } = await pool.query(movQuery, [parseInt(cliente_id), startDate, endDate]);
+      for (const m of movs) {
+        totalProductosReales += (parseInt(m.cantidad_despachada) || 0);
+        volumenTotalReales += (parseFloat(m.volumen_total_m3_producto) || 0);
+      }
+    } catch (e) {
+      console.warn('No se pudieron obtener totales reales:', e?.message);
+    }
+
+    // Contar registros (movimientos) por orden (repetidas) para coincidir con conteo previo
+    let totalOrdenesRepetidas = 0;
+    let diasActivos = 1;
+    const fechasSet = new Set();
+    try {
+      const repQuery = `
+        SELECT orden_despacho
+             , fecha_de_despacho::date AS fecha
+        FROM admin_platform.inventario_prospecto
+        WHERE cliente_id = $1
+          AND fecha_de_despacho::date BETWEEN $2::date AND $3::date
+          AND orden_despacho IS NOT NULL
+      `;
+      const { rows: repRows } = await pool.query(repQuery, [parseInt(cliente_id), startDate, endDate]);
+      totalOrdenesRepetidas = repRows.length;
+      for (const r of repRows) {
+        if (r.fecha) fechasSet.add(new Date(r.fecha).toISOString().slice(0,10));
+      }
+      diasActivos = fechasSet.size || 1;
+    } catch (e) {
+      console.warn('No se pudo contar órdenes repetidas:', e?.message);
+    }
+
+    const agregados = new Map(); // modelo_id -> { modelo_id, nombre_modelo, total_cajas }
+  let totalProductosModelados = 0; // suma de productos desde las órdenes procesadas (puede ser < reales)
+  let totalVolumenM3Modelado = 0;
+
+    // Optimización: obtener modelos una sola vez y procesar órdenes en paralelo controlado
+    const modelosCache = await sugerenciasService.obtenerModelosCubeCached();
+    const CONCURRENCY = 32; // ajustar según CPU / carga DB
+    let index = 0;
+    const ordenesArr = ordenes.slice();
+
+    async function procesarLote() {
+      const lote = ordenesArr.slice(index, index + CONCURRENCY);
+      index += CONCURRENCY;
+      await Promise.all(lote.map(async (ord) => {
+        const orden = ord.orden_despacho;
+        try {
+          const sugerencias = await sugerenciasService.calcularSugerenciasPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden }, { modelos: modelosCache });
+          if (Array.isArray(sugerencias) && sugerencias.length) {
+            const best = sugerencias.find(s => s.es_mejor_opcion) || sugerencias[0];
+            if (best && best.modelo_id != null) {
+              const key = best.modelo_id;
+              const prev = agregados.get(key) || { modelo_id: key, nombre_modelo: best.nombre_modelo, total_cajas: 0 };
+              prev.total_cajas += (best.cantidad_sugerida || 0);
+              agregados.set(key, prev);
+              totalProductosModelados += (best.total_productos_transportados || 0);
+              totalVolumenM3Modelado += (best.volumen_total_productos || 0);
+            }
+          }
+        } catch (e) {
+          console.warn('No se pudo procesar orden', orden, e?.message);
+        }
+      }));
+      if (index < ordenesArr.length) return procesarLote();
+    }
+
+    await procesarLote();
+
+    const divisorDias = diasActivos || totalDias;
+    const modelos_agregados = Array.from(agregados.values())
+      .map(m => ({
+        ...m,
+        promedio_diario_cajas: divisorDias > 0 ? m.total_cajas / divisorDias : m.total_cajas
+      }))
+      .sort((a,b) => b.total_cajas - a.total_cajas);
+
+    res.json({
+      resumen: {
+        startDate,
+        endDate,
+        total_dias: totalDias,
+        total_ordenes_unicas: ordenes.length,
+        total_ordenes_repetidas: totalOrdenesRepetidas,
+        total_ordenes: totalOrdenesRepetidas || ordenes.length, // compat
+  total_productos_reales: totalProductosReales,
+  volumen_total_m3_reales: volumenTotalReales,
+  total_productos_modelados: totalProductosModelados,
+  volumen_total_m3_modelados: totalVolumenM3Modelado,
+  cobertura_productos_pct: totalProductosReales > 0 ? (totalProductosModelados / totalProductosReales) * 100 : 0,
+  cobertura_volumen_pct: volumenTotalReales > 0 ? (totalVolumenM3Modelado / volumenTotalReales) * 100 : 0,
+  total_dias_activos: diasActivos
+      },
+      modelos_agregados
+    });
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/calcular-por-rango-orden-a-orden:', error);
+    res.status(500).json({ error: 'Error al calcular agregado orden a orden' });
+  }
+});
+
+// Nueva ruta: distribución OPTIMA (mezcla única) por rango
+app.post('/api/sugerencias/distribucion-optima-rango', async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+    const result = await sugerenciasService.calcularDistribucionOptimaRango({
+      cliente_id: parseInt(cliente_id),
+      startDate,
+      endDate
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/distribucion-optima-rango:', error);
+    res.status(500).json({ error: 'Error al calcular distribución óptima por rango' });
+  }
+});
+
+// Nueva ruta: recomendación mensual REAL (basada en distribución real por línea)
+app.post('/api/sugerencias/recomendacion-mensual-real', async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate, base_dias, mensual_factor } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+    const result = await sugerenciasService.calcularRecomendacionMensualReal({
+      cliente_id: parseInt(cliente_id),
+      startDate,
+      endDate,
+      base_dias: base_dias || 'activos',
+      mensual_factor: mensual_factor || 30
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/recomendacion-mensual-real:', error);
+    res.status(500).json({ error: 'Error al calcular recomendación mensual real' });
+  }
+});
+
+// Guardar recomendación mensual real en la tabla sugerencias_reemplazo (una fila por modelo)
+app.post('/api/sugerencias/recomendacion-mensual-real/guardar', async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate, base_dias, mensual_factor } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+    const result = await sugerenciasService.saveRecomendacionMensualReal({
+      cliente_id: parseInt(cliente_id),
+      startDate,
+      endDate,
+      base_dias: base_dias || 'activos',
+      mensual_factor: mensual_factor || 30
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/recomendacion-mensual-real/guardar:', error);
+    res.status(500).json({ error: 'Error al guardar recomendación mensual real' });
+  }
+});
+
 app.get('/api/inventario-prospectos/orden/:ordenDespacho', async (req, res) => {
   try {
     const productos = await inventarioProspectosService.getProductosPorOrden(req.params.ordenDespacho);
@@ -678,11 +913,16 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
     }
 
     // Fetch existing items for de-duplication
-    const existing = await inventarioProspectosService.getInventarioByCliente(clienteIdNum);
-    const existingSet = new Set(existing.map(e => [
-      normalize(e.descripcion_producto), normalize(e.producto), e.largo_mm, e.ancho_mm, e.alto_mm,
-      e.cantidad_despachada, normalize(e.orden_despacho)
-    ].join('|')));
+    // NOTE: getInventarioByCliente returns an object { total, items } NOT a plain array.
+    // Previous code assumed an array and caused a runtime error (existing.map is not a function) -> 500.
+    const existingResult = await inventarioProspectosService.getInventarioByCliente(clienteIdNum, { limit: 5000 });
+    const existingArray = Array.isArray(existingResult) ? existingResult : (existingResult.items || []);
+    const existingSet = new Set(
+      existingArray.map(e => [
+        normalize(e.descripcion_producto), normalize(e.producto), e.largo_mm, e.ancho_mm, e.alto_mm,
+        e.cantidad_despachada, normalize(e.orden_despacho)
+      ].join('|'))
+    );
 
   const toInsert = [];
   const previews = [];

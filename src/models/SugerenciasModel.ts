@@ -13,6 +13,9 @@ export interface SugerenciaReemplazo {
   estado: string | null;
   orden_despacho?: string | null;
   detalle_orden?: string | null;
+  cantidad_diaria?: string | null; // nuevo campo (texto: '8' o '1 cada N días' o promedio técnico)
+  rango_dias?: string | null;
+  dias_activos?: string | null;
   // Campos adicionales para joins
   nombre_cliente?: string;
   descripcion_inventario?: string;
@@ -48,6 +51,8 @@ export interface ResultadoSugerencia {
   volumen_total_disponible?: number;
   espacio_sobrante_m3: number;
   porcentaje_espacio_sobrante?: number;
+  // Nuevo: promedio diario de cajas sugeridas (solo aplica para cálculo por rango)
+  promedio_diario_cajas?: number;
   eficiencia?: number; // Para compatibilidad con cálculo individual
   eficiencia_porcentaje?: number; // Para cálculo por orden
   porcentaje_recomendacion?: number; // 0-100, normalizado (top=100)

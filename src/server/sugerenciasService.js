@@ -10,6 +10,7 @@ const sugerenciasService = {
           s.cantidad_sugerida, s.fecha_sugerencia, 
           s.modelo_id, s.estado,
           COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
+            s.cantidad_diaria, s.rango_dias, s.dias_activos,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
           i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
@@ -74,6 +75,7 @@ const sugerenciasService = {
           s.cantidad_sugerida, s.fecha_sugerencia, 
           s.modelo_id, s.estado,
           COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
+            s.cantidad_diaria, s.rango_dias, s.dias_activos,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
           i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
@@ -100,6 +102,19 @@ const sugerenciasService = {
       if (!cliente_id) throw new Error('cliente_id es requerido');
       if (!startDate || !endDate) throw new Error('startDate y endDate son requeridos');
 
+      // Calcular número de días en el rango (inclusive)
+      let totalDias = 1;
+      try {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffMs = end.getTime() - start.getTime();
+        // Sumamos 1 para que 1-31 enero sean 31 días, no 30
+        const diasCalc = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+        if (diasCalc > 0 && Number.isFinite(diasCalc)) totalDias = diasCalc;
+      } catch (e) {
+        console.warn('No se pudo calcular total de días, usando 1. Error:', e?.message);
+      }
+
       // Traer items del cliente dentro del rango por fecha de despacho (cast a date)
       const q = `
         SELECT inv_id, producto, descripcion_producto, cantidad_despachada, largo_mm, ancho_mm, alto_mm,
@@ -115,6 +130,13 @@ const sugerenciasService = {
       const totalM3 = items.reduce((acc, it) => acc + (parseFloat(it.volumen_total_m3_producto) || 0), 0);
   // Contar órdenes incluyendo repetidas (no únicas)
   const totalOrdenes = items.filter(it => !!it.orden_despacho).length;
+// Días activos (distintos con al menos una orden)
+const diasActivosSet = new Set(
+  items
+    .filter(it => it.fecha_de_despacho)
+    .map(it => (new Date(it.fecha_de_despacho).toISOString().slice(0,10)))
+);
+const totalDiasActivos = diasActivosSet.size || 1;
 
   // Resumen simple por producto para mostrar (limitado para UI/logs)
   const resumenProductos = items.slice(0, 50).map(it => ({
@@ -161,7 +183,8 @@ const sugerenciasService = {
           return {
             ...s,
             detalle_contenedores_por_producto: detalle,
-            cantidad_sugerida: cantidadSugeridaSumada
+            cantidad_sugerida: cantidadSugeridaSumada,
+            promedio_diario_cajas: cantidadSugeridaSumada / totalDiasActivos
           };
         });
       }
@@ -172,8 +195,10 @@ const sugerenciasService = {
           endDate,
           total_ordenes: totalOrdenes,
           total_registros: totalRegistros,
-          total_productos: totalProductos,
-          volumen_total_m3: totalM3
+            total_productos: totalProductos,
+          volumen_total_m3: totalM3,
+          total_dias: totalDias,
+          total_dias_activos: totalDiasActivos
         },
   sugerencias
       };
@@ -181,6 +206,310 @@ const sugerenciasService = {
       console.error('Error en calcularSugerenciasPorRangoTotal:', error);
       throw error;
     }
+  },
+
+  // Distribución 100% real por rango: asigna el modelo más pequeño que acepta cada línea
+  calcularDistribucionRealPorRango: async ({ cliente_id, startDate, endDate }) => {
+    if (!cliente_id) throw new Error('cliente_id es requerido');
+    if (!startDate || !endDate) throw new Error('startDate y endDate son requeridos');
+
+    // Inventario del rango
+    const invQuery = `
+      SELECT inv_id, producto, descripcion_producto, cantidad_despachada,
+             largo_mm, ancho_mm, alto_mm, volumen_total_m3_producto,
+             fecha_de_despacho, orden_despacho
+      FROM admin_platform.inventario_prospecto
+      WHERE cliente_id = $1
+        AND fecha_de_despacho::date BETWEEN $2::date AND $3::date
+    `;
+    const { rows: items } = await pool.query(invQuery, [cliente_id, startDate, endDate]);
+
+    if (!items.length) {
+      return {
+        resumen: {
+          startDate, endDate,
+          total_registros: 0,
+          total_productos: 0,
+            volumen_total_m3: 0,
+          total_dias_activos: 0,
+          productos_asignados: 0,
+          volumen_asignado_m3: 0,
+          omitidos: 0,
+          cobertura_productos: 0,
+          cobertura_volumen: 0
+        },
+        distribucion: []
+      };
+    }
+
+    // Modelos ordenados de menor a mayor volumen
+    const modelosQuery = `
+      SELECT modelo_id, nombre_modelo, volumen_litros,
+             dim_int_frente, dim_int_profundo, dim_int_alto
+      FROM admin_platform.modelos
+      WHERE tipo = 'Cube'
+      ORDER BY volumen_litros ASC
+    `;
+    const { rows: modelos } = await pool.query(modelosQuery);
+    if (!modelos.length) throw new Error('No hay modelos Cube disponibles');
+
+    // Días activos (distintas fechas con registros)
+    const diasActivosSet = new Set(
+      items.filter(i => i.fecha_de_despacho).map(i => new Date(i.fecha_de_despacho).toISOString().slice(0,10))
+    );
+    const totalDiasActivos = diasActivosSet.size || 1;
+
+    let totalProductosReales = 0;
+    let totalVolumenReal = 0;
+    let totalProductosAsignados = 0;
+    let totalVolumenAsignado = 0;
+    let omitidos = 0;
+    const accModelos = new Map();
+
+    for (const it of items) {
+      const cantidad = parseInt(it.cantidad_despachada) || 0;
+      const volLinea = parseFloat(it.volumen_total_m3_producto) || 0;
+      const largo = parseFloat(it.largo_mm);
+      const ancho = parseFloat(it.ancho_mm);
+      const alto = parseFloat(it.alto_mm);
+
+      totalProductosReales += cantidad;
+      totalVolumenReal += volLinea;
+
+      if (!cantidad || !volLinea || !largo || !ancho || !alto) { omitidos++; continue; }
+      const volUnit = volLinea / cantidad;
+      const modeloElegido = modelos.find(m =>
+        largo <= m.dim_int_frente &&
+        ancho <= m.dim_int_profundo &&
+        alto <= m.dim_int_alto &&
+        (m.volumen_litros / 1000) >= volUnit
+      );
+      if (!modeloElegido) { omitidos++; continue; }
+
+      const volModeloM3 = modeloElegido.volumen_litros / 1000;
+      const productosPorContenedor = Math.max(1, Math.floor(volModeloM3 / volUnit));
+      const esPerfecto = (
+        largo === modeloElegido.dim_int_frente &&
+        ancho === modeloElegido.dim_int_profundo &&
+        alto === modeloElegido.dim_int_alto
+      );
+      const contenedores = esPerfecto ? cantidad : Math.ceil(cantidad / productosPorContenedor);
+
+      totalProductosAsignados += cantidad;
+      totalVolumenAsignado += volLinea;
+
+      const prev = accModelos.get(modeloElegido.modelo_id) || {
+        modelo_id: modeloElegido.modelo_id,
+        nombre_modelo: modeloElegido.nombre_modelo,
+        volumen_litros: modeloElegido.volumen_litros,
+        contenedores_total: 0,
+        productos_asignados: 0,
+        volumen_asignado_m3: 0
+      };
+      prev.contenedores_total += contenedores;
+      prev.productos_asignados += cantidad;
+      prev.volumen_asignado_m3 += volLinea;
+      accModelos.set(modeloElegido.modelo_id, prev);
+    }
+
+    const distribucion = Array.from(accModelos.values()).map(d => ({
+      ...d,
+      promedio_diario_cajas: d.contenedores_total / totalDiasActivos,
+      porcentaje_productos: totalProductosAsignados ? (d.productos_asignados / totalProductosAsignados) * 100 : 0,
+      porcentaje_volumen: totalVolumenAsignado ? (d.volumen_asignado_m3 / totalVolumenAsignado) * 100 : 0
+    })).sort((a,b) => b.contenedores_total - a.contenedores_total);
+
+    const coberturaProductos = totalProductosReales ? (totalProductosAsignados / totalProductosReales) * 100 : 0;
+    const coberturaVolumen = totalVolumenReal ? (totalVolumenAsignado / totalVolumenReal) * 100 : 0;
+
+    return {
+      resumen: {
+        startDate,
+        endDate,
+        total_registros: items.length,
+        total_productos: totalProductosReales,
+        volumen_total_m3: totalVolumenReal,
+        total_dias_activos: totalDiasActivos,
+        productos_asignados: totalProductosAsignados,
+        volumen_asignado_m3: totalVolumenAsignado,
+        omitidos,
+        cobertura_productos: coberturaProductos,
+        cobertura_volumen: coberturaVolumen
+      },
+      distribucion
+    };
+  },
+  
+  // Proyección mensual: estima uso diario futuro basado en patrón histórico del rango
+  calcularProyeccionMensual: async ({ cliente_id, startDate, endDate, percentil_stock = 0.95 }) => {
+    if (!cliente_id) throw new Error('cliente_id es requerido');
+    if (!startDate || !endDate) throw new Error('startDate y endDate son requeridos');
+    if (percentil_stock <= 0 || percentil_stock > 1) percentil_stock = 0.95;
+
+    const invQuery = `
+      SELECT inv_id, producto, descripcion_producto, cantidad_despachada,
+             largo_mm, ancho_mm, alto_mm, volumen_total_m3_producto,
+             fecha_de_despacho::date AS fecha_de_despacho
+      FROM admin_platform.inventario_prospecto
+      WHERE cliente_id = $1
+        AND fecha_de_despacho::date BETWEEN $2::date AND $3::date
+    `;
+    const { rows: items } = await pool.query(invQuery, [cliente_id, startDate, endDate]);
+
+    // Periodo calendario
+    let diasCalendario = 1;
+    try {
+      const s = new Date(startDate); const e = new Date(endDate);
+      const diff = Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
+      if (diff > 0) diasCalendario = diff;
+    } catch {}
+
+    if (!items.length) {
+      return {
+        resumen: {
+          startDate, endDate,
+          dias_calendario: diasCalendario,
+          dias_activos: 0,
+          total_registros: 0,
+          total_productos: 0,
+          volumen_total_m3: 0,
+          cobertura_productos: 0,
+          cobertura_volumen: 0,
+          percentil_stock
+        },
+        modelos: [],
+        parque_recomendado: { total_promedio_activo: 0, total_promedio_calendario: 0, total_percentil: 0, detalle: [] }
+      };
+    }
+
+    // Modelos
+    const modelosQuery = `
+      SELECT modelo_id, nombre_modelo, volumen_litros,
+             dim_int_frente, dim_int_profundo, dim_int_alto
+      FROM admin_platform.modelos
+      WHERE tipo = 'Cube'
+      ORDER BY volumen_litros ASC
+    `;
+    const { rows: modelos } = await pool.query(modelosQuery);
+    if (!modelos.length) throw new Error('No hay modelos Cube disponibles');
+
+    const fechasActivasSet = new Set(items.filter(i => i.fecha_de_despacho).map(i => i.fecha_de_despacho.toISOString().slice(0,10)));
+    const diasActivos = fechasActivasSet.size || 1;
+    const fechasActivasOrdenadas = Array.from(fechasActivasSet).sort();
+    const indiceFecha = new Map(fechasActivasOrdenadas.map((f,i)=>[f,i]));
+
+    let totalProductosReales = 0;
+    let totalVolumenReal = 0;
+    let totalProductosAsignados = 0;
+    let totalVolumenAsignado = 0;
+    let omitidos = 0;
+
+    const accModelos = new Map(); // modelo_id -> aggregate
+    const dailyMatrix = new Map(); // modelo_id -> Array(diasActivos).fill(0)
+
+    for (const it of items) {
+      const cantidad = parseInt(it.cantidad_despachada) || 0;
+      const volLinea = parseFloat(it.volumen_total_m3_producto) || 0;
+      const largo = parseFloat(it.largo_mm);
+      const ancho = parseFloat(it.ancho_mm);
+      const alto = parseFloat(it.alto_mm);
+      const fecha = it.fecha_de_despacho ? new Date(it.fecha_de_despacho).toISOString().slice(0,10) : null;
+      totalProductosReales += cantidad;
+      totalVolumenReal += volLinea;
+      if (!cantidad || !volLinea || !largo || !ancho || !alto || !fecha) { omitidos++; continue; }
+      const volUnit = volLinea / cantidad;
+      const modeloElegido = modelos.find(m => (
+        largo <= m.dim_int_frente &&
+        ancho <= m.dim_int_profundo &&
+        alto <= m.dim_int_alto &&
+        (m.volumen_litros / 1000) >= volUnit
+      ));
+      if (!modeloElegido) { omitidos++; continue; }
+      const volModeloM3 = modeloElegido.volumen_litros / 1000;
+      const productosPorContenedor = Math.max(1, Math.floor(volModeloM3 / volUnit));
+      const esPerfecto = largo === modeloElegido.dim_int_frente && ancho === modeloElegido.dim_int_profundo && alto === modeloElegido.dim_int_alto;
+      const contenedores = esPerfecto ? cantidad : Math.ceil(cantidad / productosPorContenedor);
+      totalProductosAsignados += cantidad;
+      totalVolumenAsignado += volLinea;
+      const prev = accModelos.get(modeloElegido.modelo_id) || {
+        modelo_id: modeloElegido.modelo_id,
+        nombre_modelo: modeloElegido.nombre_modelo,
+        volumen_litros: modeloElegido.volumen_litros,
+        contenedores_total: 0,
+        productos_asignados: 0,
+        volumen_asignado_m3: 0
+      };
+      prev.contenedores_total += contenedores;
+      prev.productos_asignados += cantidad;
+      prev.volumen_asignado_m3 += volLinea;
+      accModelos.set(modeloElegido.modelo_id, prev);
+      if (!dailyMatrix.has(modeloElegido.modelo_id)) dailyMatrix.set(modeloElegido.modelo_id, Array(diasActivos).fill(0));
+      const idx = indiceFecha.get(fecha);
+      if (idx != null) dailyMatrix.get(modeloElegido.modelo_id)[idx] += contenedores;
+    }
+
+    // Helper percentil
+    const calcPercentil = (arr, p) => {
+      if (!arr.length) return 0;
+      const sorted = [...arr].sort((a,b)=>a-b);
+      const k = Math.ceil(p * sorted.length) - 1;
+      return sorted[Math.max(0, Math.min(sorted.length-1, k))];
+    };
+
+    const modelosResultado = Array.from(accModelos.values()).map(m => {
+      const diarios = dailyMatrix.get(m.modelo_id) || [];
+      const promedioActivo = m.contenedores_total / diasActivos;
+      const promedioCalendario = m.contenedores_total / diasCalendario;
+      const p95 = calcPercentil(diarios, percentil_stock);
+      const recomendacionDiaria = Math.max(1, Math.round(p95 || promedioActivo));
+      return {
+        ...m,
+        promedio_diario_activo: promedioActivo,
+        promedio_diario_calendario: promedioCalendario,
+        percentil_diario: p95,
+        recomendacion_diaria: recomendacionDiaria,
+        porcentaje_productos: totalProductosAsignados ? (m.productos_asignados / totalProductosAsignados) * 100 : 0,
+        porcentaje_volumen: totalVolumenAsignado ? (m.volumen_asignado_m3 / totalVolumenAsignado) * 100 : 0
+      };
+    }).sort((a,b)=> b.contenedores_total - a.contenedores_total);
+
+    const coberturaProductos = totalProductosReales ? (totalProductosAsignados / totalProductosReales) * 100 : 0;
+    const coberturaVolumen = totalVolumenReal ? (totalVolumenAsignado / totalVolumenReal) * 100 : 0;
+
+    const totalPromedioActivo = modelosResultado.reduce((s,m)=> s + m.promedio_diario_activo, 0);
+    const totalPromedioCalendario = modelosResultado.reduce((s,m)=> s + m.promedio_diario_calendario, 0);
+    const totalPercentil = modelosResultado.reduce((s,m)=> s + m.recomendacion_diaria, 0);
+
+    return {
+      resumen: {
+        startDate,
+        endDate,
+        dias_calendario: diasCalendario,
+        dias_activos: diasActivos,
+        total_registros: items.length,
+        total_productos: totalProductosReales,
+        volumen_total_m3: totalVolumenReal,
+        productos_asignados: totalProductosAsignados,
+        volumen_asignado_m3: totalVolumenAsignado,
+        omitidos,
+        cobertura_productos: coberturaProductos,
+        cobertura_volumen: coberturaVolumen,
+        percentil_stock
+      },
+      modelos: modelosResultado,
+      parque_recomendado: {
+        total_promedio_activo: totalPromedioActivo,
+        total_promedio_calendario: totalPromedioCalendario,
+        total_percentil: totalPercentil,
+        detalle: modelosResultado.map(m => ({
+          modelo_id: m.modelo_id,
+          nombre_modelo: m.nombre_modelo,
+          promedio_diario_activo: m.promedio_diario_activo,
+          percentil_diario: m.percentil_diario,
+          recomendacion_diaria: m.recomendacion_diaria
+        }))
+      }
+    };
   },
 
   // Crear una nueva sugerencia
@@ -205,42 +534,52 @@ const sugerenciasService = {
       try {
         const insertWithOrden = `
           INSERT INTO admin_platform.sugerencias_reemplazo (
-            cliente_id, inv_id, modelo_sugerido, cantidad_sugerida, 
-            modelo_id, estado, orden_despacho
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            cliente_id, inv_id, modelo_sugerido, cantidad_sugerida,
+            modelo_id, estado, orden_despacho, detalle_orden, cantidad_diaria,
+            rango_dias, dias_activos
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           RETURNING sugerencia_id
         `;
         const valuesWithOrden = [
-          data.cliente_id, data.inv_id, data.modelo_sugerido,
-          data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente', ordenDespacho
+          data.cliente_id, data.inv_id ?? null, data.modelo_sugerido,
+          data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente', ordenDespacho, data.detalle_orden || null, data.cantidad_diaria || null,
+          data.rango_dias || null, data.dias_activos || null
         ];
         const { rows } = await pool.query(insertWithOrden, valuesWithOrden);
         sugerenciaId = rows[0].sugerencia_id;
       } catch (e) {
-        // Compatibilidad si aún no existe la columna orden_despacho
-        console.warn('Insert con orden_despacho falló, reintentando sin esa columna:', e?.message);
-        const insertWithoutOrden = `
-          INSERT INTO admin_platform.sugerencias_reemplazo (
-            cliente_id, inv_id, modelo_sugerido, cantidad_sugerida, 
-            modelo_id, estado
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING sugerencia_id
-        `;
-        const valuesWithoutOrden = [
-          data.cliente_id, data.inv_id, data.modelo_sugerido,
-          data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente'
-        ];
-        const { rows } = await pool.query(insertWithoutOrden, valuesWithoutOrden);
-        sugerenciaId = rows[0].sugerencia_id;
+        // Compatibilidad si aún no existen columnas nuevas
+        console.warn('Insert con orden_despacho + cantidad_diaria falló, reintentando versión reducida:', e?.message);
+        try {
+          const insertFallback = `
+            INSERT INTO admin_platform.sugerencias_reemplazo (
+              cliente_id, inv_id, modelo_sugerido, cantidad_sugerida,
+              modelo_id, estado, detalle_orden
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING sugerencia_id
+          `;
+          const valuesFallback = [
+            data.cliente_id, data.inv_id ?? null, data.modelo_sugerido,
+            data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente', data.detalle_orden || null
+          ];
+          const { rows } = await pool.query(insertFallback, valuesFallback);
+          sugerenciaId = rows[0].sugerencia_id;
+        } catch (e2) {
+          console.warn('Fallback insert sin columnas nuevas también falló:', e2?.message);
+          throw e2;
+        }
       }
 
       // Ahora obtener la sugerencia completa con todos los JOINs
-      const selectQuery = `
+    const selectQuery = `
         SELECT 
           s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
           s.cantidad_sugerida, s.fecha_sugerencia, 
           s.modelo_id, s.estado,
           COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
+      s.detalle_orden,
+      s.cantidad_diaria,
+      s.rango_dias, s.dias_activos,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
           i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
@@ -260,10 +599,25 @@ const sugerenciasService = {
     }
   },
 
-  calcularSugerenciasPorOrden: async (datos) => {
+  // Cache simple de modelos Cube para evitar repetir query en cálculos masivos
+  obtenerModelosCubeCached: async () => {
+    if (!global.__modelosCubeCache || (Date.now() - global.__modelosCubeCache.ts) > 5 * 60 * 1000) {
+      const query = `
+        SELECT 
+          modelo_id, nombre_modelo, volumen_litros,
+          dim_int_frente, dim_int_profundo, dim_int_alto
+        FROM admin_platform.modelos
+        WHERE tipo = 'Cube'
+        ORDER BY volumen_litros ASC
+      `;
+      const { rows } = await pool.query(query);
+      global.__modelosCubeCache = { ts: Date.now(), rows };
+    }
+    return global.__modelosCubeCache.rows;
+  },
+
+  calcularSugerenciasPorOrden: async (datos, opts = {}) => {
     try {
-      console.log('Datos recibidos para cálculo por orden:', datos);
-      
       const { cliente_id, orden_despacho } = datos;
       
       if (!orden_despacho) {
@@ -319,17 +673,12 @@ const sugerenciasService = {
       console.log(`Calculando contenedores para cada tipo de producto en la orden ${orden_despacho}`);
       
       // Buscar TODOS los modelos Cube disponibles
-      const query = `
-        SELECT 
-          modelo_id, nombre_modelo, volumen_litros,
-          dim_int_frente, dim_int_profundo, dim_int_alto
-        FROM admin_platform.modelos
-        WHERE tipo = 'Cube'
-        ORDER BY volumen_litros ASC
-      `;
-      
-      const { rows: modelos } = await pool.query(query);
-      console.log('Modelos encontrados:', modelos.length);
+      // Reusar modelos cacheados si se proporcionan
+      let modelos = opts.modelos;
+      if (!modelos) {
+        modelos = await module.exports.obtenerModelosCubeCached();
+      }
+      // (no logging para rendimiento)
       
       if (modelos.length === 0) {
         console.log('No se encontraron modelos tipo Cube');
@@ -1091,6 +1440,292 @@ const sugerenciasService = {
       console.error('Error al eliminar sugerencia:', error);
       throw error;
     }
+  },
+
+  // Nueva función: calcular una distribucion OPTIMA (heurística) única de mezcla de modelos
+  // Objetivo: cubrir el volumen total requerido en el rango con la menor cantidad de desperdicio
+  // Estrategia: greedy por volumen descendente + ajuste final con modelos menores; heurística rápida O(n^2)
+  calcularDistribucionOptimaRango: async ({ cliente_id, startDate, endDate }) => {
+    const t0 = Date.now();
+    try {
+      if (!cliente_id) throw new Error('cliente_id requerido');
+      if (!startDate || !endDate) throw new Error('startDate y endDate requeridos');
+
+      // Obtener totales del rango
+      const totQuery = `
+        SELECT 
+          COALESCE(SUM(cantidad_despachada),0)::bigint AS total_productos,
+          COALESCE(SUM(volumen_total_m3_producto),0)::float8 AS volumen_total_m3
+        FROM admin_platform.inventario_prospecto
+        WHERE cliente_id = $1
+          AND fecha_de_despacho::date BETWEEN $2::date AND $3::date
+      `;
+      const { rows: totRows } = await pool.query(totQuery, [cliente_id, startDate, endDate]);
+      const totalProductos = parseInt(totRows[0]?.total_productos || 0);
+      const volumenTotalM3 = parseFloat(totRows[0]?.volumen_total_m3 || 0);
+
+      if (volumenTotalM3 <= 0) {
+        return {
+          parametros: { cliente_id, startDate, endDate },
+            resumen: {
+              total_productos: 0,
+              volumen_total_m3: 0,
+              modelos_usados: 0,
+              volumen_total_capacidad_m3: 0,
+              desperdicio_m3: 0,
+              eficiencia_pct: 0
+            },
+            distribucion: [],
+            detalle_algoritmo: { estrategia: 'sin datos', tiempo_ms: Date.now() - t0 }
+        };
+      }
+
+      // Obtener modelos (cache)
+      const modelos = await module.exports.obtenerModelosCubeCached();
+      if (!Array.isArray(modelos) || modelos.length === 0) throw new Error('No hay modelos tipo Cube');
+
+      // Trabajaremos en litros para evitar flotantes (1 m3 = 1000 litros)
+      const volumenObjetivoLitros = volumenTotalM3 * 1000;
+      const modelosOrdenados = modelos
+        .map(m => ({
+          modelo_id: m.modelo_id,
+          nombre_modelo: m.nombre_modelo,
+          volumen_litros: parseFloat(m.volumen_litros),
+          volumen_m3: parseFloat(m.volumen_litros) / 1000
+        }))
+        .filter(m => m.volumen_litros > 0)
+        .sort((a,b) => b.volumen_litros - a.volumen_litros); // descendente
+
+      // Greedy simple descendente
+      let restante = volumenObjetivoLitros;
+      const uso = [];
+      for (const mod of modelosOrdenados) {
+        if (restante <= 0) break;
+        const capacidad = mod.volumen_litros;
+        // Cantidad máxima sin exceder demasiado (permitimos que quede un restante que cubrirá modelos menores)
+        const cant = Math.floor(restante / capacidad);
+        if (cant > 0) {
+          uso.push({ ...mod, cantidad: cant });
+          restante -= cant * capacidad;
+        }
+      }
+      // Si queda volumen restante, usamos el modelo más pequeño que exista para cerrarlo
+      if (restante > 0) {
+        const menores = [...modelosOrdenados].sort((a,b) => a.volumen_litros - b.volumen_litros);
+        const masPequenio = menores[0];
+        if (masPequenio) {
+          uso.push({ ...masPequenio, cantidad: 1 });
+          restante -= masPequenio.volumen_litros; // puede quedar negativo indicando sobrecapacidad
+        }
+      }
+
+      // Ajuste: intentar reducir desperdicio reemplazando 1 unidad grande por varias pequeñas si mejora
+      // (búsqueda local limitada)
+      function capacidadTotalLitros(arr){ return arr.reduce((s,x)=> s + x.cantidad * x.volumen_litros, 0); }
+      function clonar(arr){ return arr.map(x => ({...x})); }
+      const capacidadInicial = capacidadTotalLitros(uso);
+      let mejor = clonar(uso);
+      let mejorDesperdicio = capacidadInicial - volumenObjetivoLitros; // puede ser negativo pero normalmente >=0
+      if (mejorDesperdicio < 0) mejorDesperdicio = 0; // no consideramos déficit
+
+      const menoresAsc = [...modelosOrdenados].sort((a,b)=> a.volumen_litros - b.volumen_litros);
+      for (let i = 0; i < uso.length; i++) {
+        const u = uso[i];
+        if (u.cantidad <= 0) continue;
+        // Intentar quitar 1 de este modelo y rellenar con hasta X (8) modelos menores
+        const capacidadSinUno = capacidadTotalLitros(uso) - u.volumen_litros;
+        const deficit = volumenObjetivoLitros - capacidadSinUno; // litros que hay que recuperar (>=0)
+        if (deficit <= 0) {
+          // Ya cubriríamos el volumen; desperdicio mejor?
+          const desperdicioAlt = capacidadSinUno - volumenObjetivoLitros;
+          if (desperdicioAlt >=0 && desperdicioAlt < mejorDesperdicio) {
+            const variante = clonar(uso);
+            variante[i].cantidad -= 1;
+            mejor = variante.filter(x=> x.cantidad>0);
+            mejorDesperdicio = desperdicioAlt;
+          }
+          continue;
+        }
+        // Necesitamos sumar >= deficit con modelos menores (simple greedy ascendente)
+        let acumulado = 0;
+        const añadidos = [];
+        for (const mMenor of menoresAsc) {
+          if (mMenor.volumen_litros >= u.volumen_litros) continue; // solo menores estrictos
+          const cantNecesaria = Math.ceil((deficit - acumulado) / mMenor.volumen_litros);
+          if (cantNecesaria <= 0) break;
+          // limitamos a 8 para evitar explosión
+          const cantUsar = Math.min(cantNecesaria, 8);
+          añadidos.push({ ...mMenor, cantidad: cantUsar });
+          acumulado += cantUsar * mMenor.volumen_litros;
+          if (acumulado >= deficit) break;
+        }
+        if (acumulado >= deficit) {
+          const nuevaCapacidad = capacidadSinUno + acumulado;
+          const desperdicioNuevo = nuevaCapacidad - volumenObjetivoLitros;
+            if (desperdicioNuevo >= 0 && desperdicioNuevo < mejorDesperdicio) {
+              const variante = clonar(uso);
+              variante[i].cantidad -= 1;
+              // merge añadidos
+              for (const add of añadidos) {
+                const idx = variante.findIndex(x => x.modelo_id === add.modelo_id);
+                if (idx >= 0) variante[idx].cantidad += add.cantidad; else variante.push(add);
+              }
+              mejor = variante.filter(x=> x.cantidad>0);
+              mejorDesperdicio = desperdicioNuevo;
+            }
+        }
+      }
+
+      // Normalizar resultado final
+      const capacidadFinalLitros = capacidadTotalLitros(mejor);
+      const desperdicioFinalLitros = Math.max(0, capacidadFinalLitros - volumenObjetivoLitros);
+      const eficienciaPct = capacidadFinalLitros > 0 ? (volumenObjetivoLitros / capacidadFinalLitros) * 100 : 0;
+
+      const distribucion = mejor
+        .map(x => ({
+          modelo_id: x.modelo_id,
+          nombre_modelo: x.nombre_modelo,
+          volumen_litros: x.volumen_litros,
+          volumen_modelo_m3: x.volumen_m3,
+          cantidad: x.cantidad,
+          volumen_total_m3: (x.cantidad * x.volumen_litros) / 1000
+        }))
+        .sort((a,b) => b.volumen_litros - a.volumen_litros);
+
+      return {
+        parametros: { cliente_id, startDate, endDate },
+        resumen: {
+          total_productos: totalProductos,
+          volumen_total_m3: volumenTotalM3,
+          modelos_usados: distribucion.length,
+          volumen_total_capacidad_m3: capacidadFinalLitros / 1000,
+          desperdicio_m3: desperdicioFinalLitros / 1000,
+          eficiencia_pct: Math.round(eficienciaPct * 100) / 100
+        },
+        distribucion,
+        detalle_algoritmo: {
+          estrategia: 'greedy-desc + ajuste local (replace 1 big -> varios menores)',
+          desperdicio_m3: desperdicioFinalLitros / 1000,
+          tiempo_ms: Date.now() - t0
+        }
+      };
+    } catch (error) {
+      console.error('Error en calcularDistribucionOptimaRango:', error);
+      throw error;
+    }
+  },
+
+  // NUEVA FUNCIÓN: Recomendación mensual REAL basada en movimientos históricos.
+  // Usa la distribución real (modelo mínimo por línea) y proyecta uso mensual típico.
+  // - base_dias: 'activos' | 'calendario' (default 'activos') define divisor para promedio diario.
+  // - mensual_factor: días que consideramos para un mes (default 30).
+  calcularRecomendacionMensualReal: async ({ cliente_id, startDate, endDate, base_dias = 'activos', mensual_factor = 30 }) => {
+    if (!cliente_id) throw new Error('cliente_id es requerido');
+    if (!startDate || !endDate) throw new Error('startDate y endDate son requeridos');
+
+    // Obtener distribución real reutilizando lógica existente para no duplicar asignaciones.
+    const distReal = await sugerenciasService.calcularDistribucionRealPorRango({ cliente_id, startDate, endDate });
+
+    // Calcular días calendario del rango (inclusivo)
+    let diasCalendario = 1;
+    try {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      const diff = Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
+      if (diff > 0) diasCalendario = diff;
+    } catch {}
+
+    const diasActivos = distReal.resumen?.total_dias_activos || 0;
+    const divisor = (base_dias === 'calendario') ? diasCalendario : (diasActivos || diasCalendario);
+    const factorMensual = mensual_factor && mensual_factor > 0 ? mensual_factor : 30;
+
+    const modelos = (distReal.distribucion || []).map(m => {
+      const promedioDiario = divisor > 0 ? (m.contenedores_total / divisor) : 0;
+      const promedioMensual = promedioDiario * factorMensual;
+      // Reglas de presentación: evitar decimales pequeños confusos
+      const recomendacionMensualEntera = Math.ceil(promedioMensual); // preferimos no subestimar
+      const recomendacionDiariaEntera = promedioDiario >= 1 ? Math.round(promedioDiario) : 0;
+      const frecuenciaCadaDias = (promedioDiario > 0 && promedioDiario < 1) ? Math.round(1 / promedioDiario) : null;
+      return {
+        modelo_id: m.modelo_id,
+        nombre_modelo: m.nombre_modelo,
+        volumen_litros: m.volumen_litros,
+        cajas_totales_periodo: m.contenedores_total,
+        promedio_diario: promedioDiario, // valor técnico
+        promedio_mensual_30: promedioMensual,
+        recomendacion_mensual: recomendacionMensualEntera,
+        recomendacion_diaria: recomendacionDiariaEntera,
+        frecuencia_cada_dias: frecuenciaCadaDias,
+        porcentaje_productos: m.porcentaje_productos || 0,
+        porcentaje_volumen: m.porcentaje_volumen || 0
+      };
+    }).sort((a,b)=> b.cajas_totales_periodo - a.cajas_totales_periodo);
+
+    const totalCajasPeriodo = modelos.reduce((s,m)=> s + (m.cajas_totales_periodo||0), 0);
+    const totalPromedioDiario = modelos.reduce((s,m)=> s + (m.promedio_diario||0), 0);
+    const totalPromedioMensual = totalPromedioDiario * factorMensual;
+    const totalRecomendacionMensual = modelos.reduce((s,m)=> s + (m.recomendacion_mensual||0), 0);
+
+    return {
+      parametros: { cliente_id, startDate, endDate, base_dias, mensual_factor: factorMensual },
+      resumen: {
+        startDate,
+        endDate,
+        dias_calendario: diasCalendario,
+        dias_activos: diasActivos,
+        base_dias_usada: base_dias === 'calendario' ? 'calendario' : 'activos',
+        total_cajas_periodo: totalCajasPeriodo,
+        promedio_diario_total: totalPromedioDiario,
+        promedio_mensual_total: totalPromedioMensual,
+        recomendacion_mensual_total: totalRecomendacionMensual,
+        cobertura_productos: distReal.resumen?.cobertura_productos || 0,
+        cobertura_volumen: distReal.resumen?.cobertura_volumen || 0
+      },
+      modelos
+    };
+  },
+  saveRecomendacionMensualReal: async ({ cliente_id, startDate, endDate, base_dias = 'activos', mensual_factor = 30 }) => {
+    const reco = await sugerenciasService.calcularRecomendacionMensualReal({ cliente_id, startDate, endDate, base_dias, mensual_factor });
+    const creadas = [];
+    for (const m of (reco.modelos || [])) {
+      if (!m.recomendacion_mensual || m.recomendacion_mensual <= 0) continue;
+      try {
+        const detalle = {
+          tipo: 'recomendacion_mensual_real',
+          periodo: { startDate, endDate, base_dias_usada: reco.resumen?.base_dias_usada, mensual_factor: reco.parametros?.mensual_factor },
+          modelo: {
+            cajas_totales_periodo: m.cajas_totales_periodo,
+            promedio_diario: m.promedio_diario,
+            recomendacion_diaria: m.recomendacion_diaria,
+            frecuencia_cada_dias: m.frecuencia_cada_dias
+          },
+          global: {
+            total_cajas_periodo: reco.resumen?.total_cajas_periodo,
+            promedio_diario_total: reco.resumen?.promedio_diario_total,
+            recomendacion_mensual_total: reco.resumen?.recomendacion_mensual_total
+          }
+        };
+        const row = await sugerenciasService.createSugerencia({
+          cliente_id,
+            inv_id: null,
+          modelo_sugerido: m.nombre_modelo,
+          cantidad_sugerida: m.recomendacion_mensual,
+          modelo_id: m.modelo_id,
+          estado: 'pendiente',
+          detalle_orden: JSON.stringify(detalle),
+          cantidad_diaria: (m.recomendacion_diaria && m.recomendacion_diaria > 0)
+            ? String(m.recomendacion_diaria)
+            : (m.frecuencia_cada_dias ? `1 cada ${m.frecuencia_cada_dias} días` : (m.promedio_diario ? m.promedio_diario.toFixed(3) : null))
+          ,
+          rango_dias: reco.resumen?.dias_calendario != null ? String(reco.resumen.dias_calendario) : null,
+          dias_activos: reco.resumen?.dias_activos != null ? String(reco.resumen.dias_activos) : null
+        });
+        creadas.push(row);
+      } catch (e) {
+        console.warn('Fallo guardando recomendación modelo', m.nombre_modelo, e?.message);
+      }
+    }
+    return { resumen: reco.resumen, total_creadas: creadas.length, sugerencias: creadas };
   }
 };
 
