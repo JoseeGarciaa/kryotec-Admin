@@ -371,8 +371,8 @@ const SugerenciasView: React.FC = () => {
             <div className="space-y-4 mb-4">
               {productosModal.map(p => (
                 <div key={p.id} className="border border-gray-200 dark:border-gray-600 rounded p-3 text-xs">
-                  <div className="mb-2 font-medium text-gray-800 dark:text-white">{p.producto}</div>
-                  <div className="text-gray-500 dark:text-gray-300 mb-1">Modelo: {p.modelo} | Cantidad: {p.cantidad}</div>
+                  <div className="mb-2 font-medium text-gray-800 dark:text-white">{p.modelo || 'Modelo'}</div>
+                  <div className="text-gray-500 dark:text-gray-300 mb-1">Cantidad: {p.cantidad}</div>
                   <input value={precios[p.id] || ''} onChange={e => setPrecios(pr => ({ ...pr, [p.id]: e.target.value }))} placeholder="Precio (Ej: $100)" className="w-full p-2 rounded border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                 </div>
               ))}
