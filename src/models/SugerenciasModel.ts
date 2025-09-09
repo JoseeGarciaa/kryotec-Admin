@@ -16,6 +16,7 @@ export interface SugerenciaReemplazo {
   cantidad_diaria?: string | null; // nuevo campo (texto: '8' o '1 cada N días' o promedio técnico)
   rango_dias?: string | null;
   dias_activos?: string | null;
+  numero_de_sugerencia?: string | null;
   // Campos adicionales para joins
   nombre_cliente?: string;
   descripcion_inventario?: string;
@@ -114,7 +115,7 @@ export const SugerenciasModel = {
   },
 
   // Obtener sugerencias paginadas (con filtro opcional por cliente y búsqueda)
-  getSugerenciasPaginated: async (opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null }): Promise<{ total: number; items: SugerenciaReemplazo[] }> => {
+  getSugerenciasPaginated: async (opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null; numero?: string | null }): Promise<{ total: number; items: SugerenciaReemplazo[] }> => {
     try {
       const limit = opts?.limit ?? 50;
       const offset = opts?.offset ?? 0;
@@ -123,10 +124,22 @@ export const SugerenciasModel = {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (search) params.set('search', search);
       if (clienteId) params.set('cliente_id', String(clienteId));
+      if (opts?.numero) params.set('numero', String(opts.numero));
       const response = await axios.get(`${API_URL}/sugerencias?${params.toString()}`);
       return response.data;
     } catch (error) {
       console.error('Error al obtener sugerencias paginadas:', error);
+      throw error;
+    }
+  },
+
+  // Obtener grupo por numero_de_sugerencia
+  getSugerenciasPorNumero: async (numero: string): Promise<SugerenciaReemplazo[]> => {
+    try {
+      const response = await axios.get(`${API_URL}/sugerencias/numero/${encodeURIComponent(numero)}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error al obtener sugerencias por número:', error);
       throw error;
     }
   },

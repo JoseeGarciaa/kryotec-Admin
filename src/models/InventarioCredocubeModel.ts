@@ -6,6 +6,11 @@ export interface InventarioCredocube {
   fecha_ingreso: string;
   ultima_actualizacion: string;
   activo: boolean;
+  categoria?: string | null;
+  modelo_id?: number | null;
+  volumen_litros?: number | null;
+  modelo_nombre?: string | null;
+  tipo_modelo?: string | null;
 }
 
 // URL base de la API - Usar ruta relativa en producción o localhost en desarrollo

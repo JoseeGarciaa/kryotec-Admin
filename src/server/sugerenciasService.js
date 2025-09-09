@@ -5,12 +5,12 @@ const sugerenciasService = {
   getAllSugerencias: async () => {
     try {
       const query = `
-        SELECT 
+    SELECT 
           s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
           s.cantidad_sugerida, s.fecha_sugerencia, 
           s.modelo_id, s.estado,
           COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
-            s.cantidad_diaria, s.rango_dias, s.dias_activos,
+      s.cantidad_diaria, s.rango_dias, s.dias_activos, s.numero_de_sugerencia,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
           i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
@@ -30,7 +30,7 @@ const sugerenciasService = {
   },
 
   // Obtener sugerencias con paginación y búsqueda opcional
-  getSugerenciasPaginated: async ({ limit = 50, offset = 0, search = '', clienteId = null } = {}) => {
+  getSugerenciasPaginated: async ({ limit = 50, offset = 0, search = '', clienteId = null, numero = null } = {}) => {
     try {
       const params = [];
       let whereClauses = [];
@@ -38,6 +38,11 @@ const sugerenciasService = {
       if (clienteId) {
         params.push(clienteId);
         whereClauses.push(`s.cliente_id = $${params.length}`);
+      }
+
+      if (numero) {
+        params.push(String(numero));
+        whereClauses.push(`s.numero_de_sugerencia = $${params.length}`);
       }
 
       if (search && search.trim()) {
@@ -49,7 +54,8 @@ const sugerenciasService = {
           LOWER(COALESCE(i.producto, '')) ILIKE ${p} OR
           LOWER(COALESCE(i.descripcion_producto, '')) ILIKE ${p} OR
           LOWER(COALESCE(m.nombre_modelo, '')) ILIKE ${p} OR
-          LOWER(COALESCE(s.estado, '')) ILIKE ${p}
+          LOWER(COALESCE(s.estado, '')) ILIKE ${p} OR
+          LOWER(COALESCE(s.numero_de_sugerencia, '')) ILIKE ${p}
         )`);
       }
 
@@ -70,12 +76,12 @@ const sugerenciasService = {
       // Items
       const itemsParams = [...params, limit, offset];
       const itemsQuery = `
-        SELECT 
+    SELECT 
           s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
           s.cantidad_sugerida, s.fecha_sugerencia, 
           s.modelo_id, s.estado,
           COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
-            s.cantidad_diaria, s.rango_dias, s.dias_activos,
+      s.cantidad_diaria, s.rango_dias, s.dias_activos, s.numero_de_sugerencia,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
           i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
@@ -536,14 +542,14 @@ const totalDiasActivos = diasActivosSet.size || 1;
           INSERT INTO admin_platform.sugerencias_reemplazo (
             cliente_id, inv_id, modelo_sugerido, cantidad_sugerida,
             modelo_id, estado, orden_despacho, detalle_orden, cantidad_diaria,
-            rango_dias, dias_activos
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            rango_dias, dias_activos, numero_de_sugerencia
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           RETURNING sugerencia_id
         `;
         const valuesWithOrden = [
           data.cliente_id, data.inv_id ?? null, data.modelo_sugerido,
           data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente', ordenDespacho, data.detalle_orden || null, data.cantidad_diaria || null,
-          data.rango_dias || null, data.dias_activos || null
+          data.rango_dias || null, data.dias_activos || null, data.numero_de_sugerencia || null
         ];
         const { rows } = await pool.query(insertWithOrden, valuesWithOrden);
         sugerenciaId = rows[0].sugerencia_id;
@@ -554,13 +560,13 @@ const totalDiasActivos = diasActivosSet.size || 1;
           const insertFallback = `
             INSERT INTO admin_platform.sugerencias_reemplazo (
               cliente_id, inv_id, modelo_sugerido, cantidad_sugerida,
-              modelo_id, estado, detalle_orden
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+              modelo_id, estado, detalle_orden, numero_de_sugerencia
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING sugerencia_id
           `;
           const valuesFallback = [
             data.cliente_id, data.inv_id ?? null, data.modelo_sugerido,
-            data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente', data.detalle_orden || null
+            data.cantidad_sugerida, data.modelo_id, data.estado || 'pendiente', data.detalle_orden || null, data.numero_de_sugerencia || null
           ];
           const { rows } = await pool.query(insertFallback, valuesFallback);
           sugerenciaId = rows[0].sugerencia_id;
@@ -579,7 +585,7 @@ const totalDiasActivos = diasActivosSet.size || 1;
           COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
       s.detalle_orden,
       s.cantidad_diaria,
-      s.rango_dias, s.dias_activos,
+      s.rango_dias, s.dias_activos, s.numero_de_sugerencia,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
           i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
@@ -1687,6 +1693,15 @@ const totalDiasActivos = diasActivosSet.size || 1;
   saveRecomendacionMensualReal: async ({ cliente_id, startDate, endDate, base_dias = 'activos', mensual_factor = 30 }) => {
     const reco = await sugerenciasService.calcularRecomendacionMensualReal({ cliente_id, startDate, endDate, base_dias, mensual_factor });
     const creadas = [];
+    // Obtener el siguiente número de sugerencia (grupo)
+    let numeroDeSugerencia = null;
+    try {
+      const { rows: maxRows } = await pool.query("SELECT MAX(CASE WHEN numero_de_sugerencia ~ '^\\d+$' THEN CAST(numero_de_sugerencia AS INTEGER) ELSE NULL END) AS maxnum FROM admin_platform.sugerencias_reemplazo");
+      const maxNum = parseInt(maxRows?.[0]?.maxnum || '0', 10) || 0;
+      numeroDeSugerencia = String(maxNum + 1);
+    } catch (e) {
+      console.warn('No se pudo calcular numero_de_sugerencia, quedará null:', e?.message);
+    }
     for (const m of (reco.modelos || [])) {
       if (!m.recomendacion_mensual || m.recomendacion_mensual <= 0) continue;
       try {
@@ -1718,14 +1733,15 @@ const totalDiasActivos = diasActivosSet.size || 1;
             : (m.frecuencia_cada_dias ? `1 cada ${m.frecuencia_cada_dias} días` : (m.promedio_diario ? m.promedio_diario.toFixed(3) : null))
           ,
           rango_dias: reco.resumen?.dias_calendario != null ? String(reco.resumen.dias_calendario) : null,
-          dias_activos: reco.resumen?.dias_activos != null ? String(reco.resumen.dias_activos) : null
+          dias_activos: reco.resumen?.dias_activos != null ? String(reco.resumen.dias_activos) : null,
+          numero_de_sugerencia: numeroDeSugerencia
         });
         creadas.push(row);
       } catch (e) {
         console.warn('Fallo guardando recomendación modelo', m.nombre_modelo, e?.message);
       }
     }
-    return { resumen: reco.resumen, total_creadas: creadas.length, sugerencias: creadas };
+  return { resumen: reco.resumen, total_creadas: creadas.length, numero_de_sugerencia: numeroDeSugerencia, sugerencias: creadas };
   }
 };
 

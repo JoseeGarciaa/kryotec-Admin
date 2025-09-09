@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Package2, AlertCircle, CheckCircle2, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
+import { Package2, AlertCircle, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
 import { useInventarioCredocubeController } from '../../../controllers/InventarioCredocubeController';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { ToastContainer } from 'react-toastify';
@@ -47,7 +47,7 @@ export const InventarioCredocubesSection: React.FC = () => {
   const chartRef = useRef<any>(null);
   
   // Usamos el controlador para manejar la lógica y el estado
-  const { inventario, loading, refreshing, error, refreshInventarioData, formatDate, prepareChartData } = useInventarioCredocubeController();
+  const { inventario, loading, refreshing, error, refreshInventarioData, prepareChartData } = useInventarioCredocubeController();
   
   // Estado para controlar qué tenants están expandidos
   const [expandedTenants, setExpandedTenants] = useState<{[key: string]: boolean}>({});
@@ -79,9 +79,21 @@ export const InventarioCredocubesSection: React.FC = () => {
       );
     }
   }, [loading, inventario]);
-
   // Preparamos los datos para los gráficos si hay datos disponibles
   const chartData = !loading && !error && inventario.length > 0 ? prepareChartData() : null;
+  // Datos para gráfico solo de Cubes por empresa
+  const cubesByTenant = React.useMemo(() => {
+    if (loading || error || inventario.length === 0) return null;
+    const cubes = inventario.filter(i => (i.categoria?.toLowerCase() === 'cube') || (i.tipo_modelo?.toLowerCase() === 'cube'));
+    const map: Record<string, number> = cubes.reduce((acc: Record<string, number>, it: any) => {
+      const tenant = it.tenant_schema_name || 'N/D';
+      acc[tenant] = (acc[tenant] || 0) + 1;
+      return acc;
+    }, {});
+    const labels = Object.keys(map);
+    const values = labels.map(l => map[l]);
+    return { labels, values };
+  }, [inventario, loading, error]);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
@@ -149,57 +161,6 @@ export const InventarioCredocubesSection: React.FC = () => {
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          display: false
-                        },
-                        tooltip: {
-                          backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                          titleFont: {
-                            size: 14,
-                            weight: 'bold'
-                          },
-                          bodyFont: {
-                            size: 13
-                          },
-                          padding: 12,
-                          cornerRadius: 8,
-                          callbacks: {
-                            label: function(context) {
-                              return `Unidades: ${context.raw}`;
-                            }
-                          }
-                        }
-                      },
-                      scales: {
-                        y: {
-                          beginAtZero: true,
-                          ticks: {
-                            color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)',
-                            font: {
-                              size: 11
-                            },
-                            padding: 8
-                          },
-                          grid: {
-                            color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'
-                            // Eliminamos propiedades no compatibles con GridLineOptions
-                          }
-                        },
-                        x: {
-                          ticks: {
-                            color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)',
-                            font: {
-                              size: 11
-                            },
-                            padding: 8
-                          },
-                          grid: {
-                            display: false
-                            // Eliminamos propiedades no compatibles con GridLineOptions
-                          }
-                        }
-                      },
                       animation: {
                         duration: 1000,
                         easing: 'easeOutQuart'
@@ -310,6 +271,44 @@ export const InventarioCredocubesSection: React.FC = () => {
             </div>
           )}
 
+          {/* Gráfico adicional: Cubes por Empresa */}
+          {cubesByTenant && cubesByTenant.labels.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 mb-6">
+              <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                <span className="bg-gradient-to-r from-cyan-500 to-blue-600 w-2 h-6 rounded mr-2"></span>
+                Cubes por Empresa
+              </h3>
+              <div className="h-64">
+                <Bar
+                  data={{
+                    labels: cubesByTenant.labels.map(l => l.replace('tenant_', '')),
+                    datasets: [{
+                      label: 'Cubes',
+                      data: cubesByTenant.values,
+                      backgroundColor: cubesByTenant.labels.map((_, i) => {
+                        const colors = [CHART_COLORS.blue, CHART_COLORS.cyan, CHART_COLORS.teal, CHART_COLORS.green, CHART_COLORS.purple, CHART_COLORS.pink];
+                        return colors[i % colors.length];
+                      }),
+                      borderColor: 'transparent',
+                      borderRadius: 8,
+                      borderWidth: 0,
+                      hoverBackgroundColor: cubesByTenant.labels.map((_, i) => {
+                        const colors = ['rgba(37, 99, 235, 1)', 'rgba(6, 182, 212, 1)', 'rgba(20, 184, 166, 1)', 'rgba(34, 197, 94, 1)', 'rgba(124, 58, 237, 1)', 'rgba(236, 72, 153, 1)'];
+                        return colors[i % colors.length];
+                      }),
+                      maxBarThickness: 50
+                    }]
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 1000, easing: 'easeOutQuart' }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Inventario agrupado por empresa */}
           <div className="grid grid-cols-1 gap-8 mt-6">
             {inventario.length > 0 && (() => {
@@ -371,63 +370,46 @@ export const InventarioCredocubesSection: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Tabla de unidades de esta empresa - Visible solo si está expandida */}
-                    {isExpanded && (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                          <thead className="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Nombre Unidad
-                              </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Fecha Ingreso
-                              </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Última Actualización
-                              </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Estado
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {items.map((item, index: number) => (
-                              <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-200">
-                                  {item.nombre_unidad}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                  {formatDate(item.fecha_ingreso)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                  {formatDate(item.ultima_actualizacion)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <span className={`px-3 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
-                                    item.activo
-                                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                      : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                  }`}>
-                                    {item.activo ? (
-                                      <>
-                                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                                        Activo
-                                      </>
-                                    ) : (
-                                      <>
-                                        <AlertCircle className="h-3 w-3 mr-1" />
-                                        Inactivo
-                                      </>
-                                    )}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                    {/* Contenido expandido: Solo categoría Cube, agrupado por litros, en tarjetas */}
+                    {isExpanded && (() => {
+                      type Grupo = { litros: number; count: number };
+                      const cubes = items.filter(i => (i.categoria?.toLowerCase() === 'cube') || (i.tipo_modelo?.toLowerCase() === 'cube'));
+                      const grupos = cubes.reduce<Record<string, Grupo>>((acc, it) => {
+                        const litros = Number((it as any).volumen_litros || 0);
+                        const key = String(litros);
+                        if (!acc[key]) acc[key] = { litros, count: 0 };
+                        acc[key].count += 1;
+                        return acc;
+                      }, {});
+                      const cards = Object.values(grupos).sort((a, b) => a.litros - b.litros);
+                      return (
+                        <div className="p-5">
+                          {cards.length === 0 ? (
+                            <div className="text-sm text-gray-500 dark:text-gray-400">No hay unidades categoría Cube.</div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                              {cards.map((g) => (
+                                <div key={g.litros} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+                                  <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4">
+                                    <h4 className="text-lg font-bold text-white">Credo Cube {g.litros}L</h4>
+                                  </div>
+                                  <div className="p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm text-gray-500 dark:text-gray-400">Unidades</span>
+                                      <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">{g.count}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm text-gray-500 dark:text-gray-400">Categoría</span>
+                                      <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Cube</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               });

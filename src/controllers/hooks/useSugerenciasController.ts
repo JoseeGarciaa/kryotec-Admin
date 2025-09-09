@@ -24,11 +24,11 @@ export const useSugerenciasController = () => {
   };
 
   // Cargar sugerencias paginadas
-  const loadSugerenciasPaginated = async (opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null }) => {
+  const loadSugerenciasPaginated = async (opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null; numero?: string | null }) => {
     setLoading('loading');
     setError(null);
     try {
-      const res = await SugerenciasController.getSugerenciasPaginated(opts);
+  const res = await SugerenciasController.getSugerenciasPaginated(opts);
       setSugerencias(res.items);
       setTotal(res.total);
       setLoading('idle');
@@ -38,6 +38,17 @@ export const useSugerenciasController = () => {
       setLoading('error');
       console.error('Error loading sugerencias paginadas:', err);
       throw err;
+    }
+  };
+
+  const loadSugerenciasPorNumero = async (numero: string) => {
+    setLoading('loading'); setError(null);
+    try {
+      const items = await SugerenciasController.getSugerenciasPorNumero(numero);
+      setSugerencias(items); setTotal(items.length); setLoading('idle');
+      return items;
+    } catch (err) {
+      setError('Error al cargar por número'); setLoading('error'); throw err;
     }
   };
 
@@ -106,6 +117,7 @@ export const useSugerenciasController = () => {
     error,
     loadSugerencias,
   loadSugerenciasPaginated,
+  loadSugerenciasPorNumero,
     calcularSugerencias,
     createSugerencia,
     updateSugerencia,

@@ -9,7 +9,7 @@ import { useClienteProspectoController } from '../../../../controllers/hooks/use
 const API = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
 
 const SugerenciasView: React.FC = () => {
-  const { sugerencias, total, loading, error, loadSugerenciasPaginated, deleteSugerencia } = useSugerenciasController();
+  const { sugerencias, total, loading, error, loadSugerenciasPaginated, loadSugerenciasPorNumero, deleteSugerencia } = useSugerenciasController();
   const { clientes } = useClienteProspectoController();
 
   // Formulario
@@ -33,20 +33,24 @@ const SugerenciasView: React.FC = () => {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const [clienteFiltro, setClienteFiltro] = useState<number | ''>('');
+  const [numeroFiltro, setNumeroFiltro] = useState<string>('');
+  const numeroOptions = Array.from(new Set((sugerencias || []).map((s:any) => s.numero_de_sugerencia).filter((v:any) => !!v)));
 
   // PDF modal
   const [showModal, setShowModal] = useState(false);
-  const [pdfType, setPdfType] = useState<'general' | 'cliente' | 'individual'>('general');
+  const [pdfType, setPdfType] = useState<'general' | 'cliente' | 'individual' | 'numero'>('general');
+  const [pdfItems, setPdfItems] = useState<any[]>([]);
+  const [pdfTitulo, setPdfTitulo] = useState<string>('Reporte_Completo');
   const [precios, setPrecios] = useState<Record<string, string>>({});
   const [productosModal, setProductosModal] = useState<Array<{ id: string; producto: string; modelo: string; cantidad: number }>>([]);
-  const [sugerenciaIndividual, setSugerenciaIndividual] = useState<any | null>(null);
+  // estado individual no requerido
 
   const filtered = sugerencias.filter(s => !clienteFiltro || s.cliente_id === Number(clienteFiltro));
 
   // Cargar historial
   useEffect(() => {
-    loadSugerenciasPaginated({ limit, offset: page * limit, search, clienteId: clienteFiltro ? Number(clienteFiltro) : null });
-  }, [limit, page, search, clienteFiltro]);
+    loadSugerenciasPaginated({ limit, offset: page * limit, search, clienteId: clienteFiltro ? Number(clienteFiltro) : null, numero: numeroFiltro || null });
+  }, [limit, page, search, clienteFiltro, numeroFiltro]);
 
   // Resumen (debounce)
   useEffect(() => {
@@ -69,9 +73,12 @@ const SugerenciasView: React.FC = () => {
           total_productos: Number(rs.total_productos || 0),
           volumen_total_m3: Number(rs.volumen_total_m3 || 0)
         });
-      } catch {
-        setResumen(null); setResumenError('No se pudo obtener el resumen');
-      } finally { setResumenLoading(false); }
+      } catch (err) {
+        // Si la solicitud fue abortada por un cambio rápido de fechas, no mostrar error
+        if (!ctrl.signal.aborted) {
+          setResumen(null); setResumenError('No se pudo obtener el resumen');
+        }
+      } finally { if (!ctrl.signal.aborted) setResumenLoading(false); }
     }, 300);
     return () => { ctrl.abort(); clearTimeout(t); };
   }, [clienteId, startDate, endDate]);
@@ -104,14 +111,14 @@ const SugerenciasView: React.FC = () => {
     if (!window.confirm('Guardar esta recomendación mensual en la base? Creará una fila por modelo.')) return;
     try {
       setGuardando(true);
-      const r = await fetch(`${API}/sugerencias/recomendacion-mensual-real/guardar`, {
+  const r = await fetch(`${API}/sugerencias/recomendacion-mensual-real/guardar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate })
       });
       if (!r.ok) throw new Error();
       const d = await r.json();
-      alert(`Guardado: ${d.total_creadas} filas`);
+  alert(`Guardado: ${d.total_creadas} filas en el grupo #${d.numero_de_sugerencia || '?'} (numero_de_sugerencia)`);
       // Refrescar historial después de guardar
       loadSugerenciasPaginated({ limit, offset: page * limit, search, clienteId: clienteFiltro ? Number(clienteFiltro) : null });
     } catch { alert('No se pudo guardar'); }
@@ -129,16 +136,17 @@ const SugerenciasView: React.FC = () => {
   };
 
   // PDF helpers
-  const buildProductos = (arr = sugerencias) => arr.map(s => ({ id: `id_${s.sugerencia_id}`, producto: s.producto || s.descripcion_inventario || 'N/A', modelo: s.modelo_sugerido || 'N/A', cantidad: s.cantidad_sugerida || 0 }));
+  const buildProductos = (arr = sugerencias) => arr.map(s => ({ id: `id_${s.sugerencia_id}`, producto: s.producto || s.descripcion_inventario || 'N/A', modelo: s.nombre_modelo || s.modelo_sugerido || 'N/A', cantidad: s.cantidad_sugerida || 0 }));
   const precioFor = (s: any) => precios[`id_${s.sugerencia_id}`] || '';
   const abrirModal = (tipo: 'general' | 'cliente') => {
     const arr = tipo === 'cliente' ? filtered : sugerencias;
     if (tipo === 'cliente' && !clienteFiltro) { alert('Seleccione cliente'); return; }
     if (arr.length === 0) { alert('No hay sugerencias'); return; }
     const prods = buildProductos(arr); const init: Record<string, string> = {}; prods.forEach(p => init[p.id] = '');
-    setPdfType(tipo); setProductosModal(prods); setPrecios(init); setShowModal(true); setSugerenciaIndividual(null);
+    setPdfType(tipo); setPdfItems(arr); setPdfTitulo(tipo === 'cliente' ? `Cliente_${clientes.find(c => c.cliente_id === Number(clienteFiltro))?.nombre_cliente || ''}` : 'Reporte_Completo');
+    setProductosModal(prods); setPrecios(init); setShowModal(true);
   };
-  const abrirModalIndividual = (s: any) => { const p = buildProductos([s]); setPdfType('individual'); setProductosModal(p); setPrecios({ [p[0].id]: '' }); setShowModal(true); setSugerenciaIndividual(s); };
+  const abrirModalIndividual = (s: any) => { const p = buildProductos([s]); setPdfType('individual'); setPdfItems([s]); setPdfTitulo('Sugerencia_Individual'); setProductosModal(p); setPrecios({ [p[0].id]: '' }); setShowModal(true); };
   const pdfGenerico = (arr: any[], titulo: string) => {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const w = pdf.internal.pageSize.getWidth();
@@ -204,9 +212,7 @@ const SugerenciasView: React.FC = () => {
     pdf.text('Generado automáticamente por Kryotec - Módulo de Sugerencias.', 16, h-16);
     pdf.save(`Sugerencias_${titulo.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
-  const generarPDF = () => pdfGenerico(sugerencias, 'Reporte_Completo');
-  const generarPDFCliente = () => { const cli = clientes.find(c => c.cliente_id === Number(clienteFiltro)); pdfGenerico(filtered, `Cliente_${cli?.nombre_cliente || ''}`); };
-  const generarPDFIndividual = () => { if (sugerenciaIndividual) pdfGenerico([sugerenciaIndividual], 'Sugerencia_Individual'); };
+  const generarPDF = () => pdfGenerico(pdfItems.length ? pdfItems : sugerencias, pdfTitulo || 'Reporte_Completo');
 
   return (
     <div className="p-6">
@@ -313,7 +319,14 @@ const SugerenciasView: React.FC = () => {
               </select>
             </div>
             <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} placeholder="Buscar..." className="p-2 rounded border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" />
+            <select value={numeroFiltro} onChange={e => { setNumeroFiltro(e.target.value); setPage(0); }} className="p-2 rounded border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm">
+              <option value=""># sugerencia</option>
+              {numeroOptions.map((n:string) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
             {clienteFiltro && <button onClick={() => abrirModal('cliente')} className="px-3 py-2 text-xs rounded bg-green-600 text-white flex items-center gap-1"><Download size={14} />PDF Cliente</button>}
+            {numeroFiltro && <button onClick={async () => { const items = await loadSugerenciasPorNumero(numeroFiltro); if (items.length) { setPdfType('general'); setProductosModal(buildProductos(items)); const init: Record<string,string> = {}; items.forEach(s => init[`id_${s.sugerencia_id}`]=''); setPrecios(init); setShowModal(true);} else { alert('No hay registros para ese número'); } }} className="px-3 py-2 text-xs rounded bg-purple-600 text-white flex items-center gap-1"><Download size={14} />PDF Nº</button>}
             <button onClick={() => abrirModal('general')} className="px-3 py-2 text-xs rounded bg-blue-600 text-white flex items-center gap-1"><Download size={14} />PDF Completo</button>
           </div>
         </div>
@@ -330,10 +343,10 @@ const SugerenciasView: React.FC = () => {
               <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200">
                 <tr>
                   <th className="text-left p-2">Cliente</th>
+                  <th className="text-left p-2">#</th>
                   <th className="text-left p-2">Modelo</th>
                   <th className="text-left p-2">Cant.</th>
                   <th className="text-left p-2">Cant. Diaria</th>
-                  <th className="text-left p-2">Estado</th>
                   <th className="text-left p-2">Fecha</th>
                   <th className="p-2">Acciones</th>
                 </tr>
@@ -342,10 +355,10 @@ const SugerenciasView: React.FC = () => {
                 {filtered.map(s => (
                   <tr key={s.sugerencia_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="p-2">{s.nombre_cliente || 'N/A'}</td>
+                    <td className="p-2">{s.numero_de_sugerencia || '-'}</td>
                     <td className="p-2">{s.modelo_sugerido}</td>
                     <td className="p-2">{s.cantidad_sugerida}</td>
                     <td className="p-2">{s.cantidad_diaria || '-'}</td>
-                    <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-[10px] ${s.estado === 'aprobada' ? 'bg-green-100 text-green-700' : s.estado === 'pendiente' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.estado}</span></td>
                     <td className="p-2">{s.fecha_sugerencia ? new Date(s.fecha_sugerencia).toLocaleDateString() : 'N/A'}</td>
                     <td className="p-2 flex gap-2 justify-center">
                       <button onClick={() => abrirModalIndividual(s)} className="p-1 rounded bg-blue-600 text-white" title="PDF"><Download size={14} /></button>
@@ -379,7 +392,7 @@ const SugerenciasView: React.FC = () => {
             </div>
             <div className="flex justify-end gap-2 text-xs">
               <button onClick={() => setShowModal(false)} className="px-3 py-2 rounded bg-gray-200 dark:bg-gray-600">Cancelar</button>
-              <button onClick={() => { setShowModal(false); if (pdfType === 'general') generarPDF(); else if (pdfType === 'cliente') generarPDFCliente(); else generarPDFIndividual(); }} className="px-3 py-2 rounded bg-blue-600 text-white">Generar PDF</button>
+              <button onClick={() => { setShowModal(false); generarPDF(); }} className="px-3 py-2 rounded bg-blue-600 text-white">Generar PDF</button>
             </div>
           </div>
         </div>

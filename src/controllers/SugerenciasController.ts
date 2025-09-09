@@ -32,7 +32,11 @@ export class SugerenciasController {
   }
 
   // Paginado
-  static async getSugerenciasPaginated(opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null }): Promise<{ total: number; items: SugerenciaReemplazo[] }> {
+  static async getSugerenciasPaginated(opts?: { limit?: number; offset?: number; search?: string; clienteId?: number | null; numero?: string | null }): Promise<{ total: number; items: SugerenciaReemplazo[] }> {
     return await SugerenciasModel.getSugerenciasPaginated(opts);
+  }
+
+  static async getSugerenciasPorNumero(numero: string): Promise<SugerenciaReemplazo[]> {
+    return await SugerenciasModel.getSugerenciasPorNumero(numero);
   }
 }

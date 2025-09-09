@@ -130,14 +130,19 @@ app.delete('/api/users/:id', async (req, res) => {
 app.get('/api/inventario-credocubes', async (req, res) => {
   try {
     const query = `
-      SELECT
-          tenant_schema_name,    -- Nombre del esquema del tenant de origen
-          nombre_unidad,         -- Nombre de la unidad de inventario
-          fecha_ingreso,         -- Fecha en que el registro fue ingresado
-          ultima_actualizacion,  -- Ultima fecha en que el registro fue actualizado
-          activo                 -- Estado de actividad del registro (true/false)
-      FROM
-          admin_platform.inventario_credocubes
+    SELECT
+      i.tenant_schema_name,      -- Esquema del tenant
+      i.nombre_unidad,           -- Nombre de la unidad
+      i.fecha_ingreso,           -- Fecha de ingreso
+      i.ultima_actualizacion,    -- Última actualización
+      i.activo,                  -- Activo/inactivo
+      i.categoria,               -- Categoría registrada en inventario
+      i.modelo_id,               -- FK al modelo
+      m.volumen_litros,          -- Volumen del modelo (para agrupar por litros)
+      m.nombre_modelo AS modelo_nombre, -- Nombre del modelo
+      m.tipo AS tipo_modelo      -- Tipo de modelo (esperado 'Cube')
+    FROM admin_platform.inventario_credocubes i
+    LEFT JOIN admin_platform.modelos m ON m.modelo_id = i.modelo_id
     `;
     const result = await pool.query(query);
     res.json(result.rows);
@@ -1018,10 +1023,11 @@ app.get('/api/sugerencias', async (req, res) => {
     const offset = req.query.offset ? Math.max(parseInt(req.query.offset), 0) : 0;
     const search = req.query.search ? String(req.query.search) : '';
     const clienteId = req.query.cliente_id ? parseInt(req.query.cliente_id) : null;
+  const numero = req.query.numero ? String(req.query.numero) : null;
 
     // Si se especifica limit, usar la versión paginada; de lo contrario devolver todo (compatibilidad)
     if (limit !== null) {
-      const result = await sugerenciasService.getSugerenciasPaginated({ limit, offset, search, clienteId });
+      const result = await sugerenciasService.getSugerenciasPaginated({ limit, offset, search, clienteId, numero });
       return res.json(result);
     }
 
@@ -1030,6 +1036,18 @@ app.get('/api/sugerencias', async (req, res) => {
   } catch (error) {
     console.error('Error en GET /api/sugerencias:', error);
     res.status(500).json({ error: 'Error al obtener sugerencias' });
+  }
+});
+
+// Obtener sugerencias por numero_de_sugerencia (grupo)
+app.get('/api/sugerencias/numero/:numero', async (req, res) => {
+  try {
+    const numero = String(req.params.numero);
+    const { items } = await sugerenciasService.getSugerenciasPaginated({ limit: 1000, offset: 0, search: '', clienteId: null, numero });
+    res.json(items);
+  } catch (error) {
+    console.error('Error en GET /api/sugerencias/numero/:numero:', error);
+    res.status(500).json({ error: 'Error al obtener sugerencias por número' });
   }
 });
 
