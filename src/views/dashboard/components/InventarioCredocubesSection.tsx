@@ -329,8 +329,9 @@ export const InventarioCredocubesSection: React.FC = () => {
               
               // Renderizar los grupos
               return Object.entries(groupedByTenant).map(([tenant, items]: [string, typeof inventario]) => {
-                const unidadesActivas = items.filter(item => item.activo).length;
-                const totalUnidades = items.length;
+                const cubesItems = items.filter(i => (i.categoria?.toLowerCase() === 'cube') || (i.tipo_modelo?.toLowerCase() === 'cube'));
+                const unidadesActivas = cubesItems.filter(item => item.activo).length;
+                const totalUnidades = cubesItems.length;
                 
                 // Crear un ID único para cada tenant
                 const tenantId = `tenant-${tenant.replace(/\s+/g, '-').toLowerCase()}`;
@@ -351,7 +352,7 @@ export const InventarioCredocubesSection: React.FC = () => {
                       </div>
                       <div className="flex items-center space-x-3">
                         <span className="bg-white/20 px-3 py-1 rounded-full text-sm text-white">
-                          {unidadesActivas}/{totalUnidades} unidades activas
+                          {unidadesActivas}/{totalUnidades} unidades activas (Cube)
                         </span>
                         <button 
                           className="bg-white/20 p-2 rounded-full text-white hover:bg-white/30 transition-colors"
