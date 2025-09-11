@@ -26,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
           
           <div>
             <h2 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
-              Bienvenido a Kryotecsense
+              Bienvenido a KryoSense
             </h2>
             <p className="text-sm lg:text-base text-gray-600 dark:text-gray-400 mt-1 hidden sm:block">
               Panel de administración multitenant SaaS • Sistema operativo 

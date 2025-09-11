@@ -154,7 +154,7 @@ export const TenantsView: React.FC = () => {
   const header = (
     <div className="px-3 pt-6 pb-3 sm:px-6 sm:pt-8 sm:pb-4">
       <h2 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent text-left tracking-tight">
-        Bienvenido a Kryotecsense
+        Bienvenido a KryoSense
       </h2>
     </div>
   );
