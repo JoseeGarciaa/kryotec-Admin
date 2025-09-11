@@ -3,14 +3,20 @@ import React from 'react';
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
 }
 
 export const Input: React.FC<InputProps> = ({
   label,
   error,
+  leftIcon,
+  rightIcon,
   className = '',
   ...props
 }) => {
+  const hasLeft = !!leftIcon;
+  const hasRight = !!rightIcon;
   return (
     <div className="space-y-2">
       {label && (
@@ -18,10 +24,22 @@ export const Input: React.FC<InputProps> = ({
           {label}
         </label>
       )}
-      <input
-        className={`w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
-        {...props}
-      />
+      <div className={`relative ${hasLeft || hasRight ? 'flex items-center' : ''}`}>
+        {hasLeft && (
+          <div className="pointer-events-none absolute left-3 inset-y-0 flex items-center text-gray-400">
+            {leftIcon}
+          </div>
+        )}
+        <input
+          className={`w-full ${hasLeft ? 'pl-10' : 'pl-3'} ${hasRight ? 'pr-10' : 'pr-3'} py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
+          {...props}
+        />
+        {hasRight && (
+          <div className="absolute right-3 inset-y-0 flex items-center text-gray-400">
+            {rightIcon}
+          </div>
+        )}
+      </div>
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400 transition-colors">{error}</p>
       )}

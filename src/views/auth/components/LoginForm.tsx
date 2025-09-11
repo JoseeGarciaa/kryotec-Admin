@@ -56,37 +56,37 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 w-full">
-      <div className="relative">
+      <div>
         <Input
           type="email"
           label="Email"
-          placeholder="admin@kryotecsense.com"
+          placeholder=""
           value={credentials.email}
           onChange={handleInputChange('email')}
           error={fieldErrors.email}
-          className="pl-10"
+          leftIcon={<Mail className="w-4 h-4" />}
         />
-        <Mail className="absolute left-3 top-8 sm:top-9 w-4 h-4 text-gray-400" />
       </div>
 
-      <div className="relative">
+      <div>
         <Input
           type={showPassword ? 'text' : 'password'}
           label="Contraseña"
-          placeholder="••••••••"
+          placeholder=""
           value={credentials.password}
           onChange={handleInputChange('password')}
           error={fieldErrors.password}
-          className="pl-10 pr-10"
+          leftIcon={<Lock className="w-4 h-4" />}
+          rightIcon={
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          }
         />
-        <Lock className="absolute left-3 top-8 sm:top-9 w-4 h-4 text-gray-400" />
-        <button
-          type="button"
-          onClick={() => setShowPassword(!showPassword)}
-          className="absolute right-3 top-8 sm:top-9 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-        >
-          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-        </button>
       </div>
 
       {error && (
@@ -104,11 +104,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error
         {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
       </Button>
 
-      <div className="text-center">
-        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 transition-colors">
-          Credenciales de prueba: admin@kryotecsense.com / admin123
-        </p>
-      </div>
+  {/* Mensaje informativo opcional (eliminadas credenciales de ejemplo) */}
     </form>
   );
 };

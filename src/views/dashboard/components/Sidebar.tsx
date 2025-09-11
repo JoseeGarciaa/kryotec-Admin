@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { LogOut, X, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Settings, Bell, Moon, Sun } from 'lucide-react';
-import credocubeLogo from '../../../assets/images/credocube-logo.png';
+import credocubeLogo from '../../../assets/images/favicon.png';
 import type { LucideIcon } from 'lucide-react';
 import { User } from '../../../models/types/auth';
 import { ThemeMode } from '../../../models/types/theme';
@@ -86,10 +86,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Encabezado con logo */}
         <div className={`p-6 ${!sidebarOpen ? 'lg:p-3' : ''}`}>
           <div className={`flex items-center gap-3 mb-8 ${!sidebarOpen ? 'lg:justify-center lg:mb-6' : ''}`}>
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm p-1">
-              <img src={credocubeLogo} alt="CredoCube Logo" className="w-full h-full object-contain" />
+            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-sm p-1">
+              <img src={credocubeLogo} alt="KryoSense Logo" className="w-full h-full object-contain" />
             </div>
-            {sidebarOpen && <h1 className="text-xl font-bold text-gray-900 dark:text-white">CredoCube</h1>}
+            {sidebarOpen && <h1 className="text-xl font-bold text-gray-900 dark:text-white">KryoSense</h1>}
           </div>
         </div>
 

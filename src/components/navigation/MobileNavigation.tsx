@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Home, Users, Box, LogOut, Moon, Sun, Package, Lightbulb } from 'lucide-react';
-import credocubeLogo from '../../assets/images/credocube-logo.png';
+import credocubeLogo from '../../assets/images/favicon.png';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthContext } from '../../views/contexts/AuthContext';
 import { useThemeContext } from '../../views/contexts/ThemeContext';
@@ -87,11 +87,11 @@ export const MobileNavigation: React.FC = () => {
               <div className="p-6 border-b border-gray-700/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg p-1">
-                      <img src={credocubeLogo} alt="CredoCube Logo" className="w-full h-full object-contain" />
+                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-lg p-1">
+                      <img src={credocubeLogo} alt="KryoSense Logo" className="w-full h-full object-contain" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-white">CredoCube</h2>
+                      <h2 className="text-xl font-bold text-white">KryoSense</h2>
                       <p className="text-xs text-blue-300 mt-0.5">Panel de Administración</p>
                     </div>
                   </div>
