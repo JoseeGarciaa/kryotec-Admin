@@ -88,10 +88,10 @@ export const MobileNavigation: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-lg p-1">
-                      <img src={credocubeLogo} alt="KryoSense Logo" className="w-full h-full object-contain" />
+                      <img src={credocubeLogo} alt="KryoTec Logo" className="w-full h-full object-contain" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-white">KryoSense</h2>
+                      <h2 className="text-xl font-bold text-white">KryoTec</h2>
                       <p className="text-xs text-blue-300 mt-0.5">Panel de Administración</p>
                     </div>
                   </div>

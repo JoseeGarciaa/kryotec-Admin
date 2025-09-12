@@ -87,9 +87,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className={`p-6 ${!sidebarOpen ? 'lg:p-3' : ''}`}>
           <div className={`flex items-center gap-3 mb-8 ${!sidebarOpen ? 'lg:justify-center lg:mb-6' : ''}`}>
             <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-sm p-1">
-              <img src={credocubeLogo} alt="KryoSense Logo" className="w-full h-full object-contain" />
+              <img src={credocubeLogo} alt="KryoTec Logo" className="w-full h-full object-contain" />
             </div>
-            {sidebarOpen && <h1 className="text-xl font-bold text-gray-900 dark:text-white">KryoSense</h1>}
+            {sidebarOpen && <h1 className="text-xl font-bold text-gray-900 dark:text-white">KryoTec</h1>}
           </div>
         </div>
 
