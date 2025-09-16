@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 // import { Button } from '../shared/ui/Button';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import SettingsView from './SettingsView';
 import { InventarioCredocubesSection } from './components/InventarioCredocubesSection';
 import { UsersView } from './UsersView';
 import { CredocubesView } from './CredocubesView';
@@ -134,6 +135,7 @@ export const DashboardView: React.FC = () => {
         user={user}
         theme={theme}
         toggleTheme={toggleTheme}
+        onOpenSettings={() => handleTabChange('settings')}
       />
 
       {/* Main Content */}
@@ -151,6 +153,7 @@ export const DashboardView: React.FC = () => {
               <InventarioCredocubesSection />
             </div>
           )}
+          {activeTab === 'settings' && <SettingsView />}
           
           {activeTab === 'usuarios' && <UsersView />}
           {activeTab === 'empresas' && <TenantsView />}

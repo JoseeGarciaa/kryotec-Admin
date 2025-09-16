@@ -132,3 +132,18 @@ updateLastLogin: async (id: number): Promise<boolean> => {
   },
 
 };
+
+// API para autenticación
+export const AuthAPI = {
+  changePassword: async (userId: number, oldPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      const response = await apiClient.post('/auth/change-password', { userId, oldPassword, newPassword });
+      return !!response.data?.success || response.status === 200;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data?.error || 'Error al cambiar contraseña');
+      }
+      throw error;
+    }
+  }
+};

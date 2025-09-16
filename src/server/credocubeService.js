@@ -15,7 +15,7 @@ const credocubeService = {
       return await cache.getOrSet(CREDOCUBES_CACHE_KEY, async () => {
         console.log('Caché miss para credocubes, consultando base de datos');
         const result = await pool.query(
-          'SELECT * FROM admin_platform.modelos ORDER BY nombre_modelo'
+          "SELECT * FROM admin_platform.modelos WHERE tipo = 'Cube' ORDER BY nombre_modelo"
         );
         return result.rows;
       }, CACHE_TTL);

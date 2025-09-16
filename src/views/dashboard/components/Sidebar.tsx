@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LogOut, X, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Settings, Bell, Moon, Sun } from 'lucide-react';
+import { LogOut, X, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Settings, Moon, Sun } from 'lucide-react';
 import credocubeLogo from '../../../assets/images/favicon.png';
 import type { LucideIcon } from 'lucide-react';
 import { User } from '../../../models/types/auth';
@@ -22,6 +22,7 @@ interface SidebarProps {
   user: User | null;
   theme: ThemeMode;
   toggleTheme: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -33,7 +34,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   logout,
   user,
   theme,
-  toggleTheme
+  toggleTheme,
+  onOpenSettings
 }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(false);
@@ -192,13 +194,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Opciones de configuración */}
             {sidebarOpen && userMenuOpen && (
               <div className="space-y-1 pl-11 mt-1 transition-all duration-300 ease-in-out">
-                <button className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                <button 
+                  onClick={() => {
+                    if (onOpenSettings) onOpenSettings();
+                    setUserMenuOpen(false);
+                  }}
+                  className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                   <Settings className="w-4 h-4 mr-3" />
                   Configuración
-                </button>
-                <button className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-                  <Bell className="w-4 h-4 mr-3" />
-                  Notificaciones
                 </button>
                 <button 
                   onClick={toggleTheme}

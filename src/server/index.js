@@ -517,7 +517,7 @@ app.get('/api/inventario-prospectos/ordenes-despacho', async (req, res) => {
 // Nueva ruta: recomendaciones por rango de fechas, agrupadas por orden
 app.post('/api/sugerencias/calcular-por-rango', async (req, res) => {
   try {
-    const { cliente_id, startDate, endDate } = req.body || {};
+    const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
 
@@ -533,7 +533,7 @@ app.post('/api/sugerencias/calcular-por-rango', async (req, res) => {
     const resultados = [];
     for (const ord of ordenes) {
       const orden = ord.orden_despacho;
-      const sugerencias = await sugerenciasService.calcularSugerenciasPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden });
+      const sugerencias = await sugerenciasService.calcularSugerenciasPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden, modelos_permitidos });
       resultados.push({ orden_despacho: orden, resumen: ord, sugerencias });
     }
     res.json({ total_ordenes: ordenes.length, resultados });
@@ -546,14 +546,15 @@ app.post('/api/sugerencias/calcular-por-rango', async (req, res) => {
 // Nueva ruta: recomendaciones agregadas por rango (suma total de m3 en el rango)
 app.post('/api/sugerencias/calcular-por-rango-total', async (req, res) => {
   try {
-    const { cliente_id, startDate, endDate } = req.body || {};
+    const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
 
     const result = await sugerenciasService.calcularSugerenciasPorRangoTotal({
       cliente_id: parseInt(cliente_id),
       startDate,
-      endDate
+      endDate,
+      modelos_permitidos
     });
     res.json(result);
   } catch (error) {
@@ -565,14 +566,15 @@ app.post('/api/sugerencias/calcular-por-rango-total', async (req, res) => {
 // Nueva ruta: distribución real (100%) por rango (asigna modelo mínimo por línea)
 app.post('/api/sugerencias/distribucion-real-rango', async (req, res) => {
   try {
-    const { cliente_id, startDate, endDate } = req.body || {};
+    const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
 
     const result = await sugerenciasService.calcularDistribucionRealPorRango({
       cliente_id: parseInt(cliente_id),
       startDate,
-      endDate
+      endDate,
+      modelos_permitidos
     });
     res.json(result);
   } catch (error) {
@@ -584,14 +586,15 @@ app.post('/api/sugerencias/distribucion-real-rango', async (req, res) => {
 // Nueva ruta: proyección mensual (estimado diario futuro)
 app.post('/api/sugerencias/proyeccion-mensual', async (req, res) => {
   try {
-    const { cliente_id, startDate, endDate, percentil_stock } = req.body || {};
+    const { cliente_id, startDate, endDate, percentil_stock, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
     const result = await sugerenciasService.calcularProyeccionMensual({
       cliente_id: parseInt(cliente_id),
       startDate,
       endDate,
-      percentil_stock: percentil_stock || 0.95
+      percentil_stock: percentil_stock || 0.95,
+      modelos_permitidos
     });
     res.json(result);
   } catch (error) {
@@ -603,7 +606,7 @@ app.post('/api/sugerencias/proyeccion-mensual', async (req, res) => {
 // Nueva ruta: agregado orden a orden (toma la mejor opción de cada orden y suma por modelo)
 app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', async (req, res) => {
   try {
-    const { cliente_id, startDate, endDate } = req.body || {};
+    const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
 
@@ -675,7 +678,11 @@ app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', async (req, res) =
   let totalVolumenM3Modelado = 0;
 
     // Optimización: obtener modelos una sola vez y procesar órdenes en paralelo controlado
-    const modelosCache = await sugerenciasService.obtenerModelosCubeCached();
+    let modelosCache = await sugerenciasService.obtenerModelosCubeCached();
+    if (Array.isArray(modelos_permitidos) && modelos_permitidos.length) {
+      const allowed = new Set(modelos_permitidos.map((x)=>parseInt(x)));
+      modelosCache = (modelosCache || []).filter((m) => allowed.has(parseInt(m.modelo_id)));
+    }
     const CONCURRENCY = 32; // ajustar según CPU / carga DB
     let index = 0;
     const ordenesArr = ordenes.slice();
@@ -686,7 +693,7 @@ app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', async (req, res) =
       await Promise.all(lote.map(async (ord) => {
         const orden = ord.orden_despacho;
         try {
-          const sugerencias = await sugerenciasService.calcularSugerenciasPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden }, { modelos: modelosCache });
+          const sugerencias = await sugerenciasService.calcularSugerenciasPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden, modelos_permitidos }, { modelos: modelosCache, modelos_permitidos });
           if (Array.isArray(sugerencias) && sugerencias.length) {
             const best = sugerencias.find(s => s.es_mejor_opcion) || sugerencias[0];
             if (best && best.modelo_id != null) {
@@ -760,7 +767,7 @@ app.post('/api/sugerencias/distribucion-optima-rango', async (req, res) => {
 // Nueva ruta: recomendación mensual REAL (basada en distribución real por línea)
 app.post('/api/sugerencias/recomendacion-mensual-real', async (req, res) => {
   try {
-    const { cliente_id, startDate, endDate, base_dias, mensual_factor } = req.body || {};
+    const { cliente_id, startDate, endDate, base_dias, mensual_factor, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
     const result = await sugerenciasService.calcularRecomendacionMensualReal({
@@ -768,7 +775,8 @@ app.post('/api/sugerencias/recomendacion-mensual-real', async (req, res) => {
       startDate,
       endDate,
       base_dias: base_dias || 'activos',
-      mensual_factor: mensual_factor || 30
+      mensual_factor: mensual_factor || 30,
+      modelos_permitidos
     });
     res.json(result);
   } catch (error) {
@@ -780,7 +788,7 @@ app.post('/api/sugerencias/recomendacion-mensual-real', async (req, res) => {
 // Guardar recomendación mensual real en la tabla sugerencias_reemplazo (una fila por modelo)
 app.post('/api/sugerencias/recomendacion-mensual-real/guardar', async (req, res) => {
   try {
-    const { cliente_id, startDate, endDate, base_dias, mensual_factor } = req.body || {};
+    const { cliente_id, startDate, endDate, base_dias, mensual_factor, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
     const result = await sugerenciasService.saveRecomendacionMensualReal({
@@ -788,7 +796,8 @@ app.post('/api/sugerencias/recomendacion-mensual-real/guardar', async (req, res)
       startDate,
       endDate,
       base_dias: base_dias || 'activos',
-      mensual_factor: mensual_factor || 30
+      mensual_factor: mensual_factor || 30,
+      modelos_permitidos
     });
     res.status(201).json(result);
   } catch (error) {

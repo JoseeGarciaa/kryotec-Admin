@@ -27,6 +27,9 @@ const SugerenciasView: React.FC = () => {
   // Días
   const [diasActivos, setDiasActivos] = useState<number | null>(null);
   const [diasRango, setDiasRango] = useState<number | null>(null);
+  // Filtro de modelos (permitidos)
+  const [modelos, setModelos] = useState<Array<{ modelo_id: number; nombre_modelo: string; volumen_litros: number }>>([]);
+  const [modelosPermitidos, setModelosPermitidos] = useState<number[]>([]);
 
   // Historial
   const [limit] = useState(20);
@@ -52,6 +55,25 @@ const SugerenciasView: React.FC = () => {
     loadSugerenciasPaginated({ limit, offset: page * limit, search, clienteId: clienteFiltro ? Number(clienteFiltro) : null, numero: numeroFiltro || null });
   }, [limit, page, search, clienteFiltro, numeroFiltro]);
 
+  // Cargar catálogo de modelos para selector
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API}/credocubes`);
+        if (r.ok) {
+          const data = await r.json();
+          const cubes = (data || [])
+            .filter((m:any) => (m?.tipo || m?.tipo_modelo) === 'Cube' || /cube/i.test(String(m?.nombre_modelo || m?.modelo_nombre || '')))
+            .map((m:any) => ({ modelo_id: m.modelo_id, nombre_modelo: m.nombre_modelo || m.modelo_nombre, volumen_litros: Number(m.volumen_litros) || 0 }));
+          const sorted = [...cubes].sort((a,b) => (a.volumen_litros || 0) - (b.volumen_litros || 0));
+          setModelos(sorted);
+          // Seleccionar todos por defecto
+          setModelosPermitidos(sorted.map(m => m.modelo_id));
+        }
+      } catch {}
+    })();
+  }, []);
+
   // Resumen (debounce)
   useEffect(() => {
     if (!clienteId || !startDate || !endDate) { setResumen(null); return; }
@@ -62,7 +84,7 @@ const SugerenciasView: React.FC = () => {
         const r = await fetch(`${API}/sugerencias/calcular-por-rango-total`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate }),
+            body: JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos }),
           signal: ctrl.signal
         });
         if (!r.ok) throw new Error();
@@ -81,14 +103,14 @@ const SugerenciasView: React.FC = () => {
       } finally { if (!ctrl.signal.aborted) setResumenLoading(false); }
     }, 300);
     return () => { ctrl.abort(); clearTimeout(t); };
-  }, [clienteId, startDate, endDate]);
+  }, [clienteId, startDate, endDate, modelosPermitidos]);
 
   const calcular = async () => {
     if (!clienteId || !startDate || !endDate) { alert('Complete cliente y fechas'); return; }
     setCalculando(true);
     setRecomendacion(null);
     try {
-      const body = JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate });
+      const body = JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos });
       // Obtenemos días activos (orden a orden) y la recomendación mensual real
       const [rOrden, rReco] = await Promise.all([
         fetch(`${API}/sugerencias/calcular-por-rango-orden-a-orden`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }),
@@ -114,7 +136,7 @@ const SugerenciasView: React.FC = () => {
   const r = await fetch(`${API}/sugerencias/recomendacion-mensual-real/guardar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate })
+        body: JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos })
       });
       if (!r.ok) throw new Error();
       const d = await r.json();
@@ -236,6 +258,35 @@ const SugerenciasView: React.FC = () => {
             <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">Hasta *</label>
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 rounded border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
           </div>
+        </div>
+        {/* Selector de modelos permitidos */}
+        <div className="mt-4">
+          <label className="block text-sm text-gray-600 dark:text-gray-300 mb-2">Modelos a considerar (opcional)</label>
+          <div className="flex gap-2 mb-2 text-xs">
+            <button type="button" onClick={() => setModelosPermitidos(modelos.map(m => m.modelo_id))} className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700">Seleccionar todos</button>
+            <button type="button" onClick={() => setModelosPermitidos([])} className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700">Limpiar</button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {modelos.map((m: { modelo_id: number; nombre_modelo: string; volumen_litros: number }) => {
+              const checked = modelosPermitidos.includes(m.modelo_id);
+              return (
+                <label key={m.modelo_id} className={`px-2 py-1 rounded border text-xs cursor-pointer select-none ${checked ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600'}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      setModelosPermitidos((prev: number[]) => e.target.checked ? [...new Set([...prev, m.modelo_id])] : prev.filter((id: number) => id !== m.modelo_id));
+                    }}
+                    className="mr-1 align-middle"
+                  />
+                  {m.nombre_modelo}
+                </label>
+              );
+            })}
+          </div>
+          {modelosPermitidos.length > 0 && (
+            <div className="text-[11px] mt-2 text-blue-600 dark:text-blue-400">Se filtrará la recomendación usando únicamente los modelos seleccionados.</div>
+          )}
         </div>
         {clienteId && startDate && endDate && (
           <div className="mt-4 text-xs p-3 rounded bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
