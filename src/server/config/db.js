@@ -17,7 +17,8 @@ if (process.env.DATABASE_URL) {
     port: parseInt(process.env.DB_PORT || '5432'),
     user: process.env.DB_USER || 'kryosenseadmin',
     password: process.env.DB_PASSWORD || 'kryosense2025',
-    database: process.env.DB_NAME || 'kryosense_test',
+  // En rama main apuntamos al esquema/productivo 'kryosense'. En rama DEV se mantiene 'kryosense_test'.
+  database: process.env.DB_NAME || 'kryosense',
     ssl: process.env.DB_SSL === 'true' ? true : false,
   };
 }
