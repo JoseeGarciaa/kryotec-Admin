@@ -1,0 +1,27 @@
+[Unit]
+Description=Kryotec Admin Panel
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/admin
+# Si usas EnvironmentFile descomenta:
+# EnvironmentFile=/var/www/admin/.env
+Environment=NODE_ENV=production
+Environment=PORT=3002
+Environment=FRONTEND_URL=https://admin.kryotecsense.com
+# Variables DB (si no usas EnvironmentFile)
+# Environment=DB_HOST=localhost
+# Environment=DB_USER=kryosenseadmin
+# Environment=DB_PASSWORD=CAMBIAR
+# Environment=DB_NAME=kryosense
+ExecStart=/usr/bin/node src/server/index.js
+Restart=always
+RestartSec=5
+User=root
+Group=root
+StandardOutput=append:/var/log/kryotec-admin.out.log
+StandardError=append:/var/log/kryotec-admin.err.log
+
+[Install]
+WantedBy=multi-user.target
