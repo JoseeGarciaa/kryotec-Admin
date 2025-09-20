@@ -59,8 +59,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error
       <div>
         <Input
           type="email"
-          label="Email"
-          placeholder=""
+          label="Correo electrónico"
+          placeholder="usuario@ejemplo.com"
+          autoComplete="email"
           value={credentials.email}
           onChange={handleInputChange('email')}
           error={fieldErrors.email}
@@ -72,7 +73,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error
         <Input
           type={showPassword ? 'text' : 'password'}
           label="Contraseña"
-          placeholder=""
+          placeholder="Tu contraseña"
+          autoComplete="current-password"
           value={credentials.password}
           onChange={handleInputChange('password')}
           error={fieldErrors.password}
