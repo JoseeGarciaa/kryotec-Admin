@@ -52,10 +52,16 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// JWT Toggle
+// JWT Toggle + Middleware global con allowlist
 const ENABLE_AUTH = (process.env.ENABLE_AUTH || 'true').toLowerCase() === 'true';
-const verifyToken = (req, res, next) => {
+const PUBLIC_PATHS = new Set([
+  '/api/health',
+  '/api/auth/login',
+  '/api/auth/me' // se permite para que frontend verifique sin token inicialmente (responderá auth:false si no hay token)
+]);
+function verifyToken(req, res, next) {
   if (!ENABLE_AUTH) return next();
+  if (PUBLIC_PATHS.has(req.path)) return next();
   const header = req.headers['authorization'];
   if (!header) return res.status(401).json({ error: 'Token requerido' });
   const [type, token] = header.split(' ');
@@ -63,11 +69,36 @@ const verifyToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
     req.user = decoded;
-    next();
+    return next();
   } catch (e) {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
-};
+}
+
+// Colocar /api/auth/me antes de uso de verifyToken por-ruta (lo permitimos público devolviendo auth:false si no hay token)
+app.get('/api/auth/me', (req, res) => {
+  if (!ENABLE_AUTH) {
+    return res.json({ auth: false, user: null, disabledAuth: true });
+  }
+  const header = req.headers['authorization'];
+  if (!header) return res.json({ auth: false });
+  const [type, token] = header.split(' ');
+  if (type !== 'Bearer' || !token) return res.json({ auth: false });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
+    pool.query('SELECT id, nombre, correo, rol, ultimo_ingreso, activo FROM admin_platform.admin_users WHERE id = $1', [decoded.sub])
+      .then(({ rows }) => {
+        if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+        res.json({ auth: true, user: rows[0] });
+      })
+      .catch(err => {
+        console.error('Error DB /auth/me:', err);
+        res.status(500).json({ error: 'Error al obtener perfil' });
+      });
+  } catch (e) {
+    return res.status(401).json({ error: 'Token inválido o expirado' });
+  }
+});
 
 // Rutas para usuarios
 app.get('/api/users', verifyToken, async (req, res) => {
@@ -211,7 +242,7 @@ app.put('/api/users/:id/login', verifyToken, async (req, res) => {
   }
 });
 
-// Rutas de autenticación
+// Rutas de autenticación (login es pública)
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { correo, contraseña } = req.body;
@@ -255,6 +286,7 @@ app.post('/api/auth/change-password', verifyToken, async (req, res) => {
 });
 
 // Rutas para Credocubes
+// A partir de aquí aplicamos verifyToken manualmente por ruta (legacy). Opcional: migrar a app.use(verifyToken) excepto PUBLIC_PATHS.
 app.get('/api/credocubes', verifyToken, async (req, res) => {
   try {
     const credocubes = await credocubeService.getAllCredocubes();
