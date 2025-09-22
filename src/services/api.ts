@@ -21,6 +21,22 @@ apiClient.interceptors.request.use(config => {
   return config;
 });
 
+// Interceptor de respuesta para manejar expiración o invalidez del token
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Limpiar sesión y redirigir a login solo si no estamos ya ahí
+      localStorage.removeItem('kryotec_token');
+      localStorage.removeItem('kryotec_user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Función para convertir fechas de string a Date en los objetos de usuario
 const convertDates = (user: any): AdminUser => {
   return {

@@ -57,16 +57,36 @@ export class AuthModel {
   }
 
   // Método para verificar si hay una sesión activa
-  static checkAuthStatus(): Promise<User | null> {
-    // Verificar si hay un usuario guardado en localStorage
-    const storedUser = localStorage.getItem(USER_STORAGE_KEY);
-    if (storedUser) {
-      try {
-        return Promise.resolve(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Error al parsear usuario almacenado:', error);
-      }
+  static async checkAuthStatus(): Promise<User | null> {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      return null;
     }
-    return Promise.resolve(null);
+    try {
+      // Verificar contra el backend para asegurarnos que el token sigue válido
+      const resp = await apiClient.get('/auth/me');
+      if (resp.data && resp.data.auth && resp.data.user) {
+        const apiUser = resp.data.user;
+        const user: User = {
+          id: apiUser.id.toString(),
+            email: apiUser.correo,
+            name: apiUser.nombre,
+            role: apiUser.rol,
+            avatar: undefined
+        };
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        return user;
+      }
+      return null;
+    } catch (error: any) {
+      if (error.response && error.response.status === 401) {
+        // Token inválido / expirado → limpiar
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        return null;
+      }
+      console.error('Error verificando sesión:', error);
+      return null;
+    }
   }
 }
