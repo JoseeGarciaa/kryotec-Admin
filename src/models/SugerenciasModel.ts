@@ -93,20 +93,14 @@ export interface ResultadoSugerencia {
   total_cajas_guardadas?: number;
 }
 
-// URL base de la API
-const API_URL = import.meta.env.PROD 
-  ? 'https://kryotec-admin-production.up.railway.app/api' 
-  : 'http://localhost:3002/api';
-
-console.log('API_URL configurada:', API_URL);
-console.log('Modo producción:', import.meta.env.PROD);
+// Todas las peticiones ahora usan apiClient (con baseURL configurada e interceptor de Authorization)
 
 // Modelo para Sugerencias
 export const SugerenciasModel = {
   // Obtener todas las sugerencias
   getAllSugerencias: async (): Promise<SugerenciaReemplazo[]> => {
     try {
-      const response = await axios.get(`${API_URL}/sugerencias`);
+      const response = await apiClient.get('/sugerencias');
       return response.data;
     } catch (error) {
       console.error('Error al obtener sugerencias:', error);
@@ -125,7 +119,7 @@ export const SugerenciasModel = {
       if (search) params.set('search', search);
       if (clienteId) params.set('cliente_id', String(clienteId));
       if (opts?.numero) params.set('numero', String(opts.numero));
-      const response = await axios.get(`${API_URL}/sugerencias?${params.toString()}`);
+      const response = await apiClient.get(`/sugerencias?${params.toString()}`);
       return response.data;
     } catch (error) {
       console.error('Error al obtener sugerencias paginadas:', error);
@@ -136,7 +130,7 @@ export const SugerenciasModel = {
   // Obtener grupo por numero_de_sugerencia
   getSugerenciasPorNumero: async (numero: string): Promise<SugerenciaReemplazo[]> => {
     try {
-      const response = await axios.get(`${API_URL}/sugerencias/numero/${encodeURIComponent(numero)}`);
+      const response = await apiClient.get(`/sugerencias/numero/${encodeURIComponent(numero)}`);
       return response.data;
     } catch (error) {
       console.error('Error al obtener sugerencias por número:', error);
@@ -147,7 +141,7 @@ export const SugerenciasModel = {
   // Obtener sugerencias por cliente
   getSugerenciasByCliente: async (clienteId: number): Promise<SugerenciaReemplazo[]> => {
     try {
-      const response = await axios.get(`${API_URL}/sugerencias/cliente/${clienteId}`);
+      const response = await apiClient.get(`/sugerencias/cliente/${clienteId}`);
       return response.data;
     } catch (error) {
       console.error(`Error al obtener sugerencias del cliente ${clienteId}:`, error);
@@ -178,7 +172,7 @@ export const SugerenciasModel = {
   // Crear una nueva sugerencia
   createSugerencia: async (sugerenciaData: CreateSugerenciaData): Promise<SugerenciaReemplazo> => {
     try {
-      const response = await axios.post(`${API_URL}/sugerencias`, sugerenciaData);
+      const response = await apiClient.post('/sugerencias', sugerenciaData);
       return response.data;
     } catch (error) {
       console.error('Error al crear sugerencia:', error);
@@ -189,7 +183,7 @@ export const SugerenciasModel = {
   // Actualizar una sugerencia
   updateSugerencia: async (id: number, sugerenciaData: Partial<CreateSugerenciaData>): Promise<SugerenciaReemplazo | null> => {
     try {
-      const response = await axios.put(`${API_URL}/sugerencias/${id}`, sugerenciaData);
+      const response = await apiClient.put(`/sugerencias/${id}`, sugerenciaData);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
@@ -203,7 +197,7 @@ export const SugerenciasModel = {
   // Eliminar una sugerencia
   deleteSugerencia: async (id: number): Promise<boolean> => {
     try {
-      await axios.delete(`${API_URL}/sugerencias/${id}`);
+      await apiClient.delete(`/sugerencias/${id}`);
       return true;
     } catch (error) {
       console.error(`Error al eliminar sugerencia con ID ${id}:`, error);

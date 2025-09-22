@@ -4,9 +4,7 @@ import { Calculator, Package, Clock, Trash2, Download, Users, Filter } from 'luc
 import jsPDF from 'jspdf';
 import { useSugerenciasController } from '../../../../controllers/hooks/useSugerenciasController';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
-
-
-const API = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+import { apiClient } from '../../../../services/api';
 
 const SugerenciasView: React.FC = () => {
   const { sugerencias, total, loading, error, loadSugerenciasPaginated, loadSugerenciasPorNumero, deleteSugerencia } = useSugerenciasController();
@@ -59,18 +57,17 @@ const SugerenciasView: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch(`${API}/credocubes`);
-        if (r.ok) {
-          const data = await r.json();
-          const cubes = (data || [])
-            .filter((m:any) => (m?.tipo || m?.tipo_modelo) === 'Cube' || /cube/i.test(String(m?.nombre_modelo || m?.modelo_nombre || '')))
-            .map((m:any) => ({ modelo_id: m.modelo_id, nombre_modelo: m.nombre_modelo || m.modelo_nombre, volumen_litros: Number(m.volumen_litros) || 0 }));
-          const sorted = [...cubes].sort((a,b) => (a.volumen_litros || 0) - (b.volumen_litros || 0));
-          setModelos(sorted);
-          // Seleccionar todos por defecto
-          setModelosPermitidos(sorted.map(m => m.modelo_id));
-        }
-      } catch {}
+        const r = await apiClient.get('/credocubes');
+        const data = r.data || [];
+        const cubes = (data || [])
+          .filter((m:any) => (m?.tipo || m?.tipo_modelo) === 'Cube' || /cube/i.test(String(m?.nombre_modelo || m?.modelo_nombre || '')))
+          .map((m:any) => ({ modelo_id: m.modelo_id, nombre_modelo: m.nombre_modelo || m.modelo_nombre, volumen_litros: Number(m.volumen_litros) || 0 }));
+        const sorted = [...cubes].sort((a,b) => (a.volumen_litros || 0) - (b.volumen_litros || 0));
+        setModelos(sorted);
+        setModelosPermitidos(sorted.map(m => m.modelo_id));
+      } catch (err) {
+        console.error('Error cargando credocubes para selector:', err);
+      }
     })();
   }, []);
 
@@ -81,14 +78,7 @@ const SugerenciasView: React.FC = () => {
     setResumenLoading(true); setResumenError(null);
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(`${API}/sugerencias/calcular-por-rango-total`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos }),
-          signal: ctrl.signal
-        });
-        if (!r.ok) throw new Error();
-        const d = await r.json();
+        const { data: d } = await apiClient.post('/sugerencias/calcular-por-rango-total', { cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos }, { signal: ctrl.signal as any });
         const rs = d.resumen || {};
         setResumen({
           total_ordenes: Number(rs.total_ordenes || 0),
@@ -110,20 +100,17 @@ const SugerenciasView: React.FC = () => {
     setCalculando(true);
     setRecomendacion(null);
     try {
-      const body = JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos });
-      // Obtenemos días activos (orden a orden) y la recomendación mensual real
+      const payload = { cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos };
       const [rOrden, rReco] = await Promise.all([
-        fetch(`${API}/sugerencias/calcular-por-rango-orden-a-orden`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }),
-        fetch(`${API}/sugerencias/recomendacion-mensual-real`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+        apiClient.post('/sugerencias/calcular-por-rango-orden-a-orden', payload),
+        apiClient.post('/sugerencias/recomendacion-mensual-real', payload)
       ]);
       const diasCalendario = (() => { try { const sd = new Date(startDate); const ed = new Date(endDate); const diff = ed.getTime() - sd.getTime(); if (isNaN(diff) || diff < 0) return 0; return Math.max(1, Math.round(diff / 86400000) + 1); } catch { return 0; } })();
       setDiasRango(diasCalendario || null);
       let activos: number | null = null;
-      if (rOrden.ok) { try { const dOrden = await rOrden.json(); activos = dOrden?.resumen?.total_dias_activos ?? null; } catch {} }
+      try { activos = rOrden.data?.resumen?.total_dias_activos ?? null; } catch {}
       setDiasActivos(activos);
-      if (!rReco.ok) throw new Error('Error recomendación');
-      const reco = await rReco.json();
-      setRecomendacion(reco);
+      setRecomendacion(rReco.data);
     } catch { alert('Error al calcular'); }
     finally { setCalculando(false); }
   };
@@ -133,13 +120,7 @@ const SugerenciasView: React.FC = () => {
     if (!window.confirm('Guardar esta recomendación mensual en la base? Creará una fila por modelo.')) return;
     try {
       setGuardando(true);
-  const r = await fetch(`${API}/sugerencias/recomendacion-mensual-real/guardar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos })
-      });
-      if (!r.ok) throw new Error();
-      const d = await r.json();
+  const { data: d } = await apiClient.post('/sugerencias/recomendacion-mensual-real/guardar', { cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos });
   alert(`Guardado: ${d.total_creadas} filas en el grupo #${d.numero_de_sugerencia || '?'} (numero_de_sugerencia)`);
       // Refrescar historial después de guardar
       loadSugerenciasPaginated({ limit, offset: page * limit, search, clienteId: clienteFiltro ? Number(clienteFiltro) : null });
