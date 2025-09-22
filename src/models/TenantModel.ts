@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from '../services/api';
 
 export interface Tenant {
   id: number;
@@ -36,7 +36,7 @@ const API_URL = import.meta.env.PROD ? '/api/tenants' : 'http://localhost:3002/a
 // Obtener todos los tenants
 export const getTenants = async (): Promise<Tenant[]> => {
   try {
-    const response = await axios.get(API_URL);
+  const response = await apiClient.get(API_URL.replace('/api','')); // API_URL ya incluye /api/tenants en prod
     return response.data;
   } catch (error) {
     console.error('Error al obtener tenants:', error);
@@ -47,7 +47,7 @@ export const getTenants = async (): Promise<Tenant[]> => {
 // Obtener un tenant por ID
 export const getTenantById = async (id: number): Promise<Tenant> => {
   try {
-    const response = await axios.get(`${API_URL}/${id}`);
+  const response = await apiClient.get(`${API_URL.replace('/api','')}/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error al obtener tenant con ID ${id}:`, error);
@@ -58,7 +58,7 @@ export const getTenantById = async (id: number): Promise<Tenant> => {
 // Crear un nuevo tenant
 export const createTenant = async (tenantData: TenantInput): Promise<Tenant> => {
   try {
-    const response = await axios.post(API_URL, tenantData);
+  const response = await apiClient.post(API_URL.replace('/api',''), tenantData);
     return response.data;
   } catch (error) {
     console.error('Error al crear tenant:', error);
@@ -69,7 +69,7 @@ export const createTenant = async (tenantData: TenantInput): Promise<Tenant> => 
 // Actualizar un tenant existente
 export const updateTenant = async (id: number, tenantData: Partial<TenantInput>): Promise<Tenant> => {
   try {
-    const response = await axios.put(`${API_URL}/${id}`, tenantData);
+  const response = await apiClient.put(`${API_URL.replace('/api','')}/${id}`, tenantData);
     return response.data;
   } catch (error) {
     console.error(`Error al actualizar tenant con ID ${id}:`, error);
@@ -80,7 +80,7 @@ export const updateTenant = async (id: number, tenantData: Partial<TenantInput>)
 // Eliminar un tenant
 export const deleteTenant = async (id: number): Promise<void> => {
   try {
-    await axios.delete(`${API_URL}/${id}`);
+  await apiClient.delete(`${API_URL.replace('/api','')}/${id}`);
   } catch (error) {
     console.error(`Error al eliminar tenant con ID ${id}:`, error);
     throw error;

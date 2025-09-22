@@ -25,8 +25,11 @@ apiClient.interceptors.request.use(config => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Limpiar sesión y redirigir a login solo si no estamos ya ahí
+    const status = error?.response?.status;
+    const url = error?.config?.url || '';
+    // No destruir sesión si es el login mismo fallando
+    const isLogin = url.includes('/auth/login');
+    if (status === 401 && !isLogin) {
       localStorage.removeItem('kryotec_token');
       localStorage.removeItem('kryotec_user');
       if (window.location.pathname !== '/login') {

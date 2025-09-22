@@ -1,4 +1,5 @@
-import axios from 'axios';
+import axios from 'axios'; // mantener para isAxiosError
+import { apiClient } from '../services/api';
 
 // Tipo para un modelo de Credocube (ahora basado en la tabla modelos)
 export interface Credocube {
@@ -21,15 +22,14 @@ export interface Credocube {
 // Tipo para crear un nuevo Credocube (sin ID)
 export type CreateCredocubeData = Omit<Credocube, 'modelo_id'>;
 
-// URL base de la API - Usar ruta relativa en producción o localhost en desarrollo
-const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+// Las rutas ahora usan apiClient con baseURL configurada
 
 // Modelo para Credocubes
 export const CredocubeModel = {
   // Obtener todos los modelos de Credocube
   getAllCredocubes: async (): Promise<Credocube[]> => {
     try {
-      const response = await axios.get(`${API_URL}/credocubes`);
+  const response = await apiClient.get(`/credocubes`);
       return response.data;
     } catch (error) {
       console.error('Error al obtener modelos de Credocube:', error);
@@ -40,7 +40,7 @@ export const CredocubeModel = {
   // Obtener un modelo de Credocube por ID
   getCredocubeById: async (id: number): Promise<Credocube | null> => {
     try {
-      const response = await axios.get(`${API_URL}/credocubes/${id}`);
+  const response = await apiClient.get(`/credocubes/${id}`);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
@@ -54,7 +54,7 @@ export const CredocubeModel = {
   // Crear un nuevo modelo de Credocube
   createCredocube: async (credocubeData: CreateCredocubeData): Promise<Credocube> => {
     try {
-      const response = await axios.post(`${API_URL}/credocubes`, credocubeData);
+  const response = await apiClient.post(`/credocubes`, credocubeData);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
@@ -68,7 +68,7 @@ export const CredocubeModel = {
   // Actualizar un modelo de Credocube existente
   updateCredocube: async (id: number, credocubeData: Partial<CreateCredocubeData>): Promise<Credocube | null> => {
     try {
-      const response = await axios.put(`${API_URL}/credocubes/${id}`, credocubeData);
+  const response = await apiClient.put(`/credocubes/${id}`, credocubeData);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
@@ -82,7 +82,7 @@ export const CredocubeModel = {
   // Eliminar un modelo de Credocube
   deleteCredocube: async (id: number): Promise<boolean> => {
     try {
-      await axios.delete(`${API_URL}/credocubes/${id}`);
+  await apiClient.delete(`/credocubes/${id}`);
       return true;
     } catch (error) {
       console.error(`Error al eliminar modelo de Credocube con ID ${id}:`, error);
