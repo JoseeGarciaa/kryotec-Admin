@@ -52,18 +52,19 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// JWT Toggle + Middleware global con allowlist
+// JWT Toggle + HOTFIX: permitir ciertos GET sin token mientras se corrige frontend
 const ENABLE_AUTH = (process.env.ENABLE_AUTH || 'true').toLowerCase() === 'true';
-const PUBLIC_PATHS = new Set([
-  '/api/health',
-  '/api/auth/login',
-  '/api/auth/me' // se permite para que frontend verifique sin token inicialmente (responderá auth:false si no hay token)
-]);
+const PUBLIC_PATHS = new Set(['/api/health','/api/auth/login','/api/auth/me']);
+const PUBLIC_GET_PREFIXES = ['/api/tenants','/api/credocubes','/api/prospectos','/api/sugerencias','/api/inventario-prospectos'];
 function verifyToken(req, res, next) {
   if (!ENABLE_AUTH) return next();
   if (PUBLIC_PATHS.has(req.path)) return next();
+  if (req.method === 'GET' && PUBLIC_GET_PREFIXES.some(p => req.path.startsWith(p))) return next();
   const header = req.headers['authorization'];
-  if (!header) return res.status(401).json({ error: 'Token requerido' });
+  if (!header) {
+    console.warn('[AUTH] Falta header Authorization', req.method, req.path);
+    return res.status(401).json({ error: 'Token requerido' });
+  }
   const [type, token] = header.split(' ');
   if (type !== 'Bearer' || !token) return res.status(401).json({ error: 'Formato inválido' });
   try {
@@ -71,6 +72,7 @@ function verifyToken(req, res, next) {
     req.user = decoded;
     return next();
   } catch (e) {
+    console.warn('[AUTH] Token inválido/expirado', req.method, req.path);
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 }
