@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 // Importar la configuración de la base de datos centralizada
 const pool = require('./config/db');
@@ -62,9 +63,21 @@ const authService = {
         
         // Devolver usuario sin contraseña
         const { contraseña: _, ...userWithoutPassword } = user;
+        // Generar token JWT
+        const payload = {
+          sub: user.id,
+          correo: user.correo,
+          rol: user.rol,
+          nombre: user.nombre
+        };
+        const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev_secret', {
+          expiresIn: process.env.JWT_EXPIRES_IN || '8h'
+        });
         return { 
           success: true, 
-          user: userWithoutPassword
+          user: userWithoutPassword,
+          token,
+          expiresIn: process.env.JWT_EXPIRES_IN || '8h'
         };
       } else {
         return { success: false, message: 'Contraseña incorrecta' };

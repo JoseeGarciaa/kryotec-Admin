@@ -12,6 +12,7 @@ const inventarioProspectosService = require('./inventarioProspectosService');
 const sugerenciasService = require('./sugerenciasService');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3002; // Cambiado a 3002 para evitar conflictos
@@ -51,8 +52,25 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// JWT Toggle
+const ENABLE_AUTH = (process.env.ENABLE_AUTH || 'true').toLowerCase() === 'true';
+const verifyToken = (req, res, next) => {
+  if (!ENABLE_AUTH) return next();
+  const header = req.headers['authorization'];
+  if (!header) return res.status(401).json({ error: 'Token requerido' });
+  const [type, token] = header.split(' ');
+  if (type !== 'Bearer' || !token) return res.status(401).json({ error: 'Formato inválido' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
+    req.user = decoded;
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'Token inválido o expirado' });
+  }
+};
+
 // Rutas para usuarios
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', verifyToken, async (req, res) => {
   try {
     const users = await userService.getAllUsers();
     res.json(users);
@@ -62,7 +80,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.get('/api/users/:id', async (req, res) => {
+app.get('/api/users/:id', verifyToken, async (req, res) => {
   try {
     const user = await userService.getUserById(parseInt(req.params.id));
     if (!user) {
@@ -75,7 +93,7 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', verifyToken, async (req, res) => {
   try {
     // Usar el servicio de autenticación para crear usuarios con hash bcrypt
     const newUser = await authService.register(req.body);
@@ -90,7 +108,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     let userData = req.body;
@@ -113,7 +131,7 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', verifyToken, async (req, res) => {
   try {
     const success = await userService.deleteUser(parseInt(req.params.id));
     if (!success) {
@@ -180,7 +198,7 @@ app.get('/api/refresh-inventario-credocubes', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id/login', async (req, res) => {
+app.put('/api/users/:id/login', verifyToken, async (req, res) => {
   try {
     const success = await userService.updateLastLogin(parseInt(req.params.id));
     if (!success) {
@@ -215,7 +233,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/change-password', async (req, res) => {
+app.post('/api/auth/change-password', verifyToken, async (req, res) => {
   try {
     const { userId, oldPassword, newPassword } = req.body;
     
@@ -237,7 +255,7 @@ app.post('/api/auth/change-password', async (req, res) => {
 });
 
 // Rutas para Credocubes
-app.get('/api/credocubes', async (req, res) => {
+app.get('/api/credocubes', verifyToken, async (req, res) => {
   try {
     const credocubes = await credocubeService.getAllCredocubes();
     res.json(credocubes);
@@ -247,7 +265,7 @@ app.get('/api/credocubes', async (req, res) => {
   }
 });
 
-app.get('/api/credocubes/:id', async (req, res) => {
+app.get('/api/credocubes/:id', verifyToken, async (req, res) => {
   try {
     const credocube = await credocubeService.getCredocubeById(parseInt(req.params.id));
     if (!credocube) {
@@ -260,7 +278,7 @@ app.get('/api/credocubes/:id', async (req, res) => {
   }
 });
 
-app.post('/api/credocubes', async (req, res) => {
+app.post('/api/credocubes', verifyToken, async (req, res) => {
   try {
     const newCredocube = await credocubeService.createCredocube(req.body);
     res.status(201).json(newCredocube);
@@ -270,7 +288,7 @@ app.post('/api/credocubes', async (req, res) => {
   }
 });
 
-app.put('/api/credocubes/:id', async (req, res) => {
+app.put('/api/credocubes/:id', verifyToken, async (req, res) => {
   try {
     const updatedCredocube = await credocubeService.updateCredocube(parseInt(req.params.id), req.body);
     if (!updatedCredocube) {
@@ -283,7 +301,7 @@ app.put('/api/credocubes/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/credocubes/:id', async (req, res) => {
+app.delete('/api/credocubes/:id', verifyToken, async (req, res) => {
   try {
     const success = await credocubeService.deleteCredocube(parseInt(req.params.id));
     if (!success) {
@@ -297,7 +315,7 @@ app.delete('/api/credocubes/:id', async (req, res) => {
 });
 
 // Rutas para tenants (empresas)
-app.get('/api/tenants', async (req, res) => {
+app.get('/api/tenants', verifyToken, async (req, res) => {
   try {
     const tenants = await tenantService.getAllTenants();
     res.json(tenants);
@@ -307,7 +325,7 @@ app.get('/api/tenants', async (req, res) => {
   }
 });
 
-app.get('/api/tenants/:id', async (req, res) => {
+app.get('/api/tenants/:id', verifyToken, async (req, res) => {
   try {
     const tenant = await tenantService.getTenantById(parseInt(req.params.id));
     res.json(tenant);
@@ -320,7 +338,7 @@ app.get('/api/tenants/:id', async (req, res) => {
   }
 });
 
-app.post('/api/tenants', async (req, res) => {
+app.post('/api/tenants', verifyToken, async (req, res) => {
   try {
     const newTenant = await tenantService.createTenant(req.body);
     res.status(201).json(newTenant);
@@ -334,7 +352,7 @@ app.post('/api/tenants', async (req, res) => {
   }
 });
 
-app.put('/api/tenants/:id', async (req, res) => {
+app.put('/api/tenants/:id', verifyToken, async (req, res) => {
   try {
     const updatedTenant = await tenantService.updateTenant(parseInt(req.params.id), req.body);
     res.json(updatedTenant);
@@ -350,7 +368,7 @@ app.put('/api/tenants/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/tenants/:id', async (req, res) => {
+app.delete('/api/tenants/:id', verifyToken, async (req, res) => {
   try {
     const success = await tenantService.deleteTenant(parseInt(req.params.id));
     res.json({ success: true });
@@ -364,7 +382,7 @@ app.delete('/api/tenants/:id', async (req, res) => {
 });
 
 // Rutas para prospectos
-app.get('/api/prospectos', async (req, res) => {
+app.get('/api/prospectos', verifyToken, async (req, res) => {
   try {
     const prospectos = await clientesProspectosService.getAllProspectos();
     res.json(prospectos);
@@ -374,7 +392,7 @@ app.get('/api/prospectos', async (req, res) => {
   }
 });
 
-app.get('/api/prospectos/:id', async (req, res) => {
+app.get('/api/prospectos/:id', verifyToken, async (req, res) => {
   try {
     const prospecto = await clientesProspectosService.getProspectoById(parseInt(req.params.id));
     if (!prospecto) {
@@ -387,7 +405,7 @@ app.get('/api/prospectos/:id', async (req, res) => {
   }
 });
 
-app.post('/api/prospectos', async (req, res) => {
+app.post('/api/prospectos', verifyToken, async (req, res) => {
   try {
     const newProspecto = await clientesProspectosService.createProspecto(req.body);
     res.status(201).json(newProspecto);
@@ -401,7 +419,7 @@ app.post('/api/prospectos', async (req, res) => {
   }
 });
 
-app.put('/api/prospectos/:id', async (req, res) => {
+app.put('/api/prospectos/:id', verifyToken, async (req, res) => {
   try {
     const updatedProspecto = await clientesProspectosService.updateProspecto(parseInt(req.params.id), req.body);
     if (!updatedProspecto) {
@@ -418,7 +436,7 @@ app.put('/api/prospectos/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/prospectos/:id', async (req, res) => {
+app.delete('/api/prospectos/:id', verifyToken, async (req, res) => {
   try {
     const success = await clientesProspectosService.deleteProspecto(parseInt(req.params.id));
     if (!success) {
@@ -432,7 +450,7 @@ app.delete('/api/prospectos/:id', async (req, res) => {
 });
 
 // Rutas de inventario prospectos
-app.get('/api/inventario-prospectos', async (req, res) => {
+app.get('/api/inventario-prospectos', verifyToken, async (req, res) => {
   try {
     const inventario = await inventarioProspectosService.getAllInventario();
     res.json(inventario);
@@ -443,7 +461,7 @@ app.get('/api/inventario-prospectos', async (req, res) => {
 });
 
 // Inventario por cliente con paginación opcional
-app.get('/api/inventario-prospectos/cliente/:clienteId', async (req, res) => {
+app.get('/api/inventario-prospectos/cliente/:clienteId', verifyToken, async (req, res) => {
   try {
     const clienteId = parseInt(req.params.clienteId);
     if (!clienteId) return res.status(400).json({ error: 'clienteId inválido' });
@@ -458,7 +476,7 @@ app.get('/api/inventario-prospectos/cliente/:clienteId', async (req, res) => {
   }
 });
 
-app.post('/api/inventario-prospectos', async (req, res) => {
+app.post('/api/inventario-prospectos', verifyToken, async (req, res) => {
   try {
     const nuevoItem = await inventarioProspectosService.createInventario(req.body);
     res.status(201).json(nuevoItem);
@@ -468,7 +486,7 @@ app.post('/api/inventario-prospectos', async (req, res) => {
   }
 });
 
-app.put('/api/inventario-prospectos/:id', async (req, res) => {
+app.put('/api/inventario-prospectos/:id', verifyToken, async (req, res) => {
   try {
     const itemActualizado = await inventarioProspectosService.updateInventario(req.params.id, req.body);
     if (itemActualizado) {
@@ -483,7 +501,7 @@ app.put('/api/inventario-prospectos/:id', async (req, res) => {
 });
 
 // Eliminar sugerencia
-app.delete('/api/inventario-prospectos/:id', async (req, res) => {
+app.delete('/api/inventario-prospectos/:id', verifyToken, async (req, res) => {
   try {
     const inventarioEliminado = await inventarioProspectosService.deleteInventario(req.params.id);
     if (inventarioEliminado) {
@@ -498,7 +516,7 @@ app.delete('/api/inventario-prospectos/:id', async (req, res) => {
 });
 
 // Nuevas rutas para órdenes de despacho
-app.get('/api/inventario-prospectos/ordenes-despacho', async (req, res) => {
+app.get('/api/inventario-prospectos/ordenes-despacho', verifyToken, async (req, res) => {
   try {
   const clienteId = req.query.cliente_id ? parseInt(req.query.cliente_id) : null;
   const limit = req.query.limit ? Math.min(parseInt(req.query.limit), 1000) : 200;
@@ -515,7 +533,7 @@ app.get('/api/inventario-prospectos/ordenes-despacho', async (req, res) => {
 });
 
 // Nueva ruta: recomendaciones por rango de fechas, agrupadas por orden
-app.post('/api/sugerencias/calcular-por-rango', async (req, res) => {
+app.post('/api/sugerencias/calcular-por-rango', verifyToken, async (req, res) => {
   try {
     const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
@@ -544,7 +562,7 @@ app.post('/api/sugerencias/calcular-por-rango', async (req, res) => {
 });
 
 // Nueva ruta: recomendaciones agregadas por rango (suma total de m3 en el rango)
-app.post('/api/sugerencias/calcular-por-rango-total', async (req, res) => {
+app.post('/api/sugerencias/calcular-por-rango-total', verifyToken, async (req, res) => {
   try {
     const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
@@ -564,7 +582,7 @@ app.post('/api/sugerencias/calcular-por-rango-total', async (req, res) => {
 });
 
 // Nueva ruta: distribución real (100%) por rango (asigna modelo mínimo por línea)
-app.post('/api/sugerencias/distribucion-real-rango', async (req, res) => {
+app.post('/api/sugerencias/distribucion-real-rango', verifyToken, async (req, res) => {
   try {
     const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
@@ -584,7 +602,7 @@ app.post('/api/sugerencias/distribucion-real-rango', async (req, res) => {
 });
 
 // Nueva ruta: proyección mensual (estimado diario futuro)
-app.post('/api/sugerencias/proyeccion-mensual', async (req, res) => {
+app.post('/api/sugerencias/proyeccion-mensual', verifyToken, async (req, res) => {
   try {
     const { cliente_id, startDate, endDate, percentil_stock, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
@@ -604,7 +622,7 @@ app.post('/api/sugerencias/proyeccion-mensual', async (req, res) => {
 });
 
 // Nueva ruta: agregado orden a orden (toma la mejor opción de cada orden y suma por modelo)
-app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', async (req, res) => {
+app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', verifyToken, async (req, res) => {
   try {
     const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
@@ -747,7 +765,7 @@ app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', async (req, res) =
 });
 
 // Nueva ruta: distribución OPTIMA (mezcla única) por rango
-app.post('/api/sugerencias/distribucion-optima-rango', async (req, res) => {
+app.post('/api/sugerencias/distribucion-optima-rango', verifyToken, async (req, res) => {
   try {
     const { cliente_id, startDate, endDate } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
@@ -765,7 +783,7 @@ app.post('/api/sugerencias/distribucion-optima-rango', async (req, res) => {
 });
 
 // Nueva ruta: recomendación mensual REAL (basada en distribución real por línea)
-app.post('/api/sugerencias/recomendacion-mensual-real', async (req, res) => {
+app.post('/api/sugerencias/recomendacion-mensual-real', verifyToken, async (req, res) => {
   try {
     const { cliente_id, startDate, endDate, base_dias, mensual_factor, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
@@ -786,7 +804,7 @@ app.post('/api/sugerencias/recomendacion-mensual-real', async (req, res) => {
 });
 
 // Guardar recomendación mensual real en la tabla sugerencias_reemplazo (una fila por modelo)
-app.post('/api/sugerencias/recomendacion-mensual-real/guardar', async (req, res) => {
+app.post('/api/sugerencias/recomendacion-mensual-real/guardar', verifyToken, async (req, res) => {
   try {
     const { cliente_id, startDate, endDate, base_dias, mensual_factor, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
@@ -806,7 +824,7 @@ app.post('/api/sugerencias/recomendacion-mensual-real/guardar', async (req, res)
   }
 });
 
-app.get('/api/inventario-prospectos/orden/:ordenDespacho', async (req, res) => {
+app.get('/api/inventario-prospectos/orden/:ordenDespacho', verifyToken, async (req, res) => {
   try {
     const productos = await inventarioProspectosService.getProductosPorOrden(req.params.ordenDespacho);
     res.json(productos);
@@ -817,7 +835,7 @@ app.get('/api/inventario-prospectos/orden/:ordenDespacho', async (req, res) => {
 });
 
 // Importación de inventario desde Excel
-app.post('/api/inventario-prospectos/import', upload.single('file'), async (req, res) => {
+app.post('/api/inventario-prospectos/import', verifyToken, upload.single('file'), async (req, res) => {
   try {
     const { cliente_id } = req.body;
     const clienteIdNum = parseInt(cliente_id);
@@ -1026,7 +1044,7 @@ app.post('/api/inventario-prospectos/import', upload.single('file'), async (req,
 });
 
 // Rutas para sugerencias - MOVER AQUÍ ANTES DEL app.listen()
-app.get('/api/sugerencias', async (req, res) => {
+app.get('/api/sugerencias', verifyToken, async (req, res) => {
   try {
     const limit = req.query.limit ? Math.min(parseInt(req.query.limit), 1000) : null;
     const offset = req.query.offset ? Math.max(parseInt(req.query.offset), 0) : 0;
@@ -1049,7 +1067,7 @@ app.get('/api/sugerencias', async (req, res) => {
 });
 
 // Obtener sugerencias por numero_de_sugerencia (grupo)
-app.get('/api/sugerencias/numero/:numero', async (req, res) => {
+app.get('/api/sugerencias/numero/:numero', verifyToken, async (req, res) => {
   try {
     const numero = String(req.params.numero);
     const { items } = await sugerenciasService.getSugerenciasPaginated({ limit: 1000, offset: 0, search: '', clienteId: null, numero });
@@ -1060,7 +1078,7 @@ app.get('/api/sugerencias/numero/:numero', async (req, res) => {
   }
 });
 
-app.post('/api/sugerencias/calcular', async (req, res) => {
+app.post('/api/sugerencias/calcular', verifyToken, async (req, res) => {
   try {
     const sugerencias = await sugerenciasService.calcularSugerencias(req.body);
     res.json(sugerencias);
@@ -1071,7 +1089,7 @@ app.post('/api/sugerencias/calcular', async (req, res) => {
 });
 
 // Nueva ruta para calcular sugerencias por orden de despacho
-app.post('/api/sugerencias/calcular-por-orden', async (req, res) => {
+app.post('/api/sugerencias/calcular-por-orden', verifyToken, async (req, res) => {
   try {
     const sugerencias = await sugerenciasService.calcularSugerenciasPorOrden(req.body);
     res.json(sugerencias);
@@ -1081,7 +1099,7 @@ app.post('/api/sugerencias/calcular-por-orden', async (req, res) => {
   }
 });
 
-app.post('/api/sugerencias', async (req, res) => {
+app.post('/api/sugerencias', verifyToken, async (req, res) => {
   try {
     const nuevaSugerencia = await sugerenciasService.createSugerencia(req.body);
     res.status(201).json(nuevaSugerencia);
@@ -1091,7 +1109,20 @@ app.post('/api/sugerencias', async (req, res) => {
   }
 });
 
-app.delete('/api/sugerencias/:id', async (req, res) => {
+app.delete('/api/sugerencias/:id', verifyToken, async (req, res) => {
+
+// Perfil actual
+app.get('/api/auth/me', verifyToken, async (req, res) => {
+  try {
+    if (!req.user) return res.status(200).json({ auth: false });
+    const { rows } = await pool.query('SELECT id, nombre, correo, rol, ultimo_ingreso, activo FROM admin_platform.admin_users WHERE id = $1', [req.user.sub]);
+    if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ auth: true, user: rows[0] });
+  } catch (e) {
+    console.error('Error en GET /api/auth/me:', e);
+    res.status(500).json({ error: 'Error al obtener perfil' });
+  }
+});
   try {
     const sugerenciaEliminada = await sugerenciasService.deleteSugerencia(req.params.id);
     if (sugerenciaEliminada) {
