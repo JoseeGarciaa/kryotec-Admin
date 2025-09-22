@@ -178,7 +178,7 @@ const SugerenciasView: React.FC = () => {
     y += 10; pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(0,0,0);
     // Helpers
     const fmtNum = (v:any) => { const n = Number(v); return isFinite(n) ? n.toLocaleString('es-CO') : (v||''); };
-    let totalCant = 0; let totalPrecio = 0; let algunPrecio = false;
+  let totalCant = 0; let totalPrecio = 0; let algunPrecio = false; let totalDiaria = 0;
     arr.forEach((s,i) => {
       if (y > h - 30) { // nueva página
         pdf.addPage(); y = 20; pdf.setFont('helvetica','bold'); pdf.setFontSize(11);
@@ -192,6 +192,17 @@ const SugerenciasView: React.FC = () => {
       const modelo = (s.nombre_modelo || s.modelo_sugerido || '').substring(0, 55);
       const cant = Number(s.cantidad_sugerida || s.total_cajas || 0); totalCant += cant;
       const diariaTxt = s.cantidad_diaria || '';
+      // Intentar interpretar cantidad diaria como número si es puramente numérica
+      const diariaNum = (() => {
+        if (typeof s.cantidad_diaria === 'number') return s.cantidad_diaria;
+        if (typeof s.cantidad_diaria === 'string') {
+          // Puede venir "1 cada N días" o "8"; solo sumamos si es número simple
+            const trimmed = s.cantidad_diaria.trim();
+            if (/^\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+        }
+        return 0;
+      })();
+      totalDiaria += diariaNum;
       const precioTxt = precioFor(s) || '';
       if (precioTxt) {
         const num = Number(String(precioTxt).replace(/[^0-9.]/g,''));
@@ -206,7 +217,9 @@ const SugerenciasView: React.FC = () => {
     // Totales
     pdf.setFont('helvetica','bold'); pdf.setFontSize(11); pdf.setFillColor(225,239,255); pdf.rect(16, y-6, w-32, 12, 'F');
     pdf.text('TOTAL', colX.modelo, y);
-    pdf.text(fmtNum(totalCant), colX.cantidad, y, { align: 'right' });
+  pdf.text(fmtNum(totalCant), colX.cantidad, y, { align: 'right' });
+  // Total de cantidad diaria (solo suma valores numéricos directos)
+  if (totalDiaria > 0) pdf.text(fmtNum(totalDiaria), colX.diaria, y, { align: 'right' });
     if (algunPrecio) pdf.text(fmtNum(totalPrecio), colX.precio, y, { align: 'right' });
     y += 14;
     // Notas
