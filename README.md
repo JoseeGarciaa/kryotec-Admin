@@ -1,132 +1,182 @@
-# Kryotec MVC
+<img src="./src/assets/images/credocube-logo.png" alt="Kryotec" width="160" />
 
-## Descripción del Proyecto
+# Kryotec Admin Platform
 
-Kryotec es una aplicación web desarrollada con React y TypeScript que sigue el patrón de arquitectura Modelo-Vista-Controlador (MVC). Esta estructura proporciona una clara separación de responsabilidades, lo que facilita el mantenimiento y la escalabilidad del código.
+Panel administrativo para la gestión de clientes, credocubes, inventarios y usuarios. Arquitectura basada en React + TypeScript (frontend) y Node.js + Express (API integrada en el mismo repositorio). Sigue un enfoque modular tipo MVC adaptado al entorno frontend + capa de servicios backend.
 
-## Estructura del Proyecto
+## 1. Resumen Ejecutivo
 
-El proyecto está organizado siguiendo el patrón MVC de la siguiente manera:
+Este panel permite:
+- Autenticación segura (JWT, bcrypt).
+- Gestión de Tenants / Clientes (multi‑entidad lógica).
+- Gestión de usuarios internos.
+- Administración de credocubes e inventario (incluyendo importación masiva vía Excel).
+- Visualización de métricas y gráficos (Chart.js + react-chartjs-2).
+- Tema oscuro/claro persistente.
 
-### Modelo (src/models/)
+## 2. Arquitectura General
 
-Contiene la lógica de negocio y el acceso a datos:
+Monorepo ligero (frontend + backend expresivo en `src/server`).
 
-- `AuthModel.ts`: Gestiona la autenticación y los datos de usuario.
-- `ThemeModel.ts`: Maneja la lógica del tema (claro/oscuro) de la aplicación.
-- `types/`: Contiene las definiciones de tipos TypeScript utilizadas en toda la aplicación.
-  - `auth.ts`: Tipos relacionados con la autenticación.
-  - `theme.ts`: Tipos relacionados con el tema.
+| Capa | Descripción |
+|------|-------------|
+| Vistas (`src/views`) | Componentes React + rutas (Vite + React Router). |
+| Controladores (`src/controllers`) | Orquestan peticiones hacia servicios / modelos. |
+| Modelos (`src/models`) | Tipos y estructuras de dominio. |
+| Servicios API (`src/services/api.ts`) | Cliente HTTP (axios) hacia backend. |
+| Backend (`src/server`) | Express + rutas REST `/api/*`. Sirve `dist` en producción. |
+| Utilidades (`src/utils`) | Helpers (fechas, responsive, plantillas Excel). |
 
-### Vista (src/views/)
+### Flujo Simplificado
+1. Usuario interactúa en la vista (React Components).
+2. Controlador/hook dispara llamada al servicio (`api.ts`).
+3. Backend Express procesa (controladores + acceso a PostgreSQL).
+4. Respuesta se normaliza y actualiza estado/contextos.
 
-Contiene los componentes de presentación:
+## 3. Stack Tecnológico
 
-- `auth/`: Componentes relacionados con la autenticación.
-  - `LoginView.tsx`: Vista de inicio de sesión.
-  - `components/`: Componentes específicos de autenticación.
-- `dashboard/`: Componentes del panel de administración.
-- `routing/`: Componentes de enrutamiento.
-  - `AppRouter.tsx`: Enrutador principal de la aplicación.
-- `shared/`: Componentes compartidos.
-  - `ui/`: Componentes de interfaz de usuario reutilizables (botones, inputs, etc.).
-- `contexts/`: Contextos de React que conectan los controladores con las vistas.
-  - `AuthContext.tsx`: Contexto para la autenticación.
-  - `ThemeContext.tsx`: Contexto para la gestión del tema.
+- Frontend: React 18, TypeScript, Vite, TailwindCSS, Chart.js, React Router.
+- Backend: Node.js, Express, PostgreSQL (`pg`, `pg-format`), Multer (uploads), ExcelJS / XLSX.
+- Seguridad: JWT, bcrypt, CORS controlado (FRONTEND_URL), headers recomendados (ver sección Seguridad).
+- Deploy: systemd + Nginx + Let’s Encrypt.
 
-### Controlador (src/controllers/)
+## 4. Estructura de Carpetas (principal)
 
-Conecta los modelos con las vistas:
+```
+src/
+  server/              # API Express
+  views/               # Vistas React (auth, dashboard, etc.)
+  controllers/         # Lógica de orquestación frontend
+  models/              # Tipos / modelos dominio
+  services/            # Cliente API
+  utils/               # Utilidades varias
+  assets/              # Imágenes y estáticos
+deploy/                # Scripts y ejemplos despliegue
+```
 
-- `AuthController.ts`: Controlador para la autenticación.
-- `ThemeController.ts`: Controlador para la gestión del tema.
+## 5. Variables de Entorno (backend)
 
-## Tecnologías Utilizadas
+Crear archivo `.env` en raíz (no se versiona):
 
-- React
-- TypeScript
-- Vite
-- CSS Modules
+```
+PORT=3002
+NODE_ENV=production
+DB_HOST=localhost
+DB_USER=usuario
+DB_PASSWORD=secreto
+DB_NAME=kryosense
+JWT_SECRET=clave_super_secreta
+FRONTEND_URL=https://admin.kryotecsense.com
+```
 
-## Instalación y Ejecución
+Notas:
+- En rama `DEV` puede usarse `DB_NAME=kryosense_test`.
+- Cambiar `FRONTEND_URL` si se despliega en otro dominio/subdominio.
 
-1. Clonar el repositorio:
-   ```bash
-   git clone [url-del-repositorio]
-   ```
+## 6. Scripts NPM
 
-2. Instalar dependencias:
-   ```bash
-   npm install
-   ```
+| Script | Uso |
+|--------|-----|
+| `npm run dev` | Dev frontend (Vite) + usar aparte `npm run server` si se quiere API local. |
+| `npm run server` | Levanta backend Express (con .env). |
+| `npm run dev:all` | Frontend + backend concurrentes. |
+| `npm run build` | Compila frontend a `dist/`. Backend usa TypeScript nativo (JS en runtime). |
+| `npm start` | Ejecuta backend sirviendo `dist` (modo producción). |
+| `npm run lint` | Linter. |
 
-3. Ejecutar en modo desarrollo:
-   ```bash
-   npm run dev
-   ```
+## 7. Desarrollo Local
 
-## Convenciones de Código
+```
+git clone <repo>
+cd kryotec-Admin
+npm install
+npm run dev:all
+```
+Frontend: http://localhost:5173  | Backend API: http://localhost:3002 (ajustar puerto si se define en .env).
 
-- **Nomenclatura**: Utilizamos PascalCase para componentes y camelCase para variables y funciones.
-- **Tipos**: Todas las interfaces y tipos se definen en la carpeta `models/types/`.
-- **Componentes**: Los componentes de React se organizan por funcionalidad en la carpeta `views/`.
+## 8. Despliegue Producción (Resumen)
 
-## Mantenimiento
+1. Clonar en servidor: `/var/www/kryotec-admin`.
+2. Crear `.env` (ver sección 5).
+3. Instalar dependencias: `npm install`.
+4. Build: `npm run build`.
+5. Crear servicio systemd (ejemplo en `deploy/kryotec-admin.service`).
+6. Configurar Nginx (ejemplo `deploy/nginx-admin.conf.example`).
+7. Emitir SSL: `certbot --nginx -d admin.kryotecsense.com`.
+8. Reiniciar: `sudo systemctl restart kryotec-admin`.
+9. Verificar: `curl -I https://admin.kryotecsense.com/api/health`.
 
-Para añadir nuevas funcionalidades al proyecto:
+Script automatizado: `bash deploy/deploy-admin.sh`.
 
-1. Crear los tipos necesarios en `models/types/`.
-2. Implementar la lógica de negocio en `models/`.
-3. Crear el controlador correspondiente en `controllers/`.
-4. Desarrollar los componentes de vista en `views/`.
-5. Si es necesario, actualizar los contextos en `views/contexts/`.
+## 9. Flujo de Actualización (Deploy Incremental)
 
-## Flujo de Datos en el Patrón MVC
+```
+cd /var/www/kryotec-admin
+git pull origin main
+npm install        # solo si cambió package.json
+npm run build      # si hubo cambios frontend
+sudo systemctl restart kryotec-admin
+```
 
-1. **Modelo**: Contiene la lógica de negocio y el acceso a datos
-   - Responsable de recuperar/almacenar datos
-   - No depende de la Vista ni del Controlador
+## 10. Seguridad (Headers Recomendados Nginx)
 
-2. **Vista**: Presenta la información al usuario
-   - Muestra los datos proporcionados por el Controlador
-   - Envía las acciones del usuario al Controlador
+Ejemplo para añadir en bloque `server {}` HTTPS:
 
-3. **Controlador**: Actúa como intermediario
-   - Recibe acciones de la Vista
-   - Interactúa con el Modelo para obtener/modificar datos
-   - Actualiza la Vista con los nuevos datos
+```
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Frame-Options "DENY" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://admin.kryotecsense.com; font-src 'self' data:;" always;
+```
 
-## Tecnologías Utilizadas
+Adaptar `connect-src` según dominios externos necesarios.
 
-- React
-- TypeScript
-- TailwindCSS
-- Vite
+## 11. Inventario: Importación Excel
 
-## Cómo Ejecutar el Proyecto
+Proceso:
+1. Descargar plantilla desde botón "Plantilla" (estructura base columnas: Descripcion, Producto, Largo_mm, Ancho_mm, Alto_mm, Cantidad, Fecha_Despacho, Orden_Despacho, Notas).
+2. Completar archivo.
+3. Seleccionar Cliente en UI.
+4. Usar botón "Importar" y subir `.xlsx`.
+5. Backend: `POST /api/inventario-prospectos/import` (form-data: `file`, `cliente_id`).
 
-1. Instalar dependencias:
-   ```
-   npm install
-   ```
+Validaciones:
+- Evita duplicados por: cliente + producto + dimensiones + cantidad + orden.
+- Inserción en bloque optimizada.
 
-2. Ejecutar en modo desarrollo:
-   ```
-   npm run dev
-   ```
+## 12. Endpoints Clave
 
-3. Construir para producción:
-   ```
-   npm run build
-   ```
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/api/health` | GET | Verificación rápida de estado. |
+| `/api/auth/login` | POST | Autenticación (body: `{ correo, contraseña }`). |
+| `/api/tenants` | CRUD | Gestión de tenants/clientes. |
+| `/api/usuarios` | CRUD | Gestión de usuarios. |
+| `/api/credocubes` | CRUD | Gestión de credocubes. |
+| `/api/inventario-prospectos/import` | POST | Importar inventario Excel. |
 
-## Credenciales de Prueba
+## 13. Estrategia de Ramas
 
-- Email: admin@kruotecsense.com
-- Contraseña: admin123
+- `main`: Producción (DB principal `kryosense`).
+- `DEV`: Entorno pruebas (schema / DB `kryosense_test`).
 
-## Inventario Prospectos: flujo Excel
+Flujo sugerido: feature branch → PR a `DEV` → pruebas → merge a `main` → deploy.
 
-- Desde la vista de Inventario, usa el botón "Plantilla" para descargar el Excel base (alineado al esquema: Descripcion, Producto, Largo_mm, Ancho_mm, Alto_mm, Cantidad, Fecha_Despacho, Orden_Despacho, Notas).
-- Selecciona un Cliente en el selector adjunto y luego haz clic en "Importar" para subir el .xlsx rellenado.
-- Backend: POST /api/inventario-prospectos/import (multipart/form-data: file, cliente_id). Valida, evita duplicados por cliente + producto + dimensiones + cantidad + orden, e inserta en bloque.
+## 14. Próximos Pasos (Opcionales)
+
+- Añadir endpoint `/api/version` leyendo `package.json` para trazar despliegues.
+- Integrar monitoreo (Uptime / logs centralizados).
+- Job programado de backups PostgreSQL.
+- Tests automatizados (Jest + supertest para API).
+- Mejorar CSP con directivas más específicas según recursos externos.
+
+## 15. Créditos
+
+Desarrollado para la plataforma Kryotec. Uso interno / clientes autorizados.
+
+---
+
+Si necesitas más detalle operativo ver carpeta `deploy/`. Cualquier ajuste adicional de seguridad o monitoreo se puede añadir sobre esta base.
+
