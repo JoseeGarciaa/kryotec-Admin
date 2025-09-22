@@ -70,14 +70,16 @@ const authService = {
           rol: user.rol,
           nombre: user.nombre
         };
+        // Expiración: configurable con JWT_EXPIRES_IN, por defecto 120m (2h)
+        const expiresInCfg = process.env.JWT_EXPIRES_IN || '120m';
         const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev_secret', {
-          expiresIn: process.env.JWT_EXPIRES_IN || '8h'
+          expiresIn: expiresInCfg
         });
         return { 
           success: true, 
           user: userWithoutPassword,
           token,
-          expiresIn: process.env.JWT_EXPIRES_IN || '8h'
+          expiresIn: expiresInCfg
         };
       } else {
         return { success: false, message: 'Contraseña incorrecta' };
