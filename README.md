@@ -150,7 +150,67 @@ add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: htt
 
 Adaptar `connect-src` según dominios externos necesarios.
 
-## 11. Inventario: Importación Excel
+## 11. Autenticación (JWT)
+
+El sistema utiliza JSON Web Tokens (JWT) firmados (HS256) para proteger casi todos los endpoints bajo `/api/*` excepto:
+
+Rutas públicas:
+- `POST /api/auth/login`
+- `GET /api/auth/me` (devuelve `{ auth:false }` si no hay token; no lanza 401 para permitir chequeo silencioso)
+- `GET /api/health`
+
+### Flujo
+1. Login envía credenciales `{ correo, contraseña }` → respuesta con `{ token, expiresIn }`.
+2. El frontend guarda el token en `localStorage` (`kryotec_token`) y el usuario (`kryotec_user`).
+3. Cada petición subsecuente se realiza mediante `apiClient` (axios) que inserta automáticamente `Authorization: Bearer <token>`.
+4. En el arranque, `AuthModel.checkAuthStatus()` llama `/auth/me`; si el token es válido se restaura la sesión; si no, se limpia.
+5. Hay un temporizador en `AuthContext` que decodifica el campo `exp` del token y ejecuta `logout()` ~30s antes de la expiración.
+
+### Expiración
+- Variable configurable: `JWT_EXPIRES_IN` (formato soportado por jsonwebtoken: `120m`, `2h`, `3600`, `1d`, etc.).
+- Valor por defecto actual: **120m (2 horas)**.
+- Backend expone `expiresIn` en el login solo para referencia (el frontend confía realmente en `exp`).
+
+### Variables Relevantes
+```
+JWT_SECRET=clave_super_secreta   # Obligatoria en producción
+JWT_EXPIRES_IN=120m              # Opcional (default 120m si se omite)
+ENABLE_AUTH=true                 # (Si se implementa toggling futuro) Forzar protección
+FRONTEND_URL=https://admin.kryotecsense.com
+```
+
+### Auto Logout Frontend
+Archivo: `src/views/contexts/AuthContext.tsx`.
+- Decodifica el token sin librerías externas.
+- Programa un `setTimeout` con margen de 30 segundos antes de `exp`.
+- Al dispararse: se ejecuta `logout()` y se limpian `localStorage` y contexto.
+
+### Errores y Comportamiento
+- Token expirado → backend responde 401; el interceptor limpia sesión (salvo en `/auth/login`).
+- Token ausente → `/auth/me` responde `{ auth:false }` sin 401 para UX suave.
+- Token corrupto / firmado con otra clave → 401 inmediato y logout.
+
+### Endpoints de ejemplo con curl
+```bash
+# Login
+curl -X POST https://admin.kryotecsense.com/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"correo":"user@example.com","contraseña":"secreta"}'
+
+# Usar token devuelto
+curl https://admin.kryotecsense.com/api/tenants \
+  -H 'Authorization: Bearer <TOKEN>'
+```
+
+### Hardening Sugerido Futuro
+- Migrar a refresh tokens httpOnly + rotación (previene exposición en XSS).
+- Añadir endpoint `/api/auth/refresh` y un ciclo de renovación proactiva.
+- Mover token de `localStorage` a cookie `SameSite=Strict; Secure; HttpOnly`.
+- Lista de revocación (si se soportan logout globales de administradores).
+
+---
+
+## 12. Inventario: Importación Excel
 
 Proceso:
 1. Descargar plantilla desde botón "Plantilla" (estructura base columnas: Descripcion, Producto, Largo_mm, Ancho_mm, Alto_mm, Cantidad, Fecha_Despacho, Orden_Despacho, Notas).
@@ -163,7 +223,7 @@ Validaciones:
 - Evita duplicados por: cliente + producto + dimensiones + cantidad + orden.
 - Inserción en bloque optimizada.
 
-## 12. Endpoints Clave
+## 13. Endpoints Clave
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
@@ -174,14 +234,14 @@ Validaciones:
 | `/api/credocubes` | CRUD | Gestión de credocubes. |
 | `/api/inventario-prospectos/import` | POST | Importar inventario Excel. |
 
-## 13. Estrategia de Ramas
+## 14. Estrategia de Ramas
 
 - `main`: Producción (DB principal `kryosense`).
 - `DEV`: Entorno pruebas (schema / DB `kryosense_test`).
 
 Flujo sugerido: feature branch → PR a `DEV` → pruebas → merge a `main` → deploy.
 
-## 14. Próximos Pasos (Opcionales)
+## 15. Próximos Pasos (Opcionales)
 
 - Añadir endpoint `/api/version` leyendo `package.json` para trazar despliegues.
 - Integrar monitoreo (Uptime / logs centralizados).
@@ -189,7 +249,7 @@ Flujo sugerido: feature branch → PR a `DEV` → pruebas → merge a `main` →
 - Tests automatizados (Jest + supertest para API).
 - Mejorar CSP con directivas más específicas según recursos externos.
 
-## 15. Créditos
+## 16. Créditos
 
 Desarrollado para la plataforma Kryotec. Uso interno / clientes autorizados.
 
