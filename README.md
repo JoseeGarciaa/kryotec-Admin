@@ -108,6 +108,23 @@ Frontend: http://localhost:5173  | Backend API: http://localhost:3002 (ajustar p
 
 Script automatizado: `bash deploy/deploy-admin.sh`.
 
+> Nota: En versiones anteriores de esta documentación se usaba la ruta `/var/www/kryotec-admin`. Si tu carpeta real en el servidor es solamente `/var/www/admin` (porque así se creó inicialmente), no es necesario renombrarla. Solo asegúrate de que el `WorkingDirectory` dentro del servicio systemd apunte a la carpeta correcta. Ejemplo para verificar:
+>
+> ```bash
+> systemctl cat kryotec-admin | grep WorkingDirectory
+> ls -lah /var/www
+> ```
+>
+> Si deseas unificar nombres por claridad, puedes (opcional):
+> ```bash
+> sudo systemctl stop kryotec-admin
+> sudo mv /var/www/admin /var/www/kryotec-admin
+> sudo sed -i 's|/var/www/admin|/var/www/kryotec-admin|' /etc/systemd/system/kryotec-admin.service
+> sudo systemctl daemon-reload
+> sudo systemctl start kryotec-admin
+> ```
+> Pero esto es solo cosmético; funcionalmente no cambia nada.
+
 ## 9. Flujo de Actualización (Deploy Incremental)
 
 ```
