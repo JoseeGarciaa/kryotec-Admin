@@ -30,6 +30,19 @@ const userService = {
     }
   },
 
+  // Contar administradores activos
+  getActiveAdminCount: async () => {
+    try {
+      const result = await pool.query(
+        "SELECT COUNT(*)::int AS count FROM admin_platform.admin_users WHERE rol = 'admin' AND activo = true"
+      );
+      return result.rows[0].count;
+    } catch (error) {
+      console.error('Error al contar administradores activos:', error);
+      throw error;
+    }
+  },
+
   // Crear un nuevo usuario
   createUser: async (userData) => {
     try {

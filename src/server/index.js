@@ -137,6 +137,25 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     let userData = req.body;
+    const targetId = parseInt(id);
+
+    // Protección: no permitir desactivar o cambiar rol del último admin
+    if ((userData.activo === false || (userData.rol && userData.rol !== 'admin'))) {
+      try {
+        const targetUser = await userService.getUserById(targetId);
+        if (!targetUser) {
+          return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        const activeAdminCount = await userService.getActiveAdminCount();
+        const isTargetLastActiveAdmin = targetUser.rol === 'admin' && targetUser.activo === true && activeAdminCount === 1;
+        if (isTargetLastActiveAdmin) {
+          return res.status(409).json({ error: 'No se puede modificar (desactivar o cambiar rol) el último administrador activo.' });
+        }
+      } catch (guardError) {
+        console.error('Error en validación de último admin (PUT):', guardError);
+        return res.status(500).json({ error: 'Error al validar último administrador' });
+      }
+    }
     
     // Si hay contraseña, usar authService para hashearla
     if (userData.contraseña) {
@@ -158,7 +177,24 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
 
 app.delete('/api/users/:id', verifyToken, async (req, res) => {
   try {
-    const success = await userService.deleteUser(parseInt(req.params.id));
+    const targetId = parseInt(req.params.id);
+    // Protección: no permitir eliminar (desactivar) el último admin
+    try {
+      const targetUser = await userService.getUserById(targetId);
+      if (!targetUser) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+      const activeAdminCount = await userService.getActiveAdminCount();
+      const isTargetLastActiveAdmin = targetUser.rol === 'admin' && targetUser.activo === true && activeAdminCount === 1;
+      if (isTargetLastActiveAdmin) {
+        return res.status(409).json({ error: 'No se puede desactivar/eliminar el último administrador activo.' });
+      }
+    } catch (guardError) {
+      console.error('Error en validación de último admin (DELETE):', guardError);
+      return res.status(500).json({ error: 'Error al validar último administrador' });
+    }
+
+    const success = await userService.deleteUser(targetId);
     if (!success) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
