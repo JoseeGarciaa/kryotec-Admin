@@ -7,6 +7,23 @@ import { useClienteProspectoController } from '../../../../controllers/hooks/use
 import { apiClient } from '../../../../services/api';
 
 const SugerenciasView: React.FC = () => {
+  // Util para formatear fechas sin desplazamiento de zona (cuando viene como YYYY-MM-DD)
+  const formatFecha = (v: any) => {
+    if (!v) return 'N/A';
+    const str = String(v);
+    // Extraer sólo la parte de fecha antes de ' ' o 'T'
+    const datePart = str.split('T')[0].split(' ')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+      const [y, m, d] = datePart.split('-');
+      return `${Number(d)}/${Number(m)}/${y}`;
+    }
+    // Fallback: intentar Date normal
+    try {
+      const dt = new Date(str);
+      if (!isNaN(dt.getTime())) return dt.toLocaleDateString();
+      return datePart || str;
+    } catch { return datePart || str; }
+  };
   const { sugerencias, total, loading, error, loadSugerenciasPaginated, loadSugerenciasPorNumero, deleteSugerencia } = useSugerenciasController();
   const { clientes } = useClienteProspectoController();
 
@@ -404,7 +421,7 @@ const SugerenciasView: React.FC = () => {
                     <td className="p-2">{s.modelo_sugerido}</td>
                     <td className="p-2">{s.cantidad_sugerida}</td>
                     <td className="p-2">{s.cantidad_diaria || '-'}</td>
-                    <td className="p-2">{s.fecha_sugerencia ? new Date(s.fecha_sugerencia).toLocaleDateString() : 'N/A'}</td>
+                    <td className="p-2">{formatFecha(s.fecha_sugerencia)}</td>
                     <td className="p-2 flex gap-2 justify-center">
                       <button onClick={() => abrirModalIndividual(s)} className="p-1 rounded bg-blue-600 text-white" title="PDF"><Download size={14} /></button>
                       <button onClick={() => eliminar(s.sugerencia_id)} className="p-1 rounded bg-red-600 text-white" title="Eliminar"><Trash2 size={14} /></button>
