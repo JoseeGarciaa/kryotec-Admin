@@ -880,7 +880,7 @@ app.post('/api/sugerencias/calcular-por-rango-orden-a-orden-combinacion', verify
       await Promise.all(lote.map(async (ord) => {
         const orden = ord.orden_despacho;
         try {
-          const res = await sugerenciasService.calcularMejorCombinacionPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden, modelos_permitidos }, { modelos: modelosCache });
+          const res = await sugerenciasService.calcularMejorCombinacionPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden, modelos_permitidos, startDate, endDate }, { modelos: modelosCache });
           if (res && Array.isArray(res.combinacion)) {
             for (const item of res.combinacion) {
               const key = item.modelo_id;
@@ -1377,7 +1377,7 @@ app.post('/api/sugerencias/mejor-combinacion-por-orden', verifyToken, async (req
     const { cliente_id, orden_despacho, modelos_permitidos } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!orden_despacho) return res.status(400).json({ error: 'orden_despacho es requerido' });
-    const result = await sugerenciasService.calcularMejorCombinacionPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho, modelos_permitidos });
+  const result = await sugerenciasService.calcularMejorCombinacionPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho, modelos_permitidos, startDate: null, endDate: null });
     res.json(result);
   } catch (error) {
     console.error('Error en POST /api/sugerencias/mejor-combinacion-por-orden:', error);

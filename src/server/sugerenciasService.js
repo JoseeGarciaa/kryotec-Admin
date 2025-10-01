@@ -552,22 +552,26 @@ const sugerenciasService = {
 
   calcularSugerenciasPorOrden: async (datos, opts = {}) => {
     try {
-      const { cliente_id, orden_despacho } = datos;
+      const { cliente_id, orden_despacho, startDate, endDate } = datos;
       
       if (!orden_despacho) {
         throw new Error('Orden de despacho es requerida');
       }
       
       // Obtener todos los productos de la orden de despacho específica
-      const inventarioQuery = `
+      // Filtrar por fecha si se provee (incluye solo los ítems de esa orden dentro del rango)
+      let inventarioQuery = `
         SELECT 
           inv_id, producto, cantidad_despachada, largo_mm, ancho_mm, alto_mm, 
-          volumen_total_m3_producto, descripcion_producto
+          volumen_total_m3_producto, descripcion_producto, fecha_de_despacho::date AS fecha_de_despacho
         FROM admin_platform.inventario_prospecto
-        WHERE cliente_id = $1 AND orden_despacho = $2
-      `;
-      
-      const { rows: inventarioItems } = await pool.query(inventarioQuery, [cliente_id, orden_despacho]);
+        WHERE cliente_id = $1 AND orden_despacho = $2`;
+      const invParams = [cliente_id, orden_despacho];
+      if (startDate && endDate) {
+        inventarioQuery += ` AND fecha_de_despacho::date BETWEEN $3::date AND $4::date`;
+        invParams.push(startDate, endDate);
+      }
+      const { rows: inventarioItems } = await pool.query(inventarioQuery, invParams);
       console.log(`Items encontrados para orden ${orden_despacho}:`, inventarioItems.length);
       
       if (inventarioItems.length === 0) {
@@ -1188,68 +1192,35 @@ const sugerenciasService = {
     }
   },
 
-  // Nueva: mejor combinación por orden minimizando cajas y luego desperdicio (solo modelos que ajustan todas las líneas)
-  calcularMejorCombinacionPorOrden: async ({ cliente_id, orden_despacho, modelos_permitidos } = {}, opts = {}) => {
+  // Mejor combinación por orden basada en asignación por línea:
+  // - Para cada producto de la orden (dentro del rango de fechas), elige el modelo más eficiente para esa línea.
+  //   NUEVO criterio: minimizar la capacidad total asignada a la línea (cajas * cap_m3) ⇒ eficiencia primero;
+  //   desempates: menos cajas; luego menor capacidad interna.
+  // - Suma las cajas por modelo. Esta estrategia respeta las dimensiones de cada línea y evita sobredimensionar por el "peor caso".
+  calcularMejorCombinacionPorOrden: async ({ cliente_id, orden_despacho, modelos_permitidos, startDate, endDate } = {}, opts = {}) => {
     if (!cliente_id) throw new Error('cliente_id es requerido');
     if (!orden_despacho) throw new Error('orden_despacho es requerido');
     dlog('== calcularMejorCombinacionPorOrden ==>', { cliente_id, orden_despacho, modelos_permitidos });
     // Obtener items de la orden
-    const invQuery = `
-      SELECT cantidad_despachada, volumen_total_m3_producto, largo_mm, ancho_mm, alto_mm
+    let invQuery = `
+      SELECT cantidad_despachada, volumen_total_m3_producto, largo_mm, ancho_mm, alto_mm, fecha_de_despacho::date AS fecha_de_despacho
       FROM admin_platform.inventario_prospecto
-      WHERE cliente_id = $1 AND orden_despacho = $2
-    `;
-    const { rows: items } = await pool.query(invQuery, [cliente_id, orden_despacho]);
-    dlog('Items en la orden:', items.length);
-    if (!items.length) return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: 0, eficiencia: 0, sobrante_m3: 0 };
-
-    // Totales y máximos dimensionales
-    let V = 0; // m3 total
-    let maxL = 0, maxA = 0, maxH = 0; // mm
-    let totalUnits = 0;
-    for (const it of items) {
-      const cant = parseInt(it.cantidad_despachada) || 0;
-      const vol = parseFloat(it.volumen_total_m3_producto) || 0;
-      V += vol;
-      totalUnits += cant;
-      maxL = Math.max(maxL, parseFloat(it.largo_mm) || 0);
-      maxA = Math.max(maxA, parseFloat(it.ancho_mm) || 0);
-      maxH = Math.max(maxH, parseFloat(it.alto_mm) || 0);
+      WHERE cliente_id = $1 AND orden_despacho = $2`;
+    const invParams = [cliente_id, orden_despacho];
+    if (startDate && endDate) {
+      invQuery += ` AND fecha_de_despacho::date BETWEEN $3::date AND $4::date`;
+      invParams.push(startDate, endDate);
     }
-    dlog('Totales de orden:', { volumen_m3: V, max_dim_mm: { frente: maxL, profundo: maxA, alto: maxH } });
+    const { rows: items } = await pool.query(invQuery, invParams);
+    dlog('Items en la orden (filtrados por rango si aplica):', items.length);
+    if (!items.length) return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: 0, eficiencia: 0, sobrante_m3: 0 };
 
     // Modelos
     let modelos = opts.modelos || await sugerenciasService.obtenerModelosCubeCached();
     modelos = sugerenciasService._filterModelosPermitidos(modelos, modelos_permitidos);
-    // Filtrar solo los que ajustan todos (por seguridad sin asignación por producto)
-    const fitsAll = (modelos || []).filter(m => {
-      if (!(maxL <= m.dim_int_frente && maxA <= m.dim_int_profundo && maxH <= m.dim_int_alto)) return false;
-      const { cap_m3 } = capacityFromDims(m);
-      return cap_m3 > 0;
-    });
-    dlog('Modelos candidatos que ajustan dimensiones (count):', fitsAll.length);
-    dlog('Candidatos (capacidad interna y dims):', fitsAll.map(m => ({
-      id: m.modelo_id,
-      nombre: m.nombre_modelo,
-      cap_m3: Number(capacityFromDims(m).cap_m3.toFixed(6)),
-      dims: { frente: m.dim_int_frente, profundo: m.dim_int_profundo, alto: m.dim_int_alto }
-    })));
-    if (!fitsAll.length) return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: V, eficiencia: 0, sobrante_m3: 0 };
-
-    // Capacidades en unidades de m3 escaladas (1 unidad = 1e-3 m3). Se derivan EXCLUSIVAMENTE de dimensiones internas.
-    const caps = fitsAll
-      .map(m => {
-        const { cap_m3 } = capacityFromDims(m);
-        const capU = Math.max(0, Math.round(cap_m3 * 1000)); // unidades m3e-3
-        // Log comparativo con campo declarado (solo informativo)
-        if (DEBUG_SUGERENCIAS) {
-          const litrosCampo = parseFloat(m.volumen_litros) || null;
-          dlog('Modelo capacidad (desde dimensiones vs campo declarado):', { id: m.modelo_id, nombre: m.nombre_modelo, cap_u_m3e_3: capU, cap_m3: cap_m3, campo_L: litrosCampo });
-        }
-        return { m, capU, cap_m3 };
-      })
-      .filter(c => c.capU > 0)
-      .sort((a,b) => a.capU - b.capU); // ascendente
+    // Helper: capacidades y packing por modelo
+    const modelosValidos = (modelos || []).map(m => ({ m, cap: capacityFromDims(m).cap_m3 })).filter(x => x.cap > 0);
+    if (!modelosValidos.length) return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: 0, eficiencia: 0, sobrante_m3: 0 };
 
     // Helper: máxima cantidad de unidades (para una sola línea) que caben en una caja del modelo, considerando rotación
     const unitsPerBoxForDims = (m, l, a, h) => {
@@ -1270,189 +1241,76 @@ const sugerenciasService = {
       }
       return best;
     };
-
-    // Si la orden tiene una sola línea, intentar caso especial: ¿algún modelo puede llevar TODAS las unidades en 1 caja (packing por dimensiones)?
-    if (items.length === 1) {
-      const it = items[0];
+    // Memoización simple para upb por (modelo_id, l,a,h)
+    const upbCache = new Map();
+    // Asignación por línea
+    const counts = new Map(); // modelo_id -> cajas
+    let V_asignado = 0; // volumen m3 de líneas asignadas
+    let modelosUsadosSet = new Set();
+    for (const it of items) {
+      const cant = parseInt(it.cantidad_despachada) || 0;
       const l = parseFloat(it.largo_mm) || 0;
       const a = parseFloat(it.ancho_mm) || 0;
       const h = parseFloat(it.alto_mm) || 0;
-      // Fallback: si la cantidad en DB viniera mal (p.ej. 1) pero el volumen total corresponde a varias unidades,
-      // inferimos unidades por volumen geométrico (mm^3 -> m^3)
-      if (totalUnits <= 1 && l > 0 && a > 0 && h > 0 && V > 0) {
-        const unitVolGeomM3 = (l/1000) * (a/1000) * (h/1000);
-        if (unitVolGeomM3 > 0) {
-          const inferred = Math.max(1, Math.round((V / unitVolGeomM3) + 1e-9));
-          if (inferred > totalUnits) {
-            dlog('Ajuste de unidades por geometría (fallback):', { totalUnits_old: totalUnits, inferred, unitVolGeomM3, V });
-            totalUnits = inferred;
+      const volLinea = parseFloat(it.volumen_total_m3_producto) || 0;
+      if (!(cant > 0 && l > 0 && a > 0 && h > 0)) continue;
+      // modelos que ajustan físicamente esta línea con packing >= 1
+      const candidates = modelosValidos
+        .filter(x => (l <= x.m.dim_int_frente && a <= x.m.dim_int_profundo && h <= x.m.dim_int_alto))
+        .map(x => {
+          const cacheKey = `${x.m.modelo_id}:${l}:${a}:${h}`;
+          let upb = upbCache.get(cacheKey);
+          if (upb == null) {
+            upb = unitsPerBoxForDims(x.m, l, a, h);
+            upbCache.set(cacheKey, upb);
           }
-        }
-      }
-      // filtrar modelos con capacidad unitaria por caja >= totalUnits
-      const isAllAxesMultiple = (m, l, a, h) => {
-        const unit = [l, a, h];
-        const box = [m.dim_int_frente, m.dim_int_profundo, m.dim_int_alto];
-        const perms = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
-        const eps = 1e-6;
-        for (const p of perms) {
-          const u0 = unit[p[0]] || 1; const u1 = unit[p[1]] || 1; const u2 = unit[p[2]] || 1;
-          const r1 = box[0] % u0;
-          const r2 = box[1] % u1;
-          const r3 = box[2] % u2;
-          if (Math.abs(r1) < eps && Math.abs(r2) < eps && Math.abs(r3) < eps) return true;
-        }
-        return false;
-      };
-      const singleBoxCandidates = fitsAll
-        .map(x => ({ m: x, upb: unitsPerBoxForDims(x, l, a, h), cap_m3: capacityFromDims(x).cap_m3, allMul: isAllAxesMultiple(x, l, a, h) }))
-        .filter(x => x.upb >= totalUnits)
-        .sort((x,y) => {
-          if (x.allMul !== y.allMul) return y.allMul - x.allMul; // true primero
-          return x.cap_m3 - y.cap_m3; // luego menor capacidad
-        });
-
-      if (singleBoxCandidates.length) {
-        // Log gear: ver top 5 candidatos por upb
-  dlog('Candidatos 1-caja (upb >= unidades):', singleBoxCandidates.slice(0,5).map(c => ({ id: c.m.modelo_id, nombre: c.m.nombre_modelo, cap_m3: Number(c.cap_m3.toFixed(6)), upb: c.upb, exact_multiples: c.allMul })));
-        const chosen = singleBoxCandidates[0].m;
-        const capacidad_m3 = capacityFromDims(chosen).cap_m3;
-        const sobrante_m3 = Math.max(0, capacidad_m3 - V);
-        const eficiencia = capacidad_m3 > 0 ? (V / capacidad_m3) * 100 : 0;
-        dlog('Caso especial: 1 caja puede llevar todas las unidades. Elegido:', {
-          modelo_id: chosen.modelo_id, nombre: chosen.nombre_modelo, cap_m3: capacidad_m3
-        });
-        return {
-          orden_despacho,
-          cajas_minimas: 1,
-          combinacion: [{ modelo_id: chosen.modelo_id, nombre_modelo: chosen.nombre_modelo, volumen_modelo_m3: capacityFromDims(chosen).cap_m3, cantidad: 1 }],
-          volumen_total_m3: V,
-          capacidad_total_m3: capacidad_m3,
-          eficiencia: Math.round(eficiencia * 10) / 10,
-          sobrante_m3: Math.round(sobrante_m3 * 1000) / 1000,
-          modelos_considerados: caps.length
-        };
-      }
+          const cajas = upb > 0 ? Math.ceil(cant / upb) : Infinity;
+          return { m: x.m, cap_m3: x.cap, upb, cajas };
+        })
+        .filter(c => c.upb > 0 && Number.isFinite(c.cajas));
+      if (!candidates.length) { dlog('Línea sin modelo que ajuste por dimensiones:', { l, a, h, cant }); continue; }
+      // Eficiencia primero: minimizar capacidad total asignada a la línea (cajas * cap_m3)
+      candidates.sort((x,y) => {
+        const capTotX = x.cajas * x.cap_m3;
+        const capTotY = y.cajas * y.cap_m3;
+        return (capTotX - capTotY) || (x.cajas - y.cajas) || (x.cap_m3 - y.cap_m3);
+      });
+      const chosen = candidates[0];
+      counts.set(chosen.m.modelo_id, (counts.get(chosen.m.modelo_id) || 0) + chosen.cajas);
+      modelosUsadosSet.add(chosen.m.modelo_id);
+      V_asignado += volLinea; // sumamos volumen real de la línea asignada
     }
 
-    // Para generalizar factibilidad por unidades en ordenes con múltiples líneas, usamos una cota conservadora:
-    // asumimos que cada unidad tiene el tamaño de la mayor pieza (maxL,maxA,maxH) para calcular upb por modelo.
-    const upbByModelId = new Map();
-    for (const x of fitsAll) {
-      upbByModelId.set(x.modelo_id, unitsPerBoxForDims(x, maxL, maxA, maxH));
-    }
-
-  const V_units = Math.round((V * 1000) - 1e-9); // volumen objetivo en unidades (1u = 1e-3 m3)
-  const ceil_units = Math.max(0, V_units); // entero mínimo de unidades a cubrir
-  const maxCapU = caps[caps.length - 1].capU;
-  const M = Math.max(ceil_units + maxCapU * 10, ceil_units + 1); // margen de búsqueda
-  dlog('Objetivo (m3 escalado a 1e-3):', { V_units: V_units, ceil_units, maxCapU, M });
-
-    const INF = 1e9;
-    const dp = new Array(M + 1).fill(INF); // dp[s] = mínima cantidad de cajas para sumar exactamente s unidades m3_e-3
-    const prev = new Array(M + 1).fill(-1); // índice de modelo elegido para llegar a s
-    dp[0] = 0;
-    for (let s = 1; s <= M; s++) {
-      for (let i = 0; i < caps.length; i++) {
-        const cap = caps[i].capU;
-        if (s - cap >= 0 && dp[s - cap] + 1 < dp[s]) {
-          dp[s] = dp[s - cap] + 1;
-          prev[s] = i;
-        }
-      }
-    }
-
-    // Buscar la mejor combinación evaluando TODAS las sumas alcanzables (s = 0..M)
-    // Criterios: (1) capacidad_precisa_m3 - V mínima, (2) dp[s] mínima, (3) capacidad_precisa_m3 mínima
-    let best = null;
-    for (let s = 0; s <= M; s++) {
-      if (dp[s] >= INF) continue;
-      // reconstruir combinación
-      const counts = new Map();
-      let cur = s;
-      while (cur > 0 && prev[cur] !== -1) {
-        const idx = prev[cur];
-        const id = caps[idx].m.modelo_id;
-        counts.set(id, (counts.get(id) || 0) + 1);
-  cur -= caps[idx].capU;
-      }
-      // capacidad total (precisa) y capacidad unitaria
-      let preciseCapM3 = 0;
-      let unitCapacity = 0;
-      for (const [id, c] of counts.entries()) {
-        const model = caps.find(x => x.m.modelo_id === id).m;
-        preciseCapM3 += capacityFromDims(model).cap_m3 * c;
-        unitCapacity += (upbByModelId.get(id) || 0) * c;
-      }
-      if (preciseCapM3 >= V && unitCapacity >= totalUnits) {
-        const over = preciseCapM3 - V;
-        const candidate = { s, counts, boxes: dp[s], preciseCapM3, over };
-        if (!best) best = candidate;
-        else if (over < best.over - 1e-12) best = candidate;
-        else if (Math.abs(over - best.over) <= 1e-12 && dp[s] < best.boxes) best = candidate;
-        else if (Math.abs(over - best.over) <= 1e-12 && dp[s] === best.boxes && preciseCapM3 < best.preciseCapM3) best = candidate;
-      } else {
-        // útil para entender por qué no pasa con s inferiores a ceilV
-        dlog('Descartada combinación por capacidad (precisa/unidades) insuficiente:', {
-          unidades_s: s, cajas: dp[s], preciseCapM3, unitCapacity, totalUnits
-        });
-      }
-    }
-    if (!best) {
-      // Fallback: una caja del mayor
-      const capacidad_m3 = capacityFromDims(caps[caps.length-1].m).cap_m3;
-      const sobrante_m3 = Math.max(0, capacidad_m3 - V);
-      const eficiencia = capacidad_m3 > 0 ? (V / capacidad_m3) * 100 : 0;
-      dlog('DP no pudo cubrir objetivo, fallback a 1 caja del mayor:', { capacidad_m3, eficiencia, sobrante_m3 });
-      return {
-        orden_despacho,
-        cajas_minimas: 1,
-  combinacion: [{ modelo_id: caps[caps.length-1].m.modelo_id, nombre_modelo: caps[caps.length-1].m.nombre_modelo, volumen_modelo_m3: capacidad_m3, cantidad: 1 }],
-        volumen_total_m3: V,
-        capacidad_total_m3: capacidad_m3,
-        eficiencia: Math.round(eficiencia * 10) / 10,
-        sobrante_m3: Math.round(sobrante_m3 * 1000) / 1000,
-        modelos_considerados: caps.length
-      };
-    }
-
-    // Reconstrucción de la combinación
-    const counts = best.counts;
+    // Construcción de combinación y métricas
     const combinacion = Array.from(counts.entries()).map(([modelo_id, cantidad]) => {
-      const mm = caps.find(x => x.m.modelo_id === modelo_id).m;
-      const capDims = capacityFromDims(mm).cap_m3;
-      return {
-        modelo_id,
-        nombre_modelo: mm.nombre_modelo,
-        volumen_modelo_m3: capDims,
-        cantidad
-      };
-    }).sort((a,b) => ((b.volumen_modelo_m3||0) - (a.volumen_modelo_m3||0)));
+      const m = (modelos || []).find(mm => mm.modelo_id === modelo_id);
+      const capDims = m ? capacityFromDims(m).cap_m3 : 0;
+      return { modelo_id, nombre_modelo: m ? m.nombre_modelo : String(modelo_id), volumen_modelo_m3: capDims, cantidad };
+    }).sort((a,b) => (b.volumen_modelo_m3 - a.volumen_modelo_m3));
 
-    const capacidad_m3 = best.preciseCapM3;
-    const sobrante_m3 = Math.max(0, capacidad_m3 - V);
-    const eficiencia = capacidad_m3 > 0 ? (V / capacidad_m3) * 100 : 0;
-    dlog('Resultado combinación por orden:', {
+    const capacidad_total_m3 = combinacion.reduce((s,c) => s + (c.volumen_modelo_m3 * c.cantidad), 0);
+    const cajas_totales = combinacion.reduce((s,c) => s + c.cantidad, 0);
+    const sobrante_m3 = Math.max(0, capacidad_total_m3 - V_asignado);
+    const eficiencia = capacidad_total_m3 > 0 ? (V_asignado / capacidad_total_m3) * 100 : 0;
+    dlog('Resultado por asignación de líneas:', {
       orden_despacho,
-      objetivo_unidades_m3e_3: ceil_units,
-      capacidad_unidades_m3e_3: best.s,
-      cajas_minimas: best.boxes,
-      capacidad_m3,
-      volumen_total_m3: V,
+      cajas_totales,
+      modelos_usados: modelosUsadosSet.size,
+      capacidad_total_m3,
+      volumen_total_m3_asignado: V_asignado,
       sobrante_m3,
-      eficiencia: Math.round(eficiencia * 10) / 10,
-      combinacion: combinacion.map(c => ({ modelo_id: c.modelo_id, nombre_modelo: c.nombre_modelo, cantidad: c.cantidad, modelo_L: Math.round((c.volumen_modelo_m3||0)*1000) }))
+      eficiencia: Math.round(eficiencia * 10) / 10
     });
 
     return {
       orden_despacho,
-      cajas_minimas: best.boxes,
+      cajas_minimas: cajas_totales,
       combinacion,
-      volumen_total_m3: V,
-      capacidad_total_m3: capacidad_m3,
+      volumen_total_m3: V_asignado,
+      capacidad_total_m3,
       eficiencia: Math.round(eficiencia * 10) / 10,
       sobrante_m3: Math.round(sobrante_m3 * 1000) / 1000,
-      modelos_considerados: caps.length
+      modelos_considerados: modelosUsadosSet.size
     };
   },
 
