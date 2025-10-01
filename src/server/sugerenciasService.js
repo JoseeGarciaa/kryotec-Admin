@@ -1,4 +1,5 @@
 const pool = require('./config/db');
+const inventarioProspectosService = require('./inventarioProspectosService');
 
 // Debug logger for tracing calculations in the terminal
 const DEBUG_SUGERENCIAS = (() => {
@@ -1723,8 +1724,94 @@ const sugerenciasService = {
       modelos
     };
   },
-  saveRecomendacionMensualReal: async ({ cliente_id, startDate, endDate, base_dias = 'activos', mensual_factor = 30, modelos_permitidos }) => {
-    const reco = await sugerenciasService.calcularRecomendacionMensualReal({ cliente_id, startDate, endDate, base_dias, mensual_factor, modelos_permitidos });
+  saveRecomendacionMensualReal: async ({ cliente_id, startDate, endDate, base_dias = 'activos', mensual_factor = 30, modelos_permitidos, fuente = 'real', modo = 'real', source = 'real' }) => {
+    // Permitir seleccionar la fuente de datos para el guardado:
+    // 'real' => distribución real por línea; 'mix' => combinación por orden (misma vista del panel)
+    const selected = (fuente || modo || source);
+    let modelosParaGuardar = [];
+    let resumenGlobal = {};
+    if (String(selected).toLowerCase() === 'mix') {
+      // Reproducir el agregado de "+combinación por orden+" del endpoint
+      // Calcular días inclusivos y activos en el rango
+      let diasCalendario = 1; let diasActivos = 1;
+      try {
+        const s = new Date(startDate); const e = new Date(endDate);
+        const d = Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
+        if (d > 0 && Number.isFinite(d)) diasCalendario = d;
+      } catch {}
+      try {
+        const movQuery = `
+          SELECT fecha_de_despacho::date AS fecha
+          FROM admin_platform.inventario_prospecto
+          WHERE cliente_id = $1 AND fecha_de_despacho::date BETWEEN $2::date AND $3::date`;
+        const { rows: movs } = await pool.query(movQuery, [parseInt(cliente_id), startDate, endDate]);
+        const fechas = new Set();
+        for (const m of movs) if (m.fecha) fechas.add(new Date(m.fecha).toISOString().slice(0,10));
+        diasActivos = fechas.size || 1;
+      } catch {}
+
+      // Traer órdenes únicas del rango
+      const { items: ordenes } = await inventarioProspectosService.getOrdenesDespacho(parseInt(cliente_id), {
+        limit: 10000, offset: 0, search: '', startDate, endDate
+      });
+      // Cache modelos permitidos
+      let modelosCache = await sugerenciasService.obtenerModelosCubeCached();
+      if (Array.isArray(modelos_permitidos) && modelos_permitidos.length) {
+        const allowed = new Set(modelos_permitidos.map((x)=>parseInt(x)));
+        modelosCache = (modelosCache || []).filter((m) => allowed.has(parseInt(m.modelo_id)));
+      }
+      const agregados = new Map();
+      for (const ord of ordenes) {
+        const orden = ord.orden_despacho;
+        try {
+          const res = await sugerenciasService.calcularMejorCombinacionPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden, modelos_permitidos }, { modelos: modelosCache });
+          if (res && Array.isArray(res.combinacion)) {
+            for (const item of res.combinacion) {
+              const key = item.modelo_id;
+              const prev = agregados.get(key) || { modelo_id: key, nombre_modelo: item.nombre_modelo, total_cajas: 0 };
+              prev.total_cajas += (item.cantidad || 0);
+              agregados.set(key, prev);
+            }
+          }
+        } catch (e) {
+          console.warn('Orden fallida al componer mix', orden, e?.message);
+        }
+      }
+      const divisor = (base_dias === 'calendario') ? diasCalendario : diasActivos;
+      modelosParaGuardar = Array.from(agregados.values())
+        .map(m => {
+          const promedio_diario = divisor > 0 ? (m.total_cajas / divisor) : 0;
+          const recomendacion_mensual = Math.ceil((promedio_diario || 0) * (mensual_factor || 30));
+          const recomendacion_diaria = promedio_diario >= 1 ? Math.round(promedio_diario) : 0;
+          const frecuencia_cada_dias = (promedio_diario > 0 && promedio_diario < 1) ? Math.round(1 / promedio_diario) : null;
+          return {
+            modelo_id: m.modelo_id,
+            nombre_modelo: m.nombre_modelo,
+            cajas_totales_periodo: m.total_cajas,
+            promedio_diario,
+            recomendacion_mensual,
+            recomendacion_diaria,
+            frecuencia_cada_dias
+          };
+        })
+        .filter(m => (m.recomendacion_mensual || 0) > 0)
+        .sort((a,b)=> b.cajas_totales_periodo - a.cajas_totales_periodo);
+      resumenGlobal = { dias_calendario: diasCalendario, dias_activos: diasActivos };
+    } else {
+      // Por defecto, usar la distribución real
+      const reco = await sugerenciasService.calcularRecomendacionMensualReal({ cliente_id, startDate, endDate, base_dias, mensual_factor, modelos_permitidos });
+      modelosParaGuardar = (reco.modelos || []).map(m => ({
+        modelo_id: m.modelo_id,
+        nombre_modelo: m.nombre_modelo,
+        cajas_totales_periodo: m.cajas_totales_periodo,
+        promedio_diario: m.promedio_diario,
+        recomendacion_mensual: m.recomendacion_mensual,
+        recomendacion_diaria: m.recomendacion_diaria,
+        frecuencia_cada_dias: m.frecuencia_cada_dias
+      })).filter(m => (m.recomendacion_mensual || 0) > 0);
+      resumenGlobal = { dias_calendario: reco?.resumen?.dias_calendario, dias_activos: reco?.resumen?.dias_activos };
+    }
+
     const creadas = [];
     // Obtener el siguiente número de sugerencia (grupo)
     let numeroDeSugerencia = null;
@@ -1735,12 +1822,12 @@ const sugerenciasService = {
     } catch (e) {
       console.warn('No se pudo calcular numero_de_sugerencia, quedará null:', e?.message);
     }
-    for (const m of (reco.modelos || [])) {
+    for (const m of modelosParaGuardar) {
       if (!m.recomendacion_mensual || m.recomendacion_mensual <= 0) continue;
       try {
         const detalle = {
-          tipo: 'recomendacion_mensual_real',
-          periodo: { startDate, endDate, base_dias_usada: reco.resumen?.base_dias_usada, mensual_factor: reco.parametros?.mensual_factor },
+          tipo: (String(selected).toLowerCase() === 'mix') ? 'recomendacion_mensual_mix' : 'recomendacion_mensual_real',
+          periodo: { startDate, endDate, base_dias_usada: base_dias, mensual_factor },
           modelo: {
             cajas_totales_periodo: m.cajas_totales_periodo,
             promedio_diario: m.promedio_diario,
@@ -1748,9 +1835,8 @@ const sugerenciasService = {
             frecuencia_cada_dias: m.frecuencia_cada_dias
           },
           global: {
-            total_cajas_periodo: reco.resumen?.total_cajas_periodo,
-            promedio_diario_total: reco.resumen?.promedio_diario_total,
-            recomendacion_mensual_total: reco.resumen?.recomendacion_mensual_total
+            dias_calendario: resumenGlobal?.dias_calendario,
+            dias_activos: resumenGlobal?.dias_activos
           }
         };
         const row = await sugerenciasService.createSugerencia({
@@ -1765,8 +1851,8 @@ const sugerenciasService = {
             ? String(m.recomendacion_diaria)
             : (m.frecuencia_cada_dias ? `1 cada ${m.frecuencia_cada_dias} días` : (m.promedio_diario ? m.promedio_diario.toFixed(3) : null))
           ,
-          rango_dias: reco.resumen?.dias_calendario != null ? String(reco.resumen.dias_calendario) : null,
-          dias_activos: reco.resumen?.dias_activos != null ? String(reco.resumen.dias_activos) : null,
+          rango_dias: resumenGlobal?.dias_calendario != null ? String(resumenGlobal.dias_calendario) : null,
+          dias_activos: resumenGlobal?.dias_activos != null ? String(resumenGlobal.dias_activos) : null,
           numero_de_sugerencia: numeroDeSugerencia
         });
         creadas.push(row);
@@ -1774,7 +1860,7 @@ const sugerenciasService = {
         console.warn('Fallo guardando recomendación modelo', m.nombre_modelo, e?.message);
       }
     }
-  return { resumen: reco.resumen, total_creadas: creadas.length, numero_de_sugerencia: numeroDeSugerencia, sugerencias: creadas };
+  return { total_creadas: creadas.length, numero_de_sugerencia: numeroDeSugerencia, sugerencias: creadas };
   }
 };
 

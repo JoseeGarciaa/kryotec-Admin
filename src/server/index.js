@@ -976,7 +976,7 @@ app.post('/api/sugerencias/recomendacion-mensual-real', verifyToken, async (req,
 // Guardar recomendación mensual real en la tabla sugerencias_reemplazo (una fila por modelo)
 app.post('/api/sugerencias/recomendacion-mensual-real/guardar', verifyToken, async (req, res) => {
   try {
-    const { cliente_id, startDate, endDate, base_dias, mensual_factor, modelos_permitidos } = req.body || {};
+    const { cliente_id, startDate, endDate, base_dias, mensual_factor, modelos_permitidos, fuente, modo, source } = req.body || {};
     if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
     if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
     const result = await sugerenciasService.saveRecomendacionMensualReal({
@@ -985,7 +985,8 @@ app.post('/api/sugerencias/recomendacion-mensual-real/guardar', verifyToken, asy
       endDate,
       base_dias: base_dias || 'activos',
       mensual_factor: mensual_factor || 30,
-      modelos_permitidos
+      modelos_permitidos,
+      fuente, modo, source
     });
     res.status(201).json(result);
   } catch (error) {

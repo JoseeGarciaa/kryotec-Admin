@@ -1,6 +1,6 @@
 // MODO UNICO: cálculo por rango de fechas (versión limpia)
 import React, { useEffect, useState } from 'react';
-import { Calculator, Package, Clock, Trash2, Download, Users, Filter } from 'lucide-react';
+import { Calculator, Package, Clock, Trash2, Download, Users, Filter, Save } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { useSugerenciasController } from '../../../../controllers/hooks/useSugerenciasController';
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
@@ -43,6 +43,7 @@ const SugerenciasView: React.FC = () => {
   // Filtro de modelos (permitidos)
   const [modelos, setModelos] = useState<Array<{ modelo_id: number; nombre_modelo: string; volumen_litros: number }>>([]);
   const [modelosPermitidos, setModelosPermitidos] = useState<number[]>([]);
+  const [guardando, setGuardando] = useState<boolean>(false);
 
   // Historial
   const [limit] = useState(20);
@@ -127,6 +128,52 @@ const SugerenciasView: React.FC = () => {
   };
 
   // Se elimina el guardado individual: solo mezcla global
+  const guardarRecomendacionMensual = async () => {
+    if (!clienteId || !startDate || !endDate) { alert('Complete cliente y fechas'); return; }
+    if (!mixAgg || !Array.isArray(mixAgg.modelos_agregados) || mixAgg.modelos_agregados.length === 0) {
+      if (!window.confirm('No hay resultados cargados en pantalla. ¿Desea guardar usando el historial real del rango?')) return;
+    }
+    try {
+      setGuardando(true);
+      const payload: any = {
+        cliente_id: Number(clienteId),
+        startDate,
+        endDate,
+        modelos_permitidos: modelosPermitidos,
+        fuente: 'mix'
+      };
+      const { data } = await apiClient.post('/sugerencias/recomendacion-mensual-real/guardar', payload);
+      const numero = data?.numero_de_sugerencia || '';
+      const total = data?.total_creadas || 0;
+      alert(`Recomendación guardada (${total} filas). Nº de sugerencia: ${numero || 'N/A'}`);
+      // Refrescar historial y, si hay número, prefiltrarlo para facilitar PDF
+      if (numero) {
+        // Cargar por número y abrir modal de PDF si el usuario lo desea
+        try {
+          const items = await loadSugerenciasPorNumero(numero);
+          if (Array.isArray(items) && items.length > 0) {
+            setPdfType('general');
+            setPdfTitulo(`N_${numero}`);
+            const prods = buildProductos(items);
+            setProductosModal(prods);
+            const init: Record<string, string> = {}; prods.forEach(p => init[p.id] = '');
+            setPrecios(init);
+            // Mostrar modal de precios para permitir PDF inmediato
+            setShowModal(true);
+          }
+        } catch {}
+      } else {
+        // Si no hay número, refrescar la página actual
+        await loadSugerenciasPaginated({ limit, offset: page * limit, search, clienteId: clienteFiltro ? Number(clienteFiltro) : null, numero: numero || null });
+      }
+    } catch (e: any) {
+      console.error('Error guardando recomendación mensual:', e);
+      const msg = e?.response?.data?.error || e?.message || 'Error al guardar';
+      alert(msg);
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   const eliminar = async (id: number) => {
     if (!window.confirm('Eliminar sugerencia?')) return;
@@ -301,6 +348,11 @@ const SugerenciasView: React.FC = () => {
           <div className="mb-4 text-xs text-gray-600 dark:text-gray-300 space-y-1">
             <div>Días calendario: {diasRango || '-'} | Días activos: {mixAgg.resumen?.total_dias_activos ?? '-'}</div>
             <div>Órdenes únicas: {mixAgg.resumen?.total_ordenes_unicas ?? '-'}</div>
+          </div>
+          <div className="flex justify-end mb-4">
+            <button onClick={guardarRecomendacionMensual} disabled={guardando} className="px-4 py-2 rounded bg-green-600 disabled:bg-green-400 text-white flex items-center gap-2 text-xs">
+              <Save size={16} /> {guardando ? 'Guardando…' : 'Guardar recomendación'}
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
