@@ -754,6 +754,7 @@ app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', verifyToken, async
     }
 
     const agregados = new Map(); // modelo_id -> { modelo_id, nombre_modelo, total_cajas }
+  const detalleOrdenes = []; // lista de resultados por orden
   let totalProductosModelados = 0; // suma de productos desde las órdenes procesadas (puede ser < reales)
   let totalVolumenM3Modelado = 0;
 
@@ -826,6 +827,113 @@ app.post('/api/sugerencias/calcular-por-rango-orden-a-orden', verifyToken, async
   }
 });
 
+// Nueva ruta: agregado orden a orden usando la mejor combinación (mix) que minimiza cajas
+app.post('/api/sugerencias/calcular-por-rango-orden-a-orden-combinacion', verifyToken, async (req, res) => {
+  try {
+    const { cliente_id, startDate, endDate, modelos_permitidos } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!startDate || !endDate) return res.status(400).json({ error: 'startDate y endDate son requeridos (YYYY-MM-DD)' });
+
+    // Calcular días inclusivos y días activos
+    let totalDias = 1;
+    try {
+      const s = new Date(startDate); const e = new Date(endDate);
+      const d = Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
+      if (d > 0 && Number.isFinite(d)) totalDias = d;
+    } catch {}
+
+    // Traer órdenes únicas del rango
+    const { items: ordenes } = await inventarioProspectosService.getOrdenesDespacho(parseInt(cliente_id), {
+      limit: 10000, offset: 0, search: '', startDate, endDate
+    });
+
+    // Totales reales
+    let totalProductosReales = 0; let volumenTotalReales = 0; let diasActivos = 1;
+    const fechasSet = new Set();
+    try {
+      const movQuery = `
+        SELECT cantidad_despachada, volumen_total_m3_producto, fecha_de_despacho::date AS fecha
+        FROM admin_platform.inventario_prospecto
+        WHERE cliente_id = $1 AND fecha_de_despacho::date BETWEEN $2::date AND $3::date`;
+      const { rows: movs } = await pool.query(movQuery, [parseInt(cliente_id), startDate, endDate]);
+      for (const m of movs) {
+        totalProductosReales += (parseInt(m.cantidad_despachada) || 0);
+        volumenTotalReales += (parseFloat(m.volumen_total_m3_producto) || 0);
+        if (m.fecha) fechasSet.add(new Date(m.fecha).toISOString().slice(0,10));
+      }
+      diasActivos = fechasSet.size || 1;
+    } catch {}
+
+    // Cache modelos
+    let modelosCache = await sugerenciasService.obtenerModelosCubeCached();
+    if (Array.isArray(modelos_permitidos) && modelos_permitidos.length) {
+      const allowed = new Set(modelos_permitidos.map((x)=>parseInt(x)));
+      modelosCache = (modelosCache || []).filter((m) => allowed.has(parseInt(m.modelo_id)));
+    }
+
+  const agregados = new Map(); // modelo_id -> { modelo_id, nombre_modelo, total_cajas }
+  const detalleOrdenes = []; // detalles por orden
+  let totalProductosModelados = 0; let totalVolumenM3Modelado = 0;
+    const CONCURRENCY = 24; let index = 0; const ordenesArr = ordenes.slice();
+    async function procesarLote() {
+      const lote = ordenesArr.slice(index, index + CONCURRENCY); index += CONCURRENCY;
+      await Promise.all(lote.map(async (ord) => {
+        const orden = ord.orden_despacho;
+        try {
+          const res = await sugerenciasService.calcularMejorCombinacionPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho: orden, modelos_permitidos }, { modelos: modelosCache });
+          if (res && Array.isArray(res.combinacion)) {
+            for (const item of res.combinacion) {
+              const key = item.modelo_id;
+              const prev = agregados.get(key) || { modelo_id: key, nombre_modelo: item.nombre_modelo, total_cajas: 0 };
+              prev.total_cajas += (item.cantidad || 0);
+              agregados.set(key, prev);
+            }
+            totalVolumenM3Modelado += (res.volumen_total_m3 || 0);
+            // productos exactos por orden no se recomputan aquí; mantenemos totales reales por transparencia
+            detalleOrdenes.push({
+              orden_despacho: res.orden_despacho || orden,
+              cajas_minimas: res.cajas_minimas,
+              eficiencia: res.eficiencia,
+              volumen_total_m3: res.volumen_total_m3,
+              capacidad_total_m3: res.capacidad_total_m3,
+              sobrante_m3: res.sobrante_m3,
+              combinacion: res.combinacion,
+              modelos_considerados: res.modelos_considerados
+            });
+          }
+        } catch (e) {
+          console.warn('Orden fallida en combinación', orden, e?.message);
+        }
+      }));
+      if (index < ordenesArr.length) return procesarLote();
+    }
+    await procesarLote();
+
+    const divisorDias = diasActivos || totalDias;
+    const modelos_agregados = Array.from(agregados.values())
+      .map(m => ({ ...m, promedio_diario_cajas: divisorDias > 0 ? m.total_cajas / divisorDias : m.total_cajas }))
+      .sort((a,b) => b.total_cajas - a.total_cajas);
+
+    res.json({
+      resumen: {
+        startDate, endDate, total_dias: totalDias,
+        total_ordenes_unicas: ordenes.length,
+        total_productos_reales: totalProductosReales,
+        volumen_total_m3_reales: volumenTotalReales,
+        total_productos_modelados: totalProductosModelados,
+        volumen_total_m3_modelados: totalVolumenM3Modelado,
+        cobertura_productos_pct: totalProductosReales > 0 ? (totalProductosModelados / totalProductosReales) * 100 : 0,
+        cobertura_volumen_pct: volumenTotalReales > 0 ? (totalVolumenM3Modelado / volumenTotalReales) * 100 : 0,
+        total_dias_activos: diasActivos
+      },
+      modelos_agregados,
+      ordenes: detalleOrdenes.sort((a,b) => String(a.orden_despacho).localeCompare(String(b.orden_despacho)))
+    });
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/calcular-por-rango-orden-a-orden-combinacion:', error);
+    res.status(500).json({ error: 'Error al calcular agregado orden a orden (combinación)' });
+  }
+});
 // Nueva ruta: distribución OPTIMA (mezcla única) por rango
 app.post('/api/sugerencias/distribucion-optima-rango', verifyToken, async (req, res) => {
   try {
@@ -905,16 +1013,87 @@ app.post('/api/inventario-prospectos/import', verifyToken, upload.single('file')
       return res.status(400).json({ error: 'cliente_id y archivo son requeridos' });
     }
 
-    // Parse workbook
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true, raw: false });
-    const sheetName = workbook.SheetNames[0];
+    // Parse workbook con manejo de errores suaves
+    let workbook;
+    try {
+      workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true, raw: false });
+    } catch (e) {
+      return res.json({
+        results: { inserted: 0, skipped: 0, errors: 0, details: [] },
+        preview: [],
+        totalRows: 0,
+        canInsert: 0,
+        unitsUsed: 'mm',
+        unitGuess: 'mm',
+        unitGuessReason: '',
+        emptyFile: true,
+        message: 'No se pudo leer el archivo. Asegúrate de subir un Excel (.xlsx) válido.'
+      });
+    }
+    const sheetName = workbook.SheetNames && workbook.SheetNames[0];
+    if (!sheetName) {
+      return res.json({
+        results: { inserted: 0, skipped: 0, errors: 0, details: [] },
+        preview: [],
+        totalRows: 0,
+        canInsert: 0,
+        unitsUsed: 'mm',
+        unitGuess: 'mm',
+        unitGuessReason: '',
+        emptyFile: true,
+        message: 'El Excel no tiene hojas. Usa la plantilla provista.'
+      });
+    }
     const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+      return res.json({
+        results: { inserted: 0, skipped: 0, errors: 0, details: [] },
+        preview: [],
+        totalRows: 0,
+        canInsert: 0,
+        unitsUsed: 'mm',
+        unitGuess: 'mm',
+        unitGuessReason: '',
+        emptyFile: true,
+        message: 'No se encontró la hoja de datos. Usa la hoja "Inventario" de la plantilla.'
+      });
+    }
 
     // Helpers
     const normalize = (s) => String(s || '').trim().toLowerCase();
+    // Convierte cadenas numéricas con coma o punto como decimal y elimina separadores de miles comunes
     const toNumber = (v) => {
       if (v === null || v === undefined || v === '') return 0;
-      const n = Number(String(v).toString().replace(',', '.'));
+      if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+      let s = String(v).trim();
+      if (!s) return 0;
+      // Si tiene ambos separadores, decidir por la última aparición como decimal
+      const hasComma = s.includes(',');
+      const hasDot = s.includes('.');
+      if (hasComma && hasDot) {
+        // Usar el último símbolo como decimal y eliminar el otro como millares
+        const lastComma = s.lastIndexOf(',');
+        const lastDot = s.lastIndexOf('.');
+        if (lastComma > lastDot) {
+          // coma decimal, puntos miles
+          s = s.replace(/\./g, '').replace(',', '.');
+        } else {
+          // punto decimal, comas miles
+          s = s.replace(/,/g, '');
+        }
+      } else if (hasComma && !hasDot) {
+        // Solo coma -> asume decimal
+        s = s.replace(',', '.');
+      } else if (hasDot && !hasComma) {
+        // Solo punto -> ya es decimal, pero eliminar puntos de miles no-decimales
+        // Si hay más de un punto, eliminar todos menos el último
+        const parts = s.split('.');
+        if (parts.length > 2) {
+          const dec = parts.pop();
+          s = parts.join('') + '.' + dec;
+        }
+      }
+      const n = Number(s);
       return Number.isFinite(n) ? n : 0;
     };
     const toInt = (v) => {
@@ -945,8 +1124,30 @@ app.post('/api/inventario-prospectos/import', verifyToken, upload.single('file')
       return null;
     };
 
+    // Units handling (declarar antes de cualquier retorno temprano)
+    const unitsParam = (req.query && req.query.units) || (req.body && req.body.units) || 'mm';
+    const units = typeof unitsParam === 'string' ? unitsParam.toLowerCase() : 'mm';
+    const scale = units === 'cm' ? 10 : 1; // convert cm->mm
+    // Valores por defecto para la detección; se recalculan si hay filas
+  // unitGuess y unitGuessReason ya declarados arriba
+
     // Detect header row dynamically (supports templates with title rows)
-    const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    let aoa = [];
+    try {
+      aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    } catch (e) {
+      return res.json({
+        results: { inserted: 0, skipped: 0, errors: 0, details: [] },
+        preview: [],
+        totalRows: 0,
+        canInsert: 0,
+        unitsUsed: units,
+        unitGuess,
+        unitGuessReason,
+        emptyFile: true,
+        message: 'No se pudo procesar la hoja. Verifica que la plantilla no esté dañada.'
+      });
+    }
     let headerRowIdx = 0;
     for (let i = 0; i < Math.min(30, aoa.length); i++) {
       const row = (aoa[i] || []).map(normalize);
@@ -965,21 +1166,25 @@ app.post('/api/inventario-prospectos/import', verifyToken, upload.single('file')
   // Parse rows starting from detected header
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', range: headerRowIdx });
     if (!rows || rows.length === 0) {
-      return res.status(400).json({
-        error: 'No se encontraron datos para importar. Verifica que la hoja "Inventario" tenga los encabezados esperados (Descripcion, Producto, Largo_mm, Ancho_mm, Alto_mm, Cantidad, Fecha_Despacho (YYYY-MM-DD), Orden_Despacho).'
+      // No retornes 400 para no cerrar el modal en el cliente; devuelve un resumen vacío
+      return res.json({
+        results: { inserted: 0, skipped: 0, errors: 0, details: [] },
+        preview: [],
+        totalRows: 0,
+        canInsert: 0,
+        unitsUsed: units,
+        unitGuess,
+        unitGuessReason,
+        emptyFile: true,
+        message: 'La plantilla está vacía o solo contiene encabezados. Agrega filas con datos.'
       });
     }
 
     // Expected headers mapping (case-insensitive)
     const results = { inserted: 0, skipped: 0, errors: 0, details: [] };
 
-    // Units handling
-    const unitsParam = (req.query && req.query.units) || (req.body && req.body.units) || 'mm';
-    const units = typeof unitsParam === 'string' ? unitsParam.toLowerCase() : 'mm';
-    const scale = units === 'cm' ? 10 : 1; // convert cm->mm
-
-    // Try to auto-detect units from data (based on raw values before scaling)
-    let dimCount = 0, smallLE100 = 0, veryLargeGT1000 = 0;
+  // Try to auto-detect units from data (based on raw values before scaling)
+  let dimCount = 0, smallLE100 = 0, veryLargeGT1000 = 0;
     for (let i = 0; i < Math.min(rows.length, 200); i++) {
       const r = rows[i] || {};
       const rawDims = [
@@ -1029,10 +1234,14 @@ app.post('/api/inventario-prospectos/import', verifyToken, upload.single('file')
       const rawL = toNumber(r['Largo_mm'] ?? r['Largo'] ?? r['largo_mm'] ?? r['largo']);
       const rawA = toNumber(r['Ancho_mm'] ?? r['Ancho'] ?? r['ancho_mm'] ?? r['ancho']);
       const rawH = toNumber(r['Alto_mm'] ?? r['Alto'] ?? r['alto_mm'] ?? r['alto']);
-      // Convertir a mm según unidades
-      const largoMM = Math.round(rawL * scale);
-      const anchoMM = Math.round(rawA * scale);
-      const altoMM = Math.round(rawH * scale);
+      // Convertir a mm según unidades, preservando decimales (hasta 2 cifras)
+      const round2 = (n) => {
+        const x = Number(n);
+        return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0;
+      };
+      const largoMM = round2(rawL * scale);
+      const anchoMM = round2(rawA * scale);
+      const altoMM = round2(rawH * scale);
 
       const record = {
         cliente_id: clienteIdNum,
@@ -1158,6 +1367,20 @@ app.post('/api/sugerencias/calcular-por-orden', verifyToken, async (req, res) =>
   } catch (error) {
     console.error('Error en POST /api/sugerencias/calcular-por-orden:', error);
     res.status(500).json({ error: 'Error al calcular sugerencias por orden de despacho' });
+  }
+});
+
+// Nueva ruta: mejor combinación (mix) por orden minimizando cajas
+app.post('/api/sugerencias/mejor-combinacion-por-orden', verifyToken, async (req, res) => {
+  try {
+    const { cliente_id, orden_despacho, modelos_permitidos } = req.body || {};
+    if (!cliente_id) return res.status(400).json({ error: 'cliente_id es requerido' });
+    if (!orden_despacho) return res.status(400).json({ error: 'orden_despacho es requerido' });
+    const result = await sugerenciasService.calcularMejorCombinacionPorOrden({ cliente_id: parseInt(cliente_id), orden_despacho, modelos_permitidos });
+    res.json(result);
+  } catch (error) {
+    console.error('Error en POST /api/sugerencias/mejor-combinacion-por-orden:', error);
+    res.status(500).json({ error: 'Error al calcular la mejor combinación por orden' });
   }
 });
 

@@ -1,5 +1,25 @@
 const pool = require('./config/db');
 
+// Debug logger for tracing calculations in the terminal
+const DEBUG_SUGERENCIAS = (() => {
+  const v = (process.env.DEBUG_SUGERENCIAS || '1').toString().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes'; // default ON so you can see logs now
+})();
+function dlog(...args) {
+  if (DEBUG_SUGERENCIAS) console.log('[SUG]', ...args);
+}
+
+// Capacidad desde dimensiones internas: mm^3 -> m^3 y litros (entero DP-safe)
+function capacityFromDims(m) {
+  const f = parseFloat(m.dim_int_frente) || 0;
+  const p = parseFloat(m.dim_int_profundo) || 0;
+  const a = parseFloat(m.dim_int_alto) || 0;
+  const mm3 = f * p * a; // mm^3
+  const cap_m3 = mm3 > 0 ? (mm3 / 1e9) : 0; // 1e9 mm^3 = 1 m^3
+  const capL = mm3 > 0 ? Math.max(0, Math.floor(mm3 / 1e6)) : 0; // 1e6 mm^3 = 1 L, floor para no sobreestimar
+  return { cap_m3, capL };
+}
+
 const sugerenciasService = {
   // Helper: filtrar modelos por lista permitida (si viene)
   _filterModelosPermitidos(modelos, modelos_permitidos) {
@@ -11,21 +31,22 @@ const sugerenciasService = {
   getAllSugerencias: async () => {
     try {
       const query = `
-    SELECT 
+        SELECT 
           s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
-          s.cantidad_sugerida, s.fecha_sugerencia, 
+          s.cantidad_sugerida, s.fecha_sugerencia,
           s.modelo_id, s.estado,
           COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
-      s.cantidad_diaria, s.rango_dias, s.dias_activos, s.numero_de_sugerencia,
+          s.detalle_orden,
+          s.cantidad_diaria, s.rango_dias, s.dias_activos, s.numero_de_sugerencia,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
-          i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
+          i.descripcion_producto AS descripcion_inventario, i.producto, i.cantidad_despachada AS cantidad_inventario,
           i.largo_mm, i.ancho_mm, i.alto_mm
         FROM admin_platform.sugerencias_reemplazo s
         LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
         LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
         LEFT JOIN admin_platform.inventario_prospecto i ON s.inv_id = i.inv_id
-        ORDER BY s.fecha_sugerencia DESC
+        ORDER BY s.fecha_sugerencia DESC NULLS LAST, s.sugerencia_id DESC
       `;
       const { rows } = await pool.query(query);
       return rows;
@@ -35,72 +56,68 @@ const sugerenciasService = {
     }
   },
 
-  // Obtener sugerencias con paginación y búsqueda opcional
+  // Obtener sugerencias paginadas con filtros
   getSugerenciasPaginated: async ({ limit = 50, offset = 0, search = '', clienteId = null, numero = null } = {}) => {
     try {
+      const where = [];
       const params = [];
-      let whereClauses = [];
 
       if (clienteId) {
         params.push(clienteId);
-        whereClauses.push(`s.cliente_id = $${params.length}`);
+        where.push(`s.cliente_id = $${params.length}`);
       }
-
       if (numero) {
         params.push(String(numero));
-        whereClauses.push(`s.numero_de_sugerencia = $${params.length}`);
+        where.push(`s.numero_de_sugerencia = $${params.length}`);
       }
-
-      if (search && search.trim()) {
-        // Búsqueda en varios campos
-        params.push(`%${search.trim().toLowerCase()}%`);
-        const p = `$${params.length}`;
-        whereClauses.push(`(
-          LOWER(COALESCE(c.nombre_cliente, '')) ILIKE ${p} OR
-          LOWER(COALESCE(i.producto, '')) ILIKE ${p} OR
-          LOWER(COALESCE(i.descripcion_producto, '')) ILIKE ${p} OR
-          LOWER(COALESCE(m.nombre_modelo, '')) ILIKE ${p} OR
-          LOWER(COALESCE(s.estado, '')) ILIKE ${p} OR
-          LOWER(COALESCE(s.numero_de_sugerencia, '')) ILIKE ${p}
+      if (search) {
+        params.push(`%${search.toLowerCase()}%`);
+        const idx = params.length;
+        where.push(`(
+          LOWER(COALESCE(c.nombre_cliente,'')) LIKE $${idx}
+          OR LOWER(COALESCE(s.modelo_sugerido,'')) LIKE $${idx}
+          OR LOWER(COALESCE(m.nombre_modelo,'')) LIKE $${idx}
+          OR LOWER(COALESCE(s.orden_despacho,'')) LIKE $${idx}
         )`);
       }
 
-      const whereSQL = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+      const whereSQL = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-      // Total
-      const countQuery = `
-        SELECT COUNT(*) AS total
+      // total
+      const countSQL = `
+        SELECT COUNT(*)::int AS total
         FROM admin_platform.sugerencias_reemplazo s
         LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
         LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
-        LEFT JOIN admin_platform.inventario_prospecto i ON s.inv_id = i.inv_id
         ${whereSQL}
       `;
-      const { rows: countRows } = await pool.query(countQuery, params);
-      const total = parseInt(countRows?.[0]?.total || '0', 10);
+      const { rows: countRows } = await pool.query(countSQL, params);
+      const total = parseInt(countRows?.[0]?.total || 0);
 
-      // Items
-      const itemsParams = [...params, limit, offset];
-      const itemsQuery = `
-    SELECT 
+      // items
+      params.push(limit);
+      params.push(offset);
+      const itemsSQL = `
+        SELECT 
           s.sugerencia_id, s.cliente_id, s.inv_id, s.modelo_sugerido,
-          s.cantidad_sugerida, s.fecha_sugerencia, 
+          s.cantidad_sugerida, s.fecha_sugerencia,
           s.modelo_id, s.estado,
           COALESCE(s.orden_despacho, i.orden_despacho) AS orden_despacho,
-      s.cantidad_diaria, s.rango_dias, s.dias_activos, s.numero_de_sugerencia,
+          s.detalle_orden,
+          s.cantidad_diaria, s.rango_dias, s.dias_activos, s.numero_de_sugerencia,
           c.nombre_cliente,
           m.nombre_modelo, m.volumen_litros,
-          i.descripcion_producto as descripcion_inventario, i.producto, i.cantidad_despachada as cantidad_inventario, 
+          i.descripcion_producto AS descripcion_inventario, i.producto, i.cantidad_despachada AS cantidad_inventario,
           i.largo_mm, i.ancho_mm, i.alto_mm
         FROM admin_platform.sugerencias_reemplazo s
         LEFT JOIN admin_platform.clientes_prospectos c ON s.cliente_id = c.cliente_id
         LEFT JOIN admin_platform.modelos m ON s.modelo_id = m.modelo_id
         LEFT JOIN admin_platform.inventario_prospecto i ON s.inv_id = i.inv_id
         ${whereSQL}
-        ORDER BY s.fecha_sugerencia DESC
-        LIMIT $${itemsParams.length - 1} OFFSET $${itemsParams.length}
+        ORDER BY s.fecha_sugerencia DESC NULLS LAST, s.sugerencia_id DESC
+        LIMIT $${params.length - 1} OFFSET $${params.length}
       `;
-      const { rows } = await pool.query(itemsQuery, itemsParams);
+      const { rows } = await pool.query(itemsSQL, params);
       return { total, items: rows };
     } catch (error) {
       console.error('Error al obtener sugerencias paginadas:', error);
@@ -108,226 +125,35 @@ const sugerenciasService = {
     }
   },
 
-  // Calcular recomendaciones por rango (con validación dimensional por línea)
-  calcularSugerenciasPorRangoTotal: async ({ cliente_id, startDate, endDate, modelos_permitidos }) => {
-    try {
-      if (!cliente_id) throw new Error('cliente_id es requerido');
-      if (!startDate || !endDate) throw new Error('startDate y endDate son requeridos');
-
-      // Calcular número de días en el rango (inclusive)
-      let totalDias = 1;
-      try {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const diffMs = end.getTime() - start.getTime();
-        // Sumamos 1 para que 1-31 enero sean 31 días, no 30
-        const diasCalc = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
-        if (diasCalc > 0 && Number.isFinite(diasCalc)) totalDias = diasCalc;
-      } catch (e) {
-        console.warn('No se pudo calcular total de días, usando 1. Error:', e?.message);
-      }
-
-      // Traer items del cliente dentro del rango por fecha de despacho (cast a date)
-      const q = `
-        SELECT inv_id, producto, descripcion_producto, cantidad_despachada, largo_mm, ancho_mm, alto_mm,
-               volumen_total_m3_producto, fecha_de_despacho, orden_despacho
-        FROM admin_platform.inventario_prospecto
-        WHERE cliente_id = $1
-          AND fecha_de_despacho::date BETWEEN $2::date AND $3::date
-      `;
-  const { rows: items } = await pool.query(q, [cliente_id, startDate, endDate]);
-
-      const totalRegistros = items.length;
-      const totalProductos = items.reduce((acc, it) => acc + (parseInt(it.cantidad_despachada) || 0), 0);
-      const totalM3 = items.reduce((acc, it) => acc + (parseFloat(it.volumen_total_m3_producto) || 0), 0);
-      // Contar órdenes incluyendo repetidas (no únicas)
-      const totalOrdenes = items.filter(it => !!it.orden_despacho).length;
-      // Días activos (distintos con al menos una orden)
-      const diasActivosSet = new Set(
-        items
-          .filter(it => it.fecha_de_despacho)
-          .map(it => (new Date(it.fecha_de_despacho).toISOString().slice(0,10)))
-      );
-      const totalDiasActivos = diasActivosSet.size || 1;
-
-      // Modelos Cube disponibles (cacheados) y filtrados por permitidos
-      let modelos = await sugerenciasService.obtenerModelosCubeCached();
-      modelos = sugerenciasService._filterModelosPermitidos(modelos, modelos_permitidos);
-
-      // Si no hay modelos (por filtro), devolver sin sugerencias
-      if (!modelos.length) {
-        return {
-          resumen: {
-            startDate,
-            endDate,
-            total_ordenes: totalOrdenes,
-            total_registros: totalRegistros,
-            total_productos: totalProductos,
-            volumen_total_m3: totalM3,
-            total_dias: totalDias,
-            total_dias_activos: totalDiasActivos
-          },
-          sugerencias: []
-        };
-      }
-
-      // Para cada modelo, validar TODAS las líneas y sumar contenedores sólo si todas caben
-      const sugerencias = [];
-      for (const modelo of modelos) {
-        const volumenModeloM3 = (modelo.volumen_litros || 0) / 1000;
-        if (!(volumenModeloM3 > 0)) continue;
-
-        let algunNoCabe = false;
-        let totalContenedores = 0;
-        let totalVolumenUtilizado = 0;
-        const detalle = [];
-
-        for (const it of items) {
-          const cantidadProducto = parseInt(it.cantidad_despachada) || 0;
-          const volumenTotalProducto = parseFloat(it.volumen_total_m3_producto) || 0;
-          const largo = parseFloat(it.largo_mm);
-          const ancho = parseFloat(it.ancho_mm);
-          const alto = parseFloat(it.alto_mm);
-          if (!cantidadProducto || !volumenTotalProducto || !largo || !ancho || !alto) { continue; }
-
-          // Validación de dimensiones internas
-          const cabeDim = (
-            largo <= modelo.dim_int_frente &&
-            ancho <= modelo.dim_int_profundo &&
-            alto <= modelo.dim_int_alto
-          );
-          if (!cabeDim) { algunNoCabe = true; break; }
-
-          // Validación volumétrica unitaria
-          const volUnit = volumenTotalProducto / cantidadProducto; // m3 por unidad
-          if (volUnit > volumenModeloM3) { algunNoCabe = true; break; }
-
-          // Cálculo de contenedores por línea
-          const dimensionesExactas = (
-            largo === modelo.dim_int_frente &&
-            ancho === modelo.dim_int_profundo &&
-            alto === modelo.dim_int_alto
-          );
-          let contenedoresLinea;
-          let tipoAjuste;
-          if (dimensionesExactas) {
-            contenedoresLinea = cantidadProducto; // 1:1
-            tipoAjuste = 'perfecto';
-          } else {
-            const productosPorContenedor = Math.max(1, Math.floor(volumenModeloM3 / volUnit));
-            contenedoresLinea = Math.ceil(cantidadProducto / productosPorContenedor);
-            tipoAjuste = 'volumetrico';
-          }
-          totalContenedores += contenedoresLinea;
-          totalVolumenUtilizado += volumenTotalProducto;
-
-          detalle.push({
-            inv_id: it.inv_id,
-            producto: it.producto,
-            descripcion_producto: it.descripcion_producto,
-            cantidad_productos: cantidadProducto,
-            contenedores_necesarios: contenedoresLinea,
-            tipo_ajuste: tipoAjuste,
-            volumen_unitario: volUnit,
-            volumen_total_producto: volumenTotalProducto
-          });
-        }
-
-        if (algunNoCabe) {
-          // Consistencia con cálculo por orden: si alguna línea no cabe, este modelo no aplica al rango
-          continue;
-        }
-
-        const volumenTotalDisponible = totalContenedores * volumenModeloM3;
-        const eficiencia = volumenTotalDisponible > 0 ? Math.max(0, Math.min(100, (totalVolumenUtilizado / volumenTotalDisponible) * 100)) : 0;
-        sugerencias.push({
-          modelo_id: modelo.modelo_id,
-          nombre_modelo: modelo.nombre_modelo,
-          volumen_litros: modelo.volumen_litros,
-          volumen_modelo_m3: volumenModeloM3,
-          cantidad_sugerida: totalContenedores,
-          volumen_total_productos: totalVolumenUtilizado,
-          volumen_total_contenedores: volumenTotalDisponible,
-          eficiencia,
-          detalle_contenedores_por_producto: detalle,
-          promedio_diario_cajas: totalContenedores / totalDiasActivos
-        });
-      }
-
-      // Ordenar por cantidad sugerida desc y luego por mejor eficiencia
-      sugerencias.sort((a,b) => {
-        if ((b.cantidad_sugerida||0) !== (a.cantidad_sugerida||0)) return (b.cantidad_sugerida||0) - (a.cantidad_sugerida||0);
-        return (b.eficiencia||0) - (a.eficiencia||0);
-      });
-
-      return {
-        resumen: {
-          startDate,
-          endDate,
-          total_ordenes: totalOrdenes,
-          total_registros: totalRegistros,
-          total_productos: totalProductos,
-          volumen_total_m3: totalM3,
-          total_dias: totalDias,
-          total_dias_activos: totalDiasActivos
-        },
-        sugerencias
-      };
-    } catch (error) {
-      console.error('Error en calcularSugerenciasPorRangoTotal:', error);
-      throw error;
-    }
-  },
-
-  // Distribución 100% real por rango: asigna el modelo más pequeño que acepta cada línea
+  // Distribución REAL por rango: asigna cada línea al modelo mínimo que le cabe por dimensiones y volumen unitario
   calcularDistribucionRealPorRango: async ({ cliente_id, startDate, endDate, modelos_permitidos }) => {
     if (!cliente_id) throw new Error('cliente_id es requerido');
     if (!startDate || !endDate) throw new Error('startDate y endDate son requeridos');
 
-    // Inventario del rango
+    // Datos del rango
+    dlog('== calcularDistribucionRealPorRango ==>', { cliente_id, startDate, endDate, modelos_permitidos });
     const invQuery = `
       SELECT inv_id, producto, descripcion_producto, cantidad_despachada,
              largo_mm, ancho_mm, alto_mm, volumen_total_m3_producto,
-             fecha_de_despacho, orden_despacho
+             fecha_de_despacho::date AS fecha_de_despacho
       FROM admin_platform.inventario_prospecto
       WHERE cliente_id = $1
         AND fecha_de_despacho::date BETWEEN $2::date AND $3::date
     `;
-    const { rows: items } = await pool.query(invQuery, [cliente_id, startDate, endDate]);
+  const { rows: items } = await pool.query(invQuery, [cliente_id, startDate, endDate]);
+  dlog('Items del rango:', items.length);
 
-    if (!items.length) {
-      return {
-        resumen: {
-          startDate, endDate,
-          total_registros: 0,
-          total_productos: 0,
-            volumen_total_m3: 0,
-          total_dias_activos: 0,
-          productos_asignados: 0,
-          volumen_asignado_m3: 0,
-          omitidos: 0,
-          cobertura_productos: 0,
-          cobertura_volumen: 0
-        },
-        distribucion: []
-      };
-    }
-
-    // Modelos ordenados de menor a mayor volumen
-    const modelosQuery = `
-      SELECT modelo_id, nombre_modelo, volumen_litros,
-             dim_int_frente, dim_int_profundo, dim_int_alto
-      FROM admin_platform.modelos
-      WHERE tipo = 'Cube'
-      ORDER BY volumen_litros ASC
-    `;
-    let { rows: modelos } = await pool.query(modelosQuery);
+    // Modelos ordenados asc por capacidad (usando dimensiones internas)
+    let modelos = await sugerenciasService.obtenerModelosCubeCached();
     modelos = sugerenciasService._filterModelosPermitidos(modelos, modelos_permitidos);
+    // Ordenar por capacidad interna real
+    modelos = (modelos || []).sort((a,b) => capacityFromDims(a).cap_m3 - capacityFromDims(b).cap_m3);
     if (!modelos.length) throw new Error('No hay modelos Cube disponibles');
+    dlog('Modelos Cube (permitidos) disponibles:', modelos.length);
 
-    // Días activos (distintas fechas con registros)
+    // Días activos del rango (fechas únicas con registros)
     const diasActivosSet = new Set(
-      items.filter(i => i.fecha_de_despacho).map(i => new Date(i.fecha_de_despacho).toISOString().slice(0,10))
+      (items || []).filter(i => i.fecha_de_despacho).map(i => String(i.fecha_de_despacho))
     );
     const totalDiasActivos = diasActivosSet.size || 1;
 
@@ -349,17 +175,35 @@ const sugerenciasService = {
       totalVolumenReal += volLinea;
 
       if (!cantidad || !volLinea || !largo || !ancho || !alto) { omitidos++; continue; }
+
       const volUnit = volLinea / cantidad;
-      const modeloElegido = modelos.find(m =>
-        largo <= m.dim_int_frente &&
-        ancho <= m.dim_int_profundo &&
-        alto <= m.dim_int_alto &&
-        (m.volumen_litros / 1000) >= volUnit
-      );
+      const modeloElegido = modelos.find(m => {
+        if (!(largo <= m.dim_int_frente && ancho <= m.dim_int_profundo && alto <= m.dim_int_alto)) return false;
+        const { cap_m3 } = capacityFromDims(m);
+        return cap_m3 >= volUnit; // capacidad interna basada en dimensiones
+      });
       if (!modeloElegido) { omitidos++; continue; }
 
-      const volModeloM3 = modeloElegido.volumen_litros / 1000;
-      const productosPorContenedor = Math.max(1, Math.floor(volModeloM3 / volUnit));
+      const volModeloM3 = capacityFromDims(modeloElegido).cap_m3;
+      // Preferir cálculo de unidades por caja basado en dimensiones (packing simple 6 orientaciones)
+      const unitsPerBoxForDimsLocal = (m, l, a, h) => {
+        if (!(m && m.dim_int_frente && m.dim_int_profundo && m.dim_int_alto)) return 0;
+        const dims = [l, a, h];
+        const box = [m.dim_int_frente, m.dim_int_profundo, m.dim_int_alto];
+        const perms = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+        let best = 0;
+        for (const p of perms) {
+          const c1 = Math.floor(box[0] / (dims[p[0]] || Infinity));
+          const c2 = Math.floor(box[1] / (dims[p[1]] || Infinity));
+          const c3 = Math.floor(box[2] /
+             (dims[p[2]] || Infinity));
+          const cap = (c1>0 && c2>0 && c3>0) ? (c1*c2*c3) : 0;
+          if (cap > best) best = cap;
+        }
+        return best;
+      };
+      const upb = unitsPerBoxForDimsLocal(modeloElegido, largo, ancho, alto);
+      const productosPorContenedor = upb > 0 ? upb : Math.max(1, Math.floor(volModeloM3 / volUnit));
       const esPerfecto = (
         largo === modeloElegido.dim_int_frente &&
         ancho === modeloElegido.dim_int_profundo &&
@@ -394,7 +238,7 @@ const sugerenciasService = {
     const coberturaProductos = totalProductosReales ? (totalProductosAsignados / totalProductosReales) * 100 : 0;
     const coberturaVolumen = totalVolumenReal ? (totalVolumenAsignado / totalVolumenReal) * 100 : 0;
 
-    return {
+    const salida = {
       resumen: {
         startDate,
         endDate,
@@ -410,6 +254,8 @@ const sugerenciasService = {
       },
       distribucion
     };
+    dlog('Resumen real por rango:', salida.resumen);
+    return salida;
   },
   
   // Proyección mensual: estima uso diario futuro basado en patrón histórico del rango
@@ -460,10 +306,11 @@ const sugerenciasService = {
              dim_int_frente, dim_int_profundo, dim_int_alto
       FROM admin_platform.modelos
       WHERE tipo = 'Cube'
-      ORDER BY volumen_litros ASC
     `;
     let { rows: modelos } = await pool.query(modelosQuery);
     modelos = sugerenciasService._filterModelosPermitidos(modelos, modelos_permitidos);
+    // Ordenar por capacidad real interna
+    modelos = (modelos || []).sort((a,b) => capacityFromDims(a).cap_m3 - capacityFromDims(b).cap_m3);
     if (!modelos.length) throw new Error('No hay modelos Cube disponibles');
 
     const fechasActivasSet = new Set(items.filter(i => i.fecha_de_despacho).map(i => i.fecha_de_despacho.toISOString().slice(0,10)));
@@ -491,15 +338,28 @@ const sugerenciasService = {
       totalVolumenReal += volLinea;
       if (!cantidad || !volLinea || !largo || !ancho || !alto || !fecha) { omitidos++; continue; }
       const volUnit = volLinea / cantidad;
-      const modeloElegido = modelos.find(m => (
-        largo <= m.dim_int_frente &&
-        ancho <= m.dim_int_profundo &&
-        alto <= m.dim_int_alto &&
-        (m.volumen_litros / 1000) >= volUnit
-      ));
+      const modeloElegido = modelos.find(m => {
+        if (!(largo <= m.dim_int_frente && ancho <= m.dim_int_profundo && alto <= m.dim_int_alto)) return false;
+        const { cap_m3 } = capacityFromDims(m);
+        return cap_m3 >= volUnit;
+      });
       if (!modeloElegido) { omitidos++; continue; }
-      const volModeloM3 = modeloElegido.volumen_litros / 1000;
-      const productosPorContenedor = Math.max(1, Math.floor(volModeloM3 / volUnit));
+      const volModeloM3 = capacityFromDims(modeloElegido).cap_m3;
+      const upb = (() => {
+        const dims = [largo, ancho, alto];
+        const box = [modeloElegido.dim_int_frente, modeloElegido.dim_int_profundo, modeloElegido.dim_int_alto];
+        const perms = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+        let best = 0;
+        for (const p of perms) {
+          const c1 = Math.floor(box[0] / (dims[p[0]] || Infinity));
+          const c2 = Math.floor(box[1] / (dims[p[1]] || Infinity));
+          const c3 = Math.floor(box[2] / (dims[p[2]] || Infinity));
+          const cap = (c1>0 && c2>0 && c3>0) ? (c1*c2*c3) : 0;
+          if (cap > best) best = cap;
+        }
+        return best;
+      })();
+      const productosPorContenedor = upb > 0 ? upb : Math.max(1, Math.floor(volModeloM3 / volUnit));
       const esPerfecto = largo === modeloElegido.dim_int_frente && ancho === modeloElegido.dim_int_profundo && alto === modeloElegido.dim_int_alto;
       const contenedores = esPerfecto ? cantidad : Math.ceil(cantidad / productosPorContenedor);
       totalProductosAsignados += cantidad;
@@ -740,17 +600,10 @@ const sugerenciasService = {
         }
       }));
 
-      // CALCULAR POR CADA TIPO DE PRODUCTO Y SUMAR LOS CONTENEDORES
-      // Esta es la lógica correcta: cada producto tiene sus propias características
-      
-      console.log(`Calculando contenedores para cada tipo de producto en la orden ${orden_despacho}`);
-      
-      // Buscar TODOS los modelos Cube disponibles
+      // Usar cálculo por volumen total de la orden con validación dimensional (no sumar por producto)
       // Reusar modelos cacheados si se proporcionan
       let modelos = opts.modelos;
-      if (!modelos) {
-        modelos = await module.exports.obtenerModelosCubeCached();
-      }
+      if (!modelos) modelos = await module.exports.obtenerModelosCubeCached();
       // Filtrar por permitidos si se especifica
       const permitidos = (opts && Array.isArray(opts.modelos_permitidos) && opts.modelos_permitidos.length)
         ? opts.modelos_permitidos
@@ -759,183 +612,13 @@ const sugerenciasService = {
         const allowed = new Set(permitidos.map((x)=>parseInt(x)));
         modelos = (modelos || []).filter((m) => allowed.has(parseInt(m.modelo_id)));
       }
-      // (no logging para rendimiento)
-      
-      if (modelos.length === 0) {
+      if (!modelos || modelos.length === 0) {
         console.log('No se encontraron modelos tipo Cube');
         return [];
       }
-      
-  // Calcular sugerencias sumando los contenedores necesarios para cada producto
-  const sugerenciasPorProducto = modelos.map((modelo, index) => {
-        console.log(`Evaluando modelo ${index + 1}/${modelos.length}:`, modelo.nombre_modelo);
-        
-        // Convertir volumen del modelo de litros a metros cúbicos
-        const volumenModeloM3 = modelo.volumen_litros / 1000;
-        console.log(`Modelo ${modelo.nombre_modelo}: ${volumenModeloM3.toFixed(6)} m³`);
-        
-        let totalContenedoresNecesarios = 0;
-        let totalVolumenUtilizado = 0;
-        let algunProductoNoCabe = false;
-        let detalleContenedoresPorProducto = []; // Agregar array para detalles
-        
-        // Para cada tipo de producto en la orden, calcular contenedores individualmente
-        for (const item of inventarioItems) {
-          const cantidadProducto = parseInt(item.cantidad_despachada) || 0;
-          const volumenTotalProducto = parseFloat(item.volumen_total_m3_producto) || 0;
-          
-          if (cantidadProducto > 0 && volumenTotalProducto > 0) {
-            // Calcular volumen unitario IGUAL que en el cálculo individual
-            const volumenUnitarioProducto = volumenTotalProducto / cantidadProducto;
-            
-            // Dimensiones del producto individual en mm (IGUAL que en el individual)
-            const productoFrente = parseInt(item.largo_mm);
-            const productoAncho = parseInt(item.ancho_mm);
-            const productoAlto = parseInt(item.alto_mm);
-            
-            console.log(`Producto ${item.producto}: ${cantidadProducto} unidades`);
-            console.log(`Dimensiones: ${productoFrente}×${productoAncho}×${productoAlto} mm`);
-            console.log(`Volumen unitario: ${volumenUnitarioProducto.toFixed(9)} m³`);
-            console.log(`Volumen total: ${volumenTotalProducto.toFixed(6)} m³`);
-            
-            // Verificar si el producto cabe físicamente en el contenedor (IGUAL que en el individual)
-            const cabeEnContenedor = (
-              productoFrente <= modelo.dim_int_frente &&
-              productoAncho <= modelo.dim_int_profundo &&
-              productoAlto <= modelo.dim_int_alto
-            );
-            
-            if (!cabeEnContenedor) {
-              console.log(`Producto ${item.producto} no cabe en ${modelo.nombre_modelo} (${productoFrente}×${productoAncho}×${productoAlto} > ${modelo.dim_int_frente}×${modelo.dim_int_profundo}×${modelo.dim_int_alto})`);
-              algunProductoNoCabe = true;
-              break;
-            }
-            
-            // Verificar si las dimensiones son exactamente iguales (IGUAL que en el individual)
-            const dimensionesExactas = (
-              productoFrente === modelo.dim_int_frente &&
-              productoAncho === modelo.dim_int_profundo &&
-              productoAlto === modelo.dim_int_alto
-            );
-            
-            let contenedoresParaEsteProducto;
-            let tipoAjuste;
-            
-            if (dimensionesExactas) {
-              // Caso perfecto: 1 producto = 1 contenedor (IGUAL que en el individual)
-              contenedoresParaEsteProducto = cantidadProducto;
-              tipoAjuste = "perfecto";
-              console.log(`Ajuste perfecto - ${cantidadProducto} contenedores necesarios (1 producto = 1 contenedor)`);
-            } else {
-              // Calcular por volumen (IGUAL que en el individual)
-              const productosPorContenedor = volumenModeloM3 / volumenUnitarioProducto;
-              
-              // Si no cabe ni un producto por volumen (IGUAL que en el individual)
-              if (productosPorContenedor < 1) {
-                console.log(`Producto ${item.producto} demasiado grande para ${modelo.nombre_modelo} (volumen: ${volumenUnitarioProducto.toFixed(6)} > ${volumenModeloM3.toFixed(6)})`);
-                algunProductoNoCabe = true;
-                break;
-              }
-              
-              // Calcular contenedores necesarios (IGUAL que en el individual)
-              contenedoresParaEsteProducto = Math.ceil(cantidadProducto / productosPorContenedor);
-              tipoAjuste = "volumetrico";
-              console.log(`${productosPorContenedor.toFixed(2)} productos por contenedor, ${contenedoresParaEsteProducto} contenedores necesarios`);
-            }
-            
-            // Registrar detalle de este producto
-            detalleContenedoresPorProducto.push({
-              inv_id: item.inv_id,
-              producto: item.producto,
-              descripcion_producto: item.descripcion_producto,
-              cantidad_productos: cantidadProducto,
-              contenedores_necesarios: contenedoresParaEsteProducto,
-              tipo_ajuste: tipoAjuste,
-              volumen_unitario: volumenUnitarioProducto,
-              volumen_total_producto: volumenTotalProducto
-            });
-            
-            // Sumar al total
-            totalContenedoresNecesarios += contenedoresParaEsteProducto;
-            totalVolumenUtilizado += volumenTotalProducto;
-          }
-        }
-        
-        if (algunProductoNoCabe) {
-          return null;
-        }
-        
-        const modelosNecesarios = totalContenedoresNecesarios;
-        const volumenTotalRequeridoM3 = totalVolumenUtilizado;
-        
-        console.log(`TOTAL para ${modelo.nombre_modelo}: ${modelosNecesarios} contenedores para toda la orden`);
-        
-        // Calcular volumen total disponible con estos contenedores
-        const volumenTotalDisponible = modelosNecesarios * volumenModeloM3;
-        
-        // Calcular eficiencia
-        let eficiencia = (volumenTotalRequeridoM3 / volumenTotalDisponible) * 100;
-        eficiencia = Math.max(0, Math.min(100, eficiencia));
-        
-        console.log(`Modelo ${modelo.nombre_modelo}: ${modelosNecesarios} contenedores, ${eficiencia.toFixed(1)}% eficiencia`);
-        
-        // Calcular espacio sobrante
-        const espacioSobrante = volumenTotalDisponible - volumenTotalRequeridoM3;
-        const porcentajeEspacio = (espacioSobrante / volumenTotalRequeridoM3) * 100;
-        
-        // Usar la misma lógica de recomendación que el cálculo individual
-        let mensajeComparacion;
-        let recomendacion = "";
-        
-        if (eficiencia >= 95) {
-          mensajeComparacion = `✅ Aprovechamiento excelente del espacio`;
-          recomendacion = "MUY RECOMENDADO - Mínimo desperdicio";
-        } else if (eficiencia >= 85) {
-          mensajeComparacion = `✅ Buen aprovechamiento del volumen`;
-          recomendacion = "RECOMENDADO - Poco espacio desperdiciado";
-        } else if (eficiencia >= 70) {
-          mensajeComparacion = `📦 Aprovechamiento moderado`;
-          recomendacion = "ACEPTABLE - Espacio moderadamente desperdiciado";
-        } else if (eficiencia >= 50) {
-          mensajeComparacion = `⚠️ Mucho espacio sobrante`;
-          recomendacion = "NO RECOMENDADO - Mucho desperdicio";
-        } else {
-          mensajeComparacion = `❌ Contenedor muy grande para esta orden`;
-          recomendacion = "EVITAR - Excesivo desperdicio de espacio";
-        }
-        
-        return {
-          modelo_id: modelo.modelo_id,
-          nombre_modelo: modelo.nombre_modelo,
-          volumen_litros: modelo.volumen_litros,
-          cantidad_sugerida: modelosNecesarios,
-          total_productos_transportados: cantidadTotalProductos,
-          volumen_total_productos: volumenTotalRequeridoM3,
-          volumen_total_contenedores: volumenTotalDisponible,
-          espacio_sobrante_m3: espacioSobrante,
-          porcentaje_espacio_sobrante: Math.round(porcentajeEspacio * 10) / 10,
-          eficiencia: Math.round(eficiencia * 10) / 10,
-          mensaje_comparacion: mensajeComparacion,
-          recomendacion: recomendacion,
-          nivel_recomendacion: eficiencia >= 95 ? 'EXCELENTE' : 
-                             eficiencia >= 85 ? 'BUENO' : 
-                             eficiencia >= 70 ? 'ACEPTABLE' : 
-                             eficiencia >= 50 ? 'MALO' : 'EVITAR',
-          dimensiones_internas: {
-            frente: modelo.dim_int_frente,
-            profundo: modelo.dim_int_profundo,
-            alto: modelo.dim_int_alto
-          },
-          orden_despacho: orden_despacho,
-          resumen_productos: resumenProductos,
-          detalle_contenedores_por_producto: detalleContenedoresPorProducto, // NUEVO: información detallada
-          es_calculo_por_orden: true
-        };
-      }).filter(sugerencia => sugerencia !== null);
 
-      // Alternativa: calcular por volumen total de la orden (una sola vez por modelo) para minimizar el redondeo acumulado
-      const sugerenciasPorVolumenTotal = modelos.map((modelo, index) => {
-        const volumenModeloM3 = (modelo.volumen_litros || 0) / 1000;
+      const sugerenciasPorVolumenTotal = modelos.map((modelo) => {
+        const volumenModeloM3 = capacityFromDims(modelo).cap_m3;
         if (!volumenModeloM3) return null;
         // Validar que TODOS los productos caben por dimensiones en este modelo
         const todosCaben = inventarioItems.every(item => (
@@ -1012,30 +695,16 @@ const sugerenciasService = {
           es_calculo_por_orden: true
         };
       }).filter(sugerencia => sugerencia !== null);
+      const sugerencias = sugerenciasPorVolumenTotal;
 
-      // Fusionar por modelo: quedarnos con la variante de mayor eficiencia; empates -> menos contenedores -> menor volumen
-      const porModelo = new Map();
-      [...sugerenciasPorProducto, ...sugerenciasPorVolumenTotal].forEach(s => {
-        const key = s.modelo_id;
-        const prev = porModelo.get(key);
-        if (!prev) porModelo.set(key, s);
-        else {
-          const d = (s.eficiencia || 0) - (prev.eficiencia || 0);
-          if (d > 0) porModelo.set(key, s);
-          else if (d === 0) {
-            if ((s.cantidad_sugerida || 0) < (prev.cantidad_sugerida || 0)) porModelo.set(key, s);
-            else if ((s.cantidad_sugerida || 0) === (prev.cantidad_sugerida || 0) && (s.volumen_total_contenedores || 0) < (prev.volumen_total_contenedores || 0)) porModelo.set(key, s);
-          }
-        }
-      });
-
-      const sugerencias = Array.from(porModelo.values());
-      
-  // Ordenar por eficiencia (mayor a menor); empates -> menos contenedores -> menor volumen total
-  sugerencias.sort((a, b) => {
-        const d = (b.eficiencia || 0) - (a.eficiencia || 0);
-        if (d !== 0) return d;
-        if ((a.cantidad_sugerida || 0) !== (b.cantidad_sugerida || 0)) return (a.cantidad_sugerida || 0) - (b.cantidad_sugerida || 0);
+      // Prioridad: 1) Menor cantidad de cajas 2) Mayor eficiencia 3) Menor volumen total
+      sugerencias.sort((a, b) => {
+        const ca = a.cantidad_sugerida || 0;
+        const cb = b.cantidad_sugerida || 0;
+        if (ca !== cb) return ca - cb;
+        const ea = a.eficiencia || 0;
+        const eb = b.eficiencia || 0;
+        if (ea !== eb) return eb - ea;
         return (a.volumen_total_contenedores || 0) - (b.volumen_total_contenedores || 0);
       });
       
@@ -1058,16 +727,15 @@ const sugerenciasService = {
       
   // Se deshabilitan combinaciones de modelos: solo recomendaciones de un solo modelo por solicitud
 
-      // Calcular porcentaje de recomendación normalizado (top = 100) con desempate por menos contenedores
+      // Calcular porcentaje de recomendación dando más peso a menos cajas (70%) y eficiencia (30%)
       if (sugerencias.length > 0) {
         const maxEff = Math.max(...sugerencias.map(s => (s.eficiencia || 0)));
-        const conts = sugerencias.map(s => s.cantidad_sugerida || 0).filter(n => n > 0);
-        const minCont = conts.length ? Math.min(...conts) : 1;
+        const minCont = Math.min(...sugerencias.map(s => s.cantidad_sugerida || Infinity));
         const composites = sugerencias.map(s => {
           const effNorm = maxEff > 0 ? (s.eficiencia || 0) / maxEff : 0;
-          const cont = s.cantidad_sugerida || minCont;
-          const contFactor = cont > 0 ? Math.min(1, minCont / cont) : 1; // 1 para el mínimo
-          return 0.9 * effNorm + 0.1 * contFactor;
+          const cont = s.cantidad_sugerida || minCont || 1;
+          const contFactor = cont > 0 ? Math.min(1, (minCont || 1) / cont) : 1; // 1 para el mínimo
+          return 0.3 * effNorm + 0.7 * contFactor;
         });
         const maxComp = Math.max(...composites);
         sugerencias.forEach((s, i) => {
@@ -1125,7 +793,7 @@ const sugerenciasService = {
         console.log(`Evaluando modelo ${index + 1}/${modelos.length}:`, modelo.nombre_modelo);
         
         // Convertir volumen del modelo de litros a metros cúbicos
-        const volumenModeloM3 = modelo.volumen_litros / 1000;
+        const volumenModeloM3 = capacityFromDims(modelo).cap_m3;
         console.log(`Modelo ${modelo.nombre_modelo}: ${volumenModeloM3.toFixed(6)} m³`);
         
         // Para órdenes de despacho, calculamos basándonos solo en volumen total
@@ -1167,7 +835,7 @@ const sugerenciasService = {
         return {
           modelo_id: modelo.modelo_id,
           nombre_modelo: modelo.nombre_modelo,
-          volumen_modelo_m3: volumenModeloM3,
+          volumen_litros: modelo.volumen_litros,
           cantidad_sugerida: modelosNecesarios,
           total_productos_transportados: cantidadProductos,
           volumen_total_productos: volumenTotalRequeridoM3,
@@ -1175,18 +843,30 @@ const sugerenciasService = {
           eficiencia_porcentaje: eficiencia,
           espacio_sobrante_m3: espacioSobrante,
           mensaje_comparacion: mensajeComparacion,
-          recomendacion_nivel: recomendacion,
+          recomendacion: recomendacion,
+          nivel_recomendacion: eficiencia >= 95 ? 'EXCELENTE' : 
+                             eficiencia >= 85 ? 'BUENO' : 
+                             eficiencia >= 70 ? 'ACEPTABLE' : 
+                             eficiencia >= 50 ? 'MALO' : 'EVITAR',
+          dimensiones_internas: {
+            frente: modelo.dim_int_frente,
+            profundo: modelo.dim_int_profundo,
+            alto: modelo.dim_int_alto
+          },
           orden_despacho: orden_despacho,
           resumen_productos: resumenProductos,
           es_calculo_por_orden: true
         };
       }).filter(sugerencia => sugerencia !== null);
       
-  // Ordenar por eficiencia (mayor a menor) para mostrar las mejores opciones primero; empates -> menos contenedores -> menor volumen total
-  sugerencias.sort((a, b) => {
-        const d = (b.eficiencia_porcentaje || 0) - (a.eficiencia_porcentaje || 0);
-        if (d !== 0) return d;
-        if ((a.cantidad_sugerida || 0) !== (b.cantidad_sugerida || 0)) return (a.cantidad_sugerida || 0) - (b.cantidad_sugerida || 0);
+      // Prioridad: 1) Menor cantidad de cajas 2) Mayor eficiencia 3) Menor volumen total
+      sugerencias.sort((a, b) => {
+        const ca = a.cantidad_sugerida || 0;
+        const cb = b.cantidad_sugerida || 0;
+        if (ca !== cb) return ca - cb;
+        const ea = a.eficiencia_porcentaje || 0;
+        const eb = b.eficiencia_porcentaje || 0;
+        if (ea !== eb) return eb - ea;
         return (a.volumen_total_disponible || 0) - (b.volumen_total_disponible || 0);
       });
       
@@ -1206,15 +886,14 @@ const sugerenciasService = {
           sugerencias[0].etiqueta_recomendacion = undefined;
         }
 
-        // Recomposición con desempate por menos contenedores
+        // Recomposición ponderando más la menor cantidad de cajas (70%) que la eficiencia (30%)
         const maxEff = Math.max(...sugerencias.map(s => (s.eficiencia_porcentaje || 0)));
-        const conts = sugerencias.map(s => s.cantidad_sugerida || 0).filter(n => n > 0);
-        const minCont = conts.length ? Math.min(...conts) : 1;
+        const minCont = Math.min(...sugerencias.map(s => s.cantidad_sugerida || Infinity));
         const composites = sugerencias.map(s => {
           const effNorm = maxEff > 0 ? (s.eficiencia_porcentaje || 0) / maxEff : 0;
-          const cont = s.cantidad_sugerida || minCont;
-          const contFactor = cont > 0 ? Math.min(1, minCont / cont) : 1;
-          return 0.9 * effNorm + 0.1 * contFactor;
+          const cont = s.cantidad_sugerida || minCont || 1;
+          const contFactor = cont > 0 ? Math.min(1, (minCont || 1) / cont) : 1;
+          return 0.3 * effNorm + 0.7 * contFactor;
         });
         const maxComp = Math.max(...composites);
         sugerencias.forEach((s, i) => {
@@ -1316,7 +995,7 @@ const sugerenciasService = {
         }
         
         // Convertir volumen del modelo de litros a metros cúbicos
-        const volumenModeloM3 = modelo.volumen_litros / 1000;
+        const volumenModeloM3 = capacityFromDims(modelo).cap_m3;
         console.log(`Modelo ${modelo.nombre_modelo}: ${volumenModeloM3.toFixed(6)} m³`);
         
         // Verificar si el producto cabe físicamente en el contenedor
@@ -1454,24 +1133,17 @@ const sugerenciasService = {
       console.log(`Sugerencias generadas: ${sugerencias.length}`);
       console.log('Primeras 2 sugerencias:', sugerencias.slice(0, 2));
       
-      // Ordenar por mejor recomendación (PRIORIZAR EFICIENCIA)
+      // Ordenar priorizando: 1) Menos cajas 2) Mayor eficiencia 3) Ajuste perfecto 4) Menor volumen total
       const sugerenciasOrdenadas = sugerencias.sort((a, b) => {
-        // Prioridad 1: EFICIENCIA (mayor eficiencia = mejor)
-        if (a.eficiencia !== b.eficiencia) {
-          return b.eficiencia - a.eficiencia;
-        }
-        
-        // Prioridad 2: Si tienen la misma eficiencia, preferir ajuste perfecto dimensional
+        const ca = a.cantidad_sugerida || 0;
+        const cb = b.cantidad_sugerida || 0;
+        if (ca !== cb) return ca - cb;
+        const ea = a.eficiencia || 0;
+        const eb = b.eficiencia || 0;
+        if (ea !== eb) return eb - ea;
         if (a.es_ajuste_perfecto && !b.es_ajuste_perfecto) return -1;
         if (!a.es_ajuste_perfecto && b.es_ajuste_perfecto) return 1;
-        
-        // Prioridad 3: Menor cantidad de contenedores (más económico)
-        if (a.cantidad_sugerida !== b.cantidad_sugerida) {
-          return a.cantidad_sugerida - b.cantidad_sugerida;
-        }
-        
-        // Prioridad 4: Menor volumen total (contenedores más pequeños)
-        return a.volumen_total_contenedores - b.volumen_total_contenedores;
+        return (a.volumen_total_contenedores || 0) - (b.volumen_total_contenedores || 0);
       });
       
       // Por defecto, marcar mejor single-model solo si cumple umbral
@@ -1488,16 +1160,15 @@ const sugerenciasService = {
       
   // Se deshabilitan combinaciones de modelos en modo individual: solo single-model
 
-      // Calcular porcentaje de recomendación normalizado (top = 100) con desempate por menos contenedores
+      // Calcular porcentaje de recomendación ponderando cajas (70%) y eficiencia (30%)
       if (sugerenciasOrdenadas.length > 0) {
         const maxEff = Math.max(...sugerenciasOrdenadas.map(s => (s.eficiencia || 0)));
-        const conts = sugerenciasOrdenadas.map(s => s.cantidad_sugerida || 0).filter(n => n > 0);
-        const minCont = conts.length ? Math.min(...conts) : 1;
+        const minCont = Math.min(...sugerenciasOrdenadas.map(s => s.cantidad_sugerida || Infinity));
         const composites = sugerenciasOrdenadas.map(s => {
           const effNorm = maxEff > 0 ? (s.eficiencia || 0) / maxEff : 0;
-          const cont = s.cantidad_sugerida || minCont;
-          const contFactor = cont > 0 ? Math.min(1, minCont / cont) : 1;
-          return 0.9 * effNorm + 0.1 * contFactor;
+          const cont = s.cantidad_sugerida || minCont || 1;
+          const contFactor = cont > 0 ? Math.min(1, (minCont || 1) / cont) : 1;
+          return 0.3 * effNorm + 0.7 * contFactor;
         });
         const maxComp = Math.max(...composites);
         sugerenciasOrdenadas.forEach((s, i) => {
@@ -1514,6 +1185,274 @@ const sugerenciasService = {
       console.error('Error en calcularSugerencias:', error);
       throw new Error(`Error al calcular sugerencias: ${error.message}`);
     }
+  },
+
+  // Nueva: mejor combinación por orden minimizando cajas y luego desperdicio (solo modelos que ajustan todas las líneas)
+  calcularMejorCombinacionPorOrden: async ({ cliente_id, orden_despacho, modelos_permitidos } = {}, opts = {}) => {
+    if (!cliente_id) throw new Error('cliente_id es requerido');
+    if (!orden_despacho) throw new Error('orden_despacho es requerido');
+    dlog('== calcularMejorCombinacionPorOrden ==>', { cliente_id, orden_despacho, modelos_permitidos });
+    // Obtener items de la orden
+    const invQuery = `
+      SELECT cantidad_despachada, volumen_total_m3_producto, largo_mm, ancho_mm, alto_mm
+      FROM admin_platform.inventario_prospecto
+      WHERE cliente_id = $1 AND orden_despacho = $2
+    `;
+    const { rows: items } = await pool.query(invQuery, [cliente_id, orden_despacho]);
+    dlog('Items en la orden:', items.length);
+    if (!items.length) return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: 0, eficiencia: 0, sobrante_m3: 0 };
+
+    // Totales y máximos dimensionales
+    let V = 0; // m3 total
+    let maxL = 0, maxA = 0, maxH = 0; // mm
+    let totalUnits = 0;
+    for (const it of items) {
+      const cant = parseInt(it.cantidad_despachada) || 0;
+      const vol = parseFloat(it.volumen_total_m3_producto) || 0;
+      V += vol;
+      totalUnits += cant;
+      maxL = Math.max(maxL, parseFloat(it.largo_mm) || 0);
+      maxA = Math.max(maxA, parseFloat(it.ancho_mm) || 0);
+      maxH = Math.max(maxH, parseFloat(it.alto_mm) || 0);
+    }
+    dlog('Totales de orden:', { volumen_m3: V, max_dim_mm: { frente: maxL, profundo: maxA, alto: maxH } });
+
+    // Modelos
+    let modelos = opts.modelos || await sugerenciasService.obtenerModelosCubeCached();
+    modelos = sugerenciasService._filterModelosPermitidos(modelos, modelos_permitidos);
+    // Filtrar solo los que ajustan todos (por seguridad sin asignación por producto)
+    const fitsAll = (modelos || []).filter(m => {
+      if (!(maxL <= m.dim_int_frente && maxA <= m.dim_int_profundo && maxH <= m.dim_int_alto)) return false;
+      const { cap_m3 } = capacityFromDims(m);
+      return cap_m3 > 0;
+    });
+    dlog('Modelos candidatos que ajustan dimensiones (count):', fitsAll.length);
+    dlog('Candidatos (capacidad interna y dims):', fitsAll.map(m => ({
+      id: m.modelo_id,
+      nombre: m.nombre_modelo,
+      cap_m3: Number(capacityFromDims(m).cap_m3.toFixed(6)),
+      dims: { frente: m.dim_int_frente, profundo: m.dim_int_profundo, alto: m.dim_int_alto }
+    })));
+    if (!fitsAll.length) return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: V, eficiencia: 0, sobrante_m3: 0 };
+
+    // Capacidades en unidades de m3 escaladas (1 unidad = 1e-3 m3). Se derivan EXCLUSIVAMENTE de dimensiones internas.
+    const caps = fitsAll
+      .map(m => {
+        const { cap_m3 } = capacityFromDims(m);
+        const capU = Math.max(0, Math.round(cap_m3 * 1000)); // unidades m3e-3
+        // Log comparativo con campo declarado (solo informativo)
+        if (DEBUG_SUGERENCIAS) {
+          const litrosCampo = parseFloat(m.volumen_litros) || null;
+          dlog('Modelo capacidad (desde dimensiones vs campo declarado):', { id: m.modelo_id, nombre: m.nombre_modelo, cap_u_m3e_3: capU, cap_m3: cap_m3, campo_L: litrosCampo });
+        }
+        return { m, capU, cap_m3 };
+      })
+      .filter(c => c.capU > 0)
+      .sort((a,b) => a.capU - b.capU); // ascendente
+
+    // Helper: máxima cantidad de unidades (para una sola línea) que caben en una caja del modelo, considerando rotación
+    const unitsPerBoxForDims = (m, l, a, h) => {
+      if (!(m && m.dim_int_frente && m.dim_int_profundo && m.dim_int_alto)) return 0;
+      const dims = [l, a, h];
+      const box = [m.dim_int_frente, m.dim_int_profundo, m.dim_int_alto];
+      // probar 6 permutaciones de la pieza
+      const perms = [
+        [0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]
+      ];
+      let best = 0;
+      for (const p of perms) {
+        const c1 = Math.floor(box[0] / (dims[p[0]] || Infinity));
+        const c2 = Math.floor(box[1] / (dims[p[1]] || Infinity));
+        const c3 = Math.floor(box[2] / (dims[p[2]] || Infinity));
+        const cap = (c1>0 && c2>0 && c3>0) ? (c1*c2*c3) : 0;
+        if (cap > best) best = cap;
+      }
+      return best;
+    };
+
+    // Si la orden tiene una sola línea, intentar caso especial: ¿algún modelo puede llevar TODAS las unidades en 1 caja (packing por dimensiones)?
+    if (items.length === 1) {
+      const it = items[0];
+      const l = parseFloat(it.largo_mm) || 0;
+      const a = parseFloat(it.ancho_mm) || 0;
+      const h = parseFloat(it.alto_mm) || 0;
+      // Fallback: si la cantidad en DB viniera mal (p.ej. 1) pero el volumen total corresponde a varias unidades,
+      // inferimos unidades por volumen geométrico (mm^3 -> m^3)
+      if (totalUnits <= 1 && l > 0 && a > 0 && h > 0 && V > 0) {
+        const unitVolGeomM3 = (l/1000) * (a/1000) * (h/1000);
+        if (unitVolGeomM3 > 0) {
+          const inferred = Math.max(1, Math.round((V / unitVolGeomM3) + 1e-9));
+          if (inferred > totalUnits) {
+            dlog('Ajuste de unidades por geometría (fallback):', { totalUnits_old: totalUnits, inferred, unitVolGeomM3, V });
+            totalUnits = inferred;
+          }
+        }
+      }
+      // filtrar modelos con capacidad unitaria por caja >= totalUnits
+      const isAllAxesMultiple = (m, l, a, h) => {
+        const unit = [l, a, h];
+        const box = [m.dim_int_frente, m.dim_int_profundo, m.dim_int_alto];
+        const perms = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+        const eps = 1e-6;
+        for (const p of perms) {
+          const u0 = unit[p[0]] || 1; const u1 = unit[p[1]] || 1; const u2 = unit[p[2]] || 1;
+          const r1 = box[0] % u0;
+          const r2 = box[1] % u1;
+          const r3 = box[2] % u2;
+          if (Math.abs(r1) < eps && Math.abs(r2) < eps && Math.abs(r3) < eps) return true;
+        }
+        return false;
+      };
+      const singleBoxCandidates = fitsAll
+        .map(x => ({ m: x, upb: unitsPerBoxForDims(x, l, a, h), cap_m3: capacityFromDims(x).cap_m3, allMul: isAllAxesMultiple(x, l, a, h) }))
+        .filter(x => x.upb >= totalUnits)
+        .sort((x,y) => {
+          if (x.allMul !== y.allMul) return y.allMul - x.allMul; // true primero
+          return x.cap_m3 - y.cap_m3; // luego menor capacidad
+        });
+
+      if (singleBoxCandidates.length) {
+        // Log gear: ver top 5 candidatos por upb
+  dlog('Candidatos 1-caja (upb >= unidades):', singleBoxCandidates.slice(0,5).map(c => ({ id: c.m.modelo_id, nombre: c.m.nombre_modelo, cap_m3: Number(c.cap_m3.toFixed(6)), upb: c.upb, exact_multiples: c.allMul })));
+        const chosen = singleBoxCandidates[0].m;
+        const capacidad_m3 = capacityFromDims(chosen).cap_m3;
+        const sobrante_m3 = Math.max(0, capacidad_m3 - V);
+        const eficiencia = capacidad_m3 > 0 ? (V / capacidad_m3) * 100 : 0;
+        dlog('Caso especial: 1 caja puede llevar todas las unidades. Elegido:', {
+          modelo_id: chosen.modelo_id, nombre: chosen.nombre_modelo, cap_m3: capacidad_m3
+        });
+        return {
+          orden_despacho,
+          cajas_minimas: 1,
+          combinacion: [{ modelo_id: chosen.modelo_id, nombre_modelo: chosen.nombre_modelo, volumen_modelo_m3: capacityFromDims(chosen).cap_m3, cantidad: 1 }],
+          volumen_total_m3: V,
+          capacidad_total_m3: capacidad_m3,
+          eficiencia: Math.round(eficiencia * 10) / 10,
+          sobrante_m3: Math.round(sobrante_m3 * 1000) / 1000,
+          modelos_considerados: caps.length
+        };
+      }
+    }
+
+    // Para generalizar factibilidad por unidades en ordenes con múltiples líneas, usamos una cota conservadora:
+    // asumimos que cada unidad tiene el tamaño de la mayor pieza (maxL,maxA,maxH) para calcular upb por modelo.
+    const upbByModelId = new Map();
+    for (const x of fitsAll) {
+      upbByModelId.set(x.modelo_id, unitsPerBoxForDims(x, maxL, maxA, maxH));
+    }
+
+  const V_units = Math.round((V * 1000) - 1e-9); // volumen objetivo en unidades (1u = 1e-3 m3)
+  const ceil_units = Math.max(0, V_units); // entero mínimo de unidades a cubrir
+  const maxCapU = caps[caps.length - 1].capU;
+  const M = Math.max(ceil_units + maxCapU * 10, ceil_units + 1); // margen de búsqueda
+  dlog('Objetivo (m3 escalado a 1e-3):', { V_units: V_units, ceil_units, maxCapU, M });
+
+    const INF = 1e9;
+    const dp = new Array(M + 1).fill(INF); // dp[s] = mínima cantidad de cajas para sumar exactamente s unidades m3_e-3
+    const prev = new Array(M + 1).fill(-1); // índice de modelo elegido para llegar a s
+    dp[0] = 0;
+    for (let s = 1; s <= M; s++) {
+      for (let i = 0; i < caps.length; i++) {
+        const cap = caps[i].capU;
+        if (s - cap >= 0 && dp[s - cap] + 1 < dp[s]) {
+          dp[s] = dp[s - cap] + 1;
+          prev[s] = i;
+        }
+      }
+    }
+
+    // Buscar la mejor combinación evaluando TODAS las sumas alcanzables (s = 0..M)
+    // Criterios: (1) capacidad_precisa_m3 - V mínima, (2) dp[s] mínima, (3) capacidad_precisa_m3 mínima
+    let best = null;
+    for (let s = 0; s <= M; s++) {
+      if (dp[s] >= INF) continue;
+      // reconstruir combinación
+      const counts = new Map();
+      let cur = s;
+      while (cur > 0 && prev[cur] !== -1) {
+        const idx = prev[cur];
+        const id = caps[idx].m.modelo_id;
+        counts.set(id, (counts.get(id) || 0) + 1);
+  cur -= caps[idx].capU;
+      }
+      // capacidad total (precisa) y capacidad unitaria
+      let preciseCapM3 = 0;
+      let unitCapacity = 0;
+      for (const [id, c] of counts.entries()) {
+        const model = caps.find(x => x.m.modelo_id === id).m;
+        preciseCapM3 += capacityFromDims(model).cap_m3 * c;
+        unitCapacity += (upbByModelId.get(id) || 0) * c;
+      }
+      if (preciseCapM3 >= V && unitCapacity >= totalUnits) {
+        const over = preciseCapM3 - V;
+        const candidate = { s, counts, boxes: dp[s], preciseCapM3, over };
+        if (!best) best = candidate;
+        else if (over < best.over - 1e-12) best = candidate;
+        else if (Math.abs(over - best.over) <= 1e-12 && dp[s] < best.boxes) best = candidate;
+        else if (Math.abs(over - best.over) <= 1e-12 && dp[s] === best.boxes && preciseCapM3 < best.preciseCapM3) best = candidate;
+      } else {
+        // útil para entender por qué no pasa con s inferiores a ceilV
+        dlog('Descartada combinación por capacidad (precisa/unidades) insuficiente:', {
+          unidades_s: s, cajas: dp[s], preciseCapM3, unitCapacity, totalUnits
+        });
+      }
+    }
+    if (!best) {
+      // Fallback: una caja del mayor
+      const capacidad_m3 = capacityFromDims(caps[caps.length-1].m).cap_m3;
+      const sobrante_m3 = Math.max(0, capacidad_m3 - V);
+      const eficiencia = capacidad_m3 > 0 ? (V / capacidad_m3) * 100 : 0;
+      dlog('DP no pudo cubrir objetivo, fallback a 1 caja del mayor:', { capacidad_m3, eficiencia, sobrante_m3 });
+      return {
+        orden_despacho,
+        cajas_minimas: 1,
+  combinacion: [{ modelo_id: caps[caps.length-1].m.modelo_id, nombre_modelo: caps[caps.length-1].m.nombre_modelo, volumen_modelo_m3: capacidad_m3, cantidad: 1 }],
+        volumen_total_m3: V,
+        capacidad_total_m3: capacidad_m3,
+        eficiencia: Math.round(eficiencia * 10) / 10,
+        sobrante_m3: Math.round(sobrante_m3 * 1000) / 1000,
+        modelos_considerados: caps.length
+      };
+    }
+
+    // Reconstrucción de la combinación
+    const counts = best.counts;
+    const combinacion = Array.from(counts.entries()).map(([modelo_id, cantidad]) => {
+      const mm = caps.find(x => x.m.modelo_id === modelo_id).m;
+      const capDims = capacityFromDims(mm).cap_m3;
+      return {
+        modelo_id,
+        nombre_modelo: mm.nombre_modelo,
+        volumen_modelo_m3: capDims,
+        cantidad
+      };
+    }).sort((a,b) => ((b.volumen_modelo_m3||0) - (a.volumen_modelo_m3||0)));
+
+    const capacidad_m3 = best.preciseCapM3;
+    const sobrante_m3 = Math.max(0, capacidad_m3 - V);
+    const eficiencia = capacidad_m3 > 0 ? (V / capacidad_m3) * 100 : 0;
+    dlog('Resultado combinación por orden:', {
+      orden_despacho,
+      objetivo_unidades_m3e_3: ceil_units,
+      capacidad_unidades_m3e_3: best.s,
+      cajas_minimas: best.boxes,
+      capacidad_m3,
+      volumen_total_m3: V,
+      sobrante_m3,
+      eficiencia: Math.round(eficiencia * 10) / 10,
+      combinacion: combinacion.map(c => ({ modelo_id: c.modelo_id, nombre_modelo: c.nombre_modelo, cantidad: c.cantidad, modelo_L: Math.round((c.volumen_modelo_m3||0)*1000) }))
+    });
+
+    return {
+      orden_despacho,
+      cajas_minimas: best.boxes,
+      combinacion,
+      volumen_total_m3: V,
+      capacidad_total_m3: capacidad_m3,
+      eficiencia: Math.round(eficiencia * 10) / 10,
+      sobrante_m3: Math.round(sobrante_m3 * 1000) / 1000,
+      modelos_considerados: caps.length
+    };
   },
 
   // Eliminar una sugerencia
@@ -1570,113 +1509,104 @@ const sugerenciasService = {
       const modelos = await module.exports.obtenerModelosCubeCached();
       if (!Array.isArray(modelos) || modelos.length === 0) throw new Error('No hay modelos tipo Cube');
 
-      // Trabajaremos en litros para evitar flotantes (1 m3 = 1000 litros)
-      const volumenObjetivoLitros = volumenTotalM3 * 1000;
+      // Trabajar en m3 y en unidades escaladas (1u = 1e-3 m3)
+      const V_units = Math.round(volumenTotalM3 * 1000);
       const modelosOrdenados = modelos
-        .map(m => ({
-          modelo_id: m.modelo_id,
-          nombre_modelo: m.nombre_modelo,
-          volumen_litros: parseFloat(m.volumen_litros),
-          volumen_m3: parseFloat(m.volumen_litros) / 1000
-        }))
-        .filter(m => m.volumen_litros > 0)
-        .sort((a,b) => b.volumen_litros - a.volumen_litros); // descendente
+        .map(m => {
+          const cap_m3 = capacityFromDims(m).cap_m3;
+          const capU = Math.max(0, Math.round(cap_m3 * 1000));
+          return { modelo_id: m.modelo_id, nombre_modelo: m.nombre_modelo, cap_m3, capU };
+        })
+        .filter(x => x.capU > 0)
+        .sort((a,b) => b.capU - a.capU); // descendente por capacidad real
 
-      // Greedy simple descendente
-      let restante = volumenObjetivoLitros;
+      // Greedy simple descendente en unidades
+      let restante = V_units;
       const uso = [];
       for (const mod of modelosOrdenados) {
         if (restante <= 0) break;
-        const capacidad = mod.volumen_litros;
-        // Cantidad máxima sin exceder demasiado (permitimos que quede un restante que cubrirá modelos menores)
-        const cant = Math.floor(restante / capacidad);
+        const cant = Math.floor(restante / mod.capU);
         if (cant > 0) {
           uso.push({ ...mod, cantidad: cant });
-          restante -= cant * capacidad;
+          restante -= cant * mod.capU;
         }
       }
-      // Si queda volumen restante, usamos el modelo más pequeño que exista para cerrarlo
+      // Si queda restante, usar el modelo más pequeño para cerrar
       if (restante > 0) {
-        const menores = [...modelosOrdenados].sort((a,b) => a.volumen_litros - b.volumen_litros);
+        const menores = [...modelosOrdenados].sort((a,b) => a.capU - b.capU);
         const masPequenio = menores[0];
         if (masPequenio) {
           uso.push({ ...masPequenio, cantidad: 1 });
-          restante -= masPequenio.volumen_litros; // puede quedar negativo indicando sobrecapacidad
+          restante -= masPequenio.capU; // puede quedar negativo → sobrecapacidad
         }
       }
 
-      // Ajuste: intentar reducir desperdicio reemplazando 1 unidad grande por varias pequeñas si mejora
-      // (búsqueda local limitada)
-      function capacidadTotalLitros(arr){ return arr.reduce((s,x)=> s + x.cantidad * x.volumen_litros, 0); }
-      function clonar(arr){ return arr.map(x => ({...x})); }
-      const capacidadInicial = capacidadTotalLitros(uso);
+      // Ajuste local: reemplazar 1 grande por varios menores si reduce sobrecapacidad
+      const capacidadTotalU = (arr) => arr.reduce((s,x)=> s + x.cantidad * x.capU, 0);
+      const clonar = (arr) => arr.map(x => ({...x}));
+      const capacidadInicialU = capacidadTotalU(uso);
       let mejor = clonar(uso);
-      let mejorDesperdicio = capacidadInicial - volumenObjetivoLitros; // puede ser negativo pero normalmente >=0
-      if (mejorDesperdicio < 0) mejorDesperdicio = 0; // no consideramos déficit
+      let mejorDesperdicioU = Math.max(0, capacidadInicialU - V_units);
 
-      const menoresAsc = [...modelosOrdenados].sort((a,b)=> a.volumen_litros - b.volumen_litros);
+      const menoresAsc = [...modelosOrdenados].sort((a,b)=> a.capU - b.capU);
       for (let i = 0; i < uso.length; i++) {
         const u = uso[i];
         if (u.cantidad <= 0) continue;
-        // Intentar quitar 1 de este modelo y rellenar con hasta X (8) modelos menores
-        const capacidadSinUno = capacidadTotalLitros(uso) - u.volumen_litros;
-        const deficit = volumenObjetivoLitros - capacidadSinUno; // litros que hay que recuperar (>=0)
-        if (deficit <= 0) {
-          // Ya cubriríamos el volumen; desperdicio mejor?
-          const desperdicioAlt = capacidadSinUno - volumenObjetivoLitros;
-          if (desperdicioAlt >=0 && desperdicioAlt < mejorDesperdicio) {
+        const capacidadSinUnoU = capacidadTotalU(uso) - u.capU;
+        const deficitU = V_units - capacidadSinUnoU; // >= 0 si falta cubrir
+        if (deficitU <= 0) {
+          const desperdicioAltU = Math.max(0, capacidadSinUnoU - V_units);
+          if (desperdicioAltU < mejorDesperdicioU) {
             const variante = clonar(uso);
             variante[i].cantidad -= 1;
             mejor = variante.filter(x=> x.cantidad>0);
-            mejorDesperdicio = desperdicioAlt;
+            mejorDesperdicioU = desperdicioAltU;
           }
           continue;
         }
-        // Necesitamos sumar >= deficit con modelos menores (simple greedy ascendente)
-        let acumulado = 0;
+        // Greedy ascendente con menores estrictos
+        let acumuladoU = 0;
         const añadidos = [];
         for (const mMenor of menoresAsc) {
-          if (mMenor.volumen_litros >= u.volumen_litros) continue; // solo menores estrictos
-          const cantNecesaria = Math.ceil((deficit - acumulado) / mMenor.volumen_litros);
+          if (mMenor.capU >= u.capU) continue;
+          const cantNecesaria = Math.ceil((deficitU - acumuladoU) / mMenor.capU);
           if (cantNecesaria <= 0) break;
-          // limitamos a 8 para evitar explosión
           const cantUsar = Math.min(cantNecesaria, 8);
           añadidos.push({ ...mMenor, cantidad: cantUsar });
-          acumulado += cantUsar * mMenor.volumen_litros;
-          if (acumulado >= deficit) break;
+          acumuladoU += cantUsar * mMenor.capU;
+          if (acumuladoU >= deficitU) break;
         }
-        if (acumulado >= deficit) {
-          const nuevaCapacidad = capacidadSinUno + acumulado;
-          const desperdicioNuevo = nuevaCapacidad - volumenObjetivoLitros;
-            if (desperdicioNuevo >= 0 && desperdicioNuevo < mejorDesperdicio) {
-              const variante = clonar(uso);
-              variante[i].cantidad -= 1;
-              // merge añadidos
-              for (const add of añadidos) {
-                const idx = variante.findIndex(x => x.modelo_id === add.modelo_id);
-                if (idx >= 0) variante[idx].cantidad += add.cantidad; else variante.push(add);
-              }
-              mejor = variante.filter(x=> x.cantidad>0);
-              mejorDesperdicio = desperdicioNuevo;
+        if (acumuladoU >= deficitU) {
+          const nuevaCapU = capacidadSinUnoU + acumuladoU;
+          const desperdicioNuevoU = Math.max(0, nuevaCapU - V_units);
+          if (desperdicioNuevoU < mejorDesperdicioU) {
+            const variante = clonar(uso);
+            variante[i].cantidad -= 1;
+            for (const add of añadidos) {
+              const idx = variante.findIndex(x => x.modelo_id === add.modelo_id);
+              if (idx >= 0) variante[idx].cantidad += add.cantidad; else variante.push(add);
             }
+            mejor = variante.filter(x=> x.cantidad>0);
+            mejorDesperdicioU = desperdicioNuevoU;
+          }
         }
       }
 
       // Normalizar resultado final
-      const capacidadFinalLitros = capacidadTotalLitros(mejor);
-      const desperdicioFinalLitros = Math.max(0, capacidadFinalLitros - volumenObjetivoLitros);
-      const eficienciaPct = capacidadFinalLitros > 0 ? (volumenObjetivoLitros / capacidadFinalLitros) * 100 : 0;
+      const capacidadFinalU = capacidadTotalU(mejor);
+      const desperdicioFinalU = Math.max(0, capacidadFinalU - V_units);
+      const eficienciaPct = capacidadFinalU > 0 ? (V_units / capacidadFinalU) * 100 : 0;
 
       const distribucion = mejor
         .map(x => ({
           modelo_id: x.modelo_id,
           nombre_modelo: x.nombre_modelo,
-          volumen_litros: x.volumen_litros,
-          volumen_modelo_m3: x.volumen_m3,
+          volumen_modelo_m3: x.cap_m3,
+          cap_u_m3e_3: x.capU,
           cantidad: x.cantidad,
-          volumen_total_m3: (x.cantidad * x.volumen_litros) / 1000
+          volumen_total_m3: x.cantidad * x.cap_m3
         }))
-        .sort((a,b) => b.volumen_litros - a.volumen_litros);
+        .sort((a,b) => b.volumen_modelo_m3 - a.volumen_modelo_m3);
 
       return {
         parametros: { cliente_id, startDate, endDate },
@@ -1684,14 +1614,14 @@ const sugerenciasService = {
           total_productos: totalProductos,
           volumen_total_m3: volumenTotalM3,
           modelos_usados: distribucion.length,
-          volumen_total_capacidad_m3: capacidadFinalLitros / 1000,
-          desperdicio_m3: desperdicioFinalLitros / 1000,
+          volumen_total_capacidad_m3: capacidadFinalU / 1000,
+          desperdicio_m3: desperdicioFinalU / 1000,
           eficiencia_pct: Math.round(eficienciaPct * 100) / 100
         },
         distribucion,
         detalle_algoritmo: {
-          estrategia: 'greedy-desc + ajuste local (replace 1 big -> varios menores)',
-          desperdicio_m3: desperdicioFinalLitros / 1000,
+          estrategia: 'greedy-desc (m3) + ajuste local por m3',
+          desperdicio_m3: desperdicioFinalU / 1000,
           tiempo_ms: Date.now() - t0
         }
       };
@@ -1699,6 +1629,29 @@ const sugerenciasService = {
       console.error('Error en calcularDistribucionOptimaRango:', error);
       throw error;
     }
+  },
+
+  // Resumen agregado por rango (totales de órdenes, productos y volumen)
+  calcularSugerenciasPorRangoTotal: async ({ cliente_id, startDate, endDate }) => {
+    if (!cliente_id) throw new Error('cliente_id es requerido');
+    if (!startDate || !endDate) throw new Error('startDate y endDate son requeridos');
+    // Total órdenes únicas
+    const qOrdenes = `SELECT COUNT(DISTINCT orden_despacho)::int AS total_ordenes
+                      FROM admin_platform.inventario_prospecto
+                      WHERE cliente_id = $1 AND fecha_de_despacho::date BETWEEN $2::date AND $3::date`;
+    // Totales productos y volumen
+    const qTotales = `SELECT COALESCE(SUM(cantidad_despachada),0)::bigint AS total_productos,
+                             COALESCE(SUM(volumen_total_m3_producto),0)::float8 AS volumen_total_m3
+                      FROM admin_platform.inventario_prospecto
+                      WHERE cliente_id = $1 AND fecha_de_despacho::date BETWEEN $2::date AND $3::date`;
+    const [{ rows: rOrd }, { rows: rTot }] = await Promise.all([
+      pool.query(qOrdenes, [cliente_id, startDate, endDate]),
+      pool.query(qTotales, [cliente_id, startDate, endDate])
+    ]);
+    const total_ordenes = parseInt(rOrd?.[0]?.total_ordenes || 0);
+    const total_productos = parseInt(rTot?.[0]?.total_productos || 0);
+    const volumen_total_m3 = parseFloat(rTot?.[0]?.volumen_total_m3 || 0);
+    return { resumen: { total_ordenes, total_productos, volumen_total_m3 } };
   },
 
   // NUEVA FUNCIÓN: Recomendación mensual REAL basada en movimientos históricos.

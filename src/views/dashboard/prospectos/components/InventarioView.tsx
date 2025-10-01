@@ -37,7 +37,9 @@ const InventarioView: React.FC = () => {
     canInsert: number,
     unitsUsed?: 'mm' | 'cm',
     unitGuess?: 'mm' | 'cm',
-    unitGuessReason?: string
+    unitGuessReason?: string,
+    emptyFile?: boolean,
+    message?: string
   }>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [isImportingPreview, setIsImportingPreview] = useState(false);
@@ -45,6 +47,20 @@ const InventarioView: React.FC = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12); // default items per page
+
+  // Formateador de números con coma y 2 decimales (para mm)
+  const fmt2 = useMemo(() => new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), []);
+
+  // Parser para inputs que aceptan coma o punto como separador decimal
+  const parseDimInput = (val: string) => {
+    if (val == null) return 0;
+    const s = String(val).trim().replace(',', '.');
+    const n = parseFloat(s);
+    if (!isFinite(n)) return 0;
+    return Math.round(n * 100) / 100; // máx 2 decimales
+  };
+  // Estados de texto para permitir escribir coma o punto libremente en el modal
+  const [dimInputs, setDimInputs] = useState<{ largo: string; ancho: string; alto: string }>({ largo: '', ancho: '', alto: '' });
 
   // Form state
   const [formData, setFormData] = useState<CreateInventarioProspectoData>({
@@ -117,16 +133,29 @@ const InventarioView: React.FC = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (res.data?.error) {
+        // Si backend devolvió error clásico, notifícalo pero deja el modal para reintentar
         toast.error(res.data.error);
-        setShowImportModal(false);
         return;
       }
       setSelectedFileForImport(file);
       setImportPreview(res.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al importar inventario:', error);
-      toast.error('Error al importar inventario');
-      setShowImportModal(false);
+      // Mantén el modal abierto y muestra un aviso más claro
+      const msg = error?.response?.data?.error || error?.response?.data?.message || 'No se pudo procesar el archivo. Verifica que sea un Excel válido o que no esté vacío.';
+      toast.warn(msg);
+      setShowImportModal(true);
+      setImportPreview({
+        preview: [],
+        results: { inserted: 0, skipped: 0, errors: 0, details: [] },
+        totalRows: 0,
+        canInsert: 0,
+        unitsUsed: importUnits,
+        unitGuess: importUnits,
+        unitGuessReason: '',
+        emptyFile: true,
+        message: msg
+      });
     } finally {
       setLoading(false);
       setIsImportingPreview(false);
@@ -198,12 +227,23 @@ const InventarioView: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Garantizar que las dimensiones usen lo último escrito (coma o punto) con 2 decimales
+    const largoParsed = parseDimInput(dimInputs.largo || String(formData.largo_mm));
+    const anchoParsed = parseDimInput(dimInputs.ancho || String(formData.ancho_mm));
+    const altoParsed = parseDimInput(dimInputs.alto || String(formData.alto_mm));
+    const payload: CreateInventarioProspectoData = {
+      ...formData,
+      largo_mm: largoParsed,
+      ancho_mm: anchoParsed,
+      alto_mm: altoParsed,
+      cantidad_despachada: Math.round(Number(formData.cantidad_despachada || 0))
+    };
     
     if (selectedItem) {
       // Editar item existente en la base de datos
       try {
         setLoading(true);
-        const updated = await InventarioProspectoController.updateInventario(selectedItem.inv_id, formData);
+  const updated = await InventarioProspectoController.updateInventario(selectedItem.inv_id, payload);
         if (updated) {
           const cliente = clientes.find((c: any) => c.cliente_id === updated.cliente_id);
           const updatedWithClientName = {
@@ -225,7 +265,7 @@ const InventarioView: React.FC = () => {
       // Editar producto pendiente local
       const cliente = clientes.find((c: any) => c.cliente_id === formData.cliente_id);
       const updatedPendingProduct: PendingProduct = {
-        ...formData,
+        ...payload,
         tempId: selectedPendingItem.tempId,
         nombre_cliente: cliente?.nombre_cliente || 'N/A'
       };
@@ -241,7 +281,7 @@ const InventarioView: React.FC = () => {
       // Agregar nuevo producto a la lista local (pendiente)
       const cliente = clientes.find((c: any) => c.cliente_id === formData.cliente_id);
       const newPendingProduct: PendingProduct = {
-        ...formData,
+        ...payload,
         tempId: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         nombre_cliente: cliente?.nombre_cliente || 'N/A'
       };
@@ -261,6 +301,7 @@ const InventarioView: React.FC = () => {
         fecha_de_despacho: '',
         orden_despacho: ''
       });
+      setDimInputs({ largo: '', ancho: '', alto: '' });
       
       toast.info('¡Puedes agregar otro producto para el mismo cliente!');
     }
@@ -305,6 +346,11 @@ const InventarioView: React.FC = () => {
       fecha_de_despacho: parseYYYYMMDD((item as any).fecha_de_despacho),
       orden_despacho: item.orden_despacho || ''
     });
+    setDimInputs({
+      largo: fmt2.format(Number(item.largo_mm || 0)),
+      ancho: fmt2.format(Number(item.ancho_mm || 0)),
+      alto: fmt2.format(Number(item.alto_mm || 0))
+    });
     setShowModal(true);
   };
 
@@ -321,6 +367,11 @@ const InventarioView: React.FC = () => {
       cantidad_despachada: item.cantidad_despachada,
       fecha_de_despacho: item.fecha_de_despacho || '',
       orden_despacho: item.orden_despacho || ''
+    });
+    setDimInputs({
+      largo: fmt2.format(Number(item.largo_mm || 0)),
+      ancho: fmt2.format(Number(item.ancho_mm || 0)),
+      alto: fmt2.format(Number(item.alto_mm || 0))
     });
     setShowModal(true);
   };
@@ -418,6 +469,7 @@ const InventarioView: React.FC = () => {
       fecha_de_despacho: '',
       orden_despacho: ''
     });
+    setDimInputs({ largo: '', ancho: '', alto: '' });
   };
 
   const openCreateModal = () => {
@@ -609,7 +661,7 @@ const InventarioView: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 dark:text-gray-400 text-sm">Dimensiones:</span>
                       <span className="text-gray-900 dark:text-white text-sm">
-                        {Number(product.largo_mm || 0)} × {Number(product.ancho_mm || 0)} × {Number(product.alto_mm || 0)} mm
+                        {fmt2.format(Number(product.largo_mm || 0))} × {fmt2.format(Number(product.ancho_mm || 0))} × {fmt2.format(Number(product.alto_mm || 0))} mm
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -745,7 +797,7 @@ const InventarioView: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 dark:text-gray-400 text-sm">Dimensiones:</span>
                       <span className="text-gray-900 dark:text-white text-sm">
-                        {Number(item.largo_mm || 0)} × {Number(item.ancho_mm || 0)} × {Number(item.alto_mm || 0)} mm
+                        {fmt2.format(Number(item.largo_mm || 0))} × {fmt2.format(Number(item.ancho_mm || 0))} × {fmt2.format(Number(item.alto_mm || 0))} mm
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -833,7 +885,7 @@ const InventarioView: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900 dark:text-white">
-                        {Number(item.largo_mm || 0)} × {Number(item.ancho_mm || 0)} × {Number(item.alto_mm || 0)} mm
+                        {fmt2.format(Number(item.largo_mm || 0))} × {fmt2.format(Number(item.ancho_mm || 0))} × {fmt2.format(Number(item.alto_mm || 0))} mm
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -974,37 +1026,43 @@ const InventarioView: React.FC = () => {
                   <div>
                     <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Largo</label>
                     <input
-                      type="number"
-                      value={formData.largo_mm}
-                      onChange={(e: any) => setFormData({...formData, largo_mm: parseInt(e.target.value) || 0})}
+                      type="text"
+                      inputMode="decimal"
+                      pattern="^[0-9]+([\.,][0-9]{0,2})?$"
+                      value={dimInputs.largo}
+                      onChange={(e: any) => setDimInputs(d => ({ ...d, largo: e.target.value }))}
+                      onBlur={() => setFormData(fd => ({ ...fd, largo_mm: parseDimInput(dimInputs.largo) }))}
                       className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       required
-                      min="1"
-                      placeholder="0"
+                      placeholder="0,00"
                     />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Ancho</label>
                     <input
-                      type="number"
-                      value={formData.ancho_mm}
-                      onChange={(e: any) => setFormData({...formData, ancho_mm: parseInt(e.target.value) || 0})}
+                      type="text"
+                      inputMode="decimal"
+                      pattern="^[0-9]+([\.,][0-9]{0,2})?$"
+                      value={dimInputs.ancho}
+                      onChange={(e: any) => setDimInputs(d => ({ ...d, ancho: e.target.value }))}
+                      onBlur={() => setFormData(fd => ({ ...fd, ancho_mm: parseDimInput(dimInputs.ancho) }))}
                       className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       required
-                      min="1"
-                      placeholder="0"
+                      placeholder="0,00"
                     />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Alto</label>
                     <input
-                      type="number"
-                      value={formData.alto_mm}
-                      onChange={(e: any) => setFormData({...formData, alto_mm: parseInt(e.target.value) || 0})}
+                      type="text"
+                      inputMode="decimal"
+                      pattern="^[0-9]+([\.,][0-9]{0,2})?$"
+                      value={dimInputs.alto}
+                      onChange={(e: any) => setDimInputs(d => ({ ...d, alto: e.target.value }))}
+                      onBlur={() => setFormData(fd => ({ ...fd, alto_mm: parseDimInput(dimInputs.alto) }))}
                       className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       required
-                      min="1"
-                      placeholder="0"
+                      placeholder="0,00"
                     />
                   </div>
                 </div>
@@ -1120,6 +1178,11 @@ const InventarioView: React.FC = () => {
               <p className="text-gray-700 dark:text-gray-300 mb-4">Procesando archivo…</p>
             ) : (
               <>
+              {importPreview?.emptyFile ? (
+                <p className="text-yellow-800 dark:text-yellow-300 mb-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 px-3 py-2 rounded">
+                  {importPreview?.message || 'La plantilla está vacía. Agrega filas con datos y vuelve a intentar.'}
+                </p>
+              ) : null}
               <p className="text-gray-700 dark:text-gray-300 mb-2">
                 Filas leídas: <span className="font-semibold">{importPreview.totalRows ?? 0}</span> · Listas para insertar: <span className="font-semibold text-green-600 dark:text-green-400">{importPreview.canInsert ?? 0}</span> · Duplicados: <span className="text-yellow-600 dark:text-yellow-400 font-semibold">{importPreview.results?.skipped ?? 0}</span> · Errores: <span className="text-red-600 dark:text-red-400 font-semibold">{importPreview.results?.errors ?? 0}</span>
               </p>
@@ -1160,7 +1223,7 @@ const InventarioView: React.FC = () => {
                           {p.status === 'error' && <span className="text-red-700 dark:text-red-400">Error</span>}
                         </td>
                         <td className="px-3 py-2 text-gray-900 dark:text-gray-200">{p.record?.producto}</td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.record?.largo_mm} × {p.record?.ancho_mm} × {p.record?.alto_mm} mm</td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{fmt2.format(Number(p.record?.largo_mm || 0))} × {fmt2.format(Number(p.record?.ancho_mm || 0))} × {fmt2.format(Number(p.record?.alto_mm || 0))} mm</td>
                         <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.record?.cantidad_despachada}</td>
                         <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.record?.fecha_de_despacho || '-'}</td>
                         <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{p.record?.orden_despacho}</td>

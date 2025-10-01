@@ -1,6 +1,9 @@
 const pool = require('./config/db');
 const format = require('pg-format');
 
+// Helper: redondea a 2 decimales números válidos
+const fix2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+
 const inventarioProspectosService = {
   getAllInventario: async () => {
     try {
@@ -24,8 +27,13 @@ const inventarioProspectosService = {
 
   createInventario: async (data) => {
     try {
-      // Calcular volumen total en m³ (misma fórmula que la calculadora)
-      const volumenTotal = (data.largo_mm * data.ancho_mm * data.alto_mm * data.cantidad_despachada) / 1000000000;
+    // Calcular volumen total en m³ (misma fórmula que la calculadora)
+    // Asegurar hasta 2 decimales en dimensiones para evitar acumulación de ruido
+  const largo = fix2(data.largo_mm);
+  const ancho = fix2(data.ancho_mm);
+  const alto = fix2(data.alto_mm);
+  const cantidad = Math.round(Number(data.cantidad_despachada || 0));
+  const volumenTotal = (largo * ancho * alto * cantidad) / 1000000000;
       
       const query = `
         INSERT INTO admin_platform.inventario_prospecto (
@@ -34,9 +42,9 @@ const inventarioProspectosService = {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, (now() at time zone 'America/Bogota'))
         RETURNING *
       `;
-      const values = [data.cliente_id, data.descripcion_producto, data.producto, 
-                     data.largo_mm, data.ancho_mm, data.alto_mm, 
-                     data.cantidad_despachada, data.fecha_de_despacho, data.orden_despacho, volumenTotal];
+  const values = [data.cliente_id, data.descripcion_producto, data.producto, 
+    largo, ancho, alto, 
+    cantidad, (data.fecha_de_despacho || null), data.orden_despacho, volumenTotal];
       const { rows } = await pool.query(query, values);
       return rows[0];
     } catch (error) {
@@ -47,8 +55,12 @@ const inventarioProspectosService = {
 
   updateInventario: async (id, data) => {
     try {
-      // Calcular volumen total en m³ al actualizar
-      const volumenTotal = (data.largo_mm * data.ancho_mm * data.alto_mm * data.cantidad_despachada) / 1000000000;
+    // Calcular volumen total en m³ al actualizar
+  const largoU = fix2(data.largo_mm);
+  const anchoU = fix2(data.ancho_mm);
+  const altoU = fix2(data.alto_mm);
+  const cantidadU = Math.round(Number(data.cantidad_despachada || 0));
+  const volumenTotal = (largoU * anchoU * altoU * cantidadU) / 1000000000;
       
       const query = `
         UPDATE admin_platform.inventario_prospecto
@@ -57,9 +69,9 @@ const inventarioProspectosService = {
             cantidad_despachada = $7, fecha_de_despacho = $8, orden_despacho = $9, volumen_total_m3_producto = $10
         WHERE inv_id = $11 RETURNING *
       `;
-      const values = [data.cliente_id, data.descripcion_producto, data.producto,
-                     data.largo_mm, data.ancho_mm, data.alto_mm,
-                     data.cantidad_despachada, data.fecha_de_despacho, data.orden_despacho, volumenTotal, id];
+  const values = [data.cliente_id, data.descripcion_producto, data.producto,
+    largoU, anchoU, altoU,
+    cantidadU, (data.fecha_de_despacho || null), data.orden_despacho, volumenTotal, id];
       const { rows } = await pool.query(query, values);
       return rows[0];
     } catch (error) {
@@ -140,9 +152,9 @@ const inventarioProspectosService = {
           (v.cliente_id)::int,
           (v.descripcion_producto)::text,
           (v.producto)::text,
-          (v.largo_mm)::int,
-          (v.ancho_mm)::int,
-          (v.alto_mm)::int,
+          (v.largo_mm)::numeric,
+          (v.ancho_mm)::numeric,
+          (v.alto_mm)::numeric,
           (v.cantidad_despachada)::int,
           NULLIF(v.fecha_de_despacho, '')::date,
           (v.orden_despacho)::text,

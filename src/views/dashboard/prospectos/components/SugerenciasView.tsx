@@ -35,10 +35,8 @@ const SugerenciasView: React.FC = () => {
   const [resumenLoading, setResumenLoading] = useState(false);
   const [resumenError, setResumenError] = useState<string | null>(null);
   const [calculando, setCalculando] = useState(false);
-  // Resultado: recomendación mensual real (agregada por modelo)
-  const [recomendacion, setRecomendacion] = useState<any|null>(null);
-  // Guardado
-  const [guardando, setGuardando] = useState(false);
+  // Resultado agregado: combinación mínima por orden (rango)
+  const [mixAgg, setMixAgg] = useState<any|null>(null);
   // Días
   const [diasActivos, setDiasActivos] = useState<number | null>(null);
   const [diasRango, setDiasRango] = useState<number | null>(null);
@@ -115,34 +113,17 @@ const SugerenciasView: React.FC = () => {
   const calcular = async () => {
     if (!clienteId || !startDate || !endDate) { alert('Complete cliente y fechas'); return; }
     setCalculando(true);
-    setRecomendacion(null);
+    setMixAgg(null);
     try {
       const payload = { cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos };
-      const [rOrden, rReco] = await Promise.all([
-        apiClient.post('/sugerencias/calcular-por-rango-orden-a-orden', payload),
-        apiClient.post('/sugerencias/recomendacion-mensual-real', payload)
-      ]);
+      const rMixAgg = await apiClient.post('/sugerencias/calcular-por-rango-orden-a-orden-combinacion', payload);
       const diasCalendario = (() => { try { const sd = new Date(startDate); const ed = new Date(endDate); const diff = ed.getTime() - sd.getTime(); if (isNaN(diff) || diff < 0) return 0; return Math.max(1, Math.round(diff / 86400000) + 1); } catch { return 0; } })();
       setDiasRango(diasCalendario || null);
-      let activos: number | null = null;
-      try { activos = rOrden.data?.resumen?.total_dias_activos ?? null; } catch {}
+      const activos = rMixAgg.data?.resumen?.total_dias_activos ?? null;
       setDiasActivos(activos);
-      setRecomendacion(rReco.data);
+      setMixAgg(rMixAgg.data);
     } catch { alert('Error al calcular'); }
     finally { setCalculando(false); }
-  };
-
-  const guardarRecomendacion = async () => {
-    if (!recomendacion || !clienteId || !startDate || !endDate) return;
-    if (!window.confirm('Guardar esta recomendación mensual en la base? Creará una fila por modelo.')) return;
-    try {
-      setGuardando(true);
-  const { data: d } = await apiClient.post('/sugerencias/recomendacion-mensual-real/guardar', { cliente_id: Number(clienteId), startDate, endDate, modelos_permitidos: modelosPermitidos });
-  alert(`Guardado: ${d.total_creadas} filas en el grupo #${d.numero_de_sugerencia || '?'} (numero_de_sugerencia)`);
-      // Refrescar historial después de guardar
-      loadSugerenciasPaginated({ limit, offset: page * limit, search, clienteId: clienteFiltro ? Number(clienteFiltro) : null });
-    } catch { alert('No se pudo guardar'); }
-    finally { setGuardando(false); }
   };
 
   // Se elimina el guardado individual: solo mezcla global
@@ -253,10 +234,11 @@ const SugerenciasView: React.FC = () => {
 
       {/* Formulario */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 mb-8">
+        
         <div className="grid gap-4 md:grid-cols-4">
           <div className="md:col-span-2">
             <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">Cliente *</label>
-            <select value={clienteId} onChange={e => { setClienteId(e.target.value as any); setRecomendacion(null); }} className="w-full p-2 rounded border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+            <select value={clienteId} onChange={e => { setClienteId(e.target.value as any); }} className="w-full p-2 rounded border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white">
               <option value="">Seleccionar...</option>
               {clientes.map(c => <option key={c.cliente_id} value={c.cliente_id}>{c.nombre_cliente}</option>)}
             </select>
@@ -308,65 +290,57 @@ const SugerenciasView: React.FC = () => {
           <button onClick={calcular} disabled={calculando || !clienteId || !startDate || !endDate} className="px-5 py-3 rounded bg-blue-600 disabled:bg-blue-400 text-white flex items-center gap-2 text-sm">
             <Calculator size={18} />{calculando ? 'Calculando...' : 'Calcular'}
           </button>
-          <button onClick={() => { setClienteId(''); setStartDate(''); setEndDate(''); setRecomendacion(null); }} className="px-5 py-3 rounded bg-gray-600 text-white text-sm">Limpiar</button>
+          <button onClick={() => { setClienteId(''); setStartDate(''); setEndDate(''); }} className="px-5 py-3 rounded bg-gray-600 text-white text-sm">Limpiar</button>
         </div>
+
       </div>
       {/* RESULTADO: Recomendación Mensual Real */}
-      {recomendacion && (
+      {mixAgg && (
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-green-300 dark:border-green-600 mb-10">
-          <h2 className="font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><Package size={18}/>Recomendación Mensual Real</h2>
-          <div className="mb-3 flex gap-2">
-            <button onClick={guardarRecomendacion} className="px-3 py-1.5 rounded bg-green-600 text-white text-xs">Guardar</button>
-            {guardando && <span className="text-xs text-gray-500">Guardando...</span>}
+          <h2 className="font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><Package size={18}/>Recomendación Mensual (Combinación por Orden)</h2>
+          <div className="mb-4 text-xs text-gray-600 dark:text-gray-300 space-y-1">
+            <div>Días calendario: {diasRango || '-'} | Días activos: {mixAgg.resumen?.total_dias_activos ?? '-'}</div>
+            <div>Órdenes únicas: {mixAgg.resumen?.total_ordenes_unicas ?? '-'}</div>
           </div>
-          {(() => {
-            const r = recomendacion;
-            const resumenR = r.resumen || {};
-            return (
-              <div className="mb-4 text-xs text-gray-600 dark:text-gray-300 space-y-1">
-                <div>Días calendario: {resumenR.dias_calendario} | Días activos: {resumenR.dias_activos} | Base usada: {resumenR.base_dias_usada}</div>
-                <div>Total cajas periodo: {resumenR.total_cajas_periodo} | Promedio diario total: {Number(resumenR.promedio_diario_total||0).toFixed(2)}</div>
-                <div>Proyección mensual (30): {Math.ceil(resumenR.promedio_diario_total * 30 || 0)} cajas</div>
-              </div>
-            );
-          })()}
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
               <thead className="bg-green-50 dark:bg-green-900/40 text-green-700 dark:text-green-200">
                 <tr>
                   <th className="text-left p-2">Modelo</th>
                   <th className="text-left p-2">Cajas Periodo</th>
-                  <th className="text-left p-2">Prom Diario (técnico)</th>
+                  <th className="text-left p-2">Prom Diario</th>
                   <th className="text-left p-2">Recom. Diaria</th>
                   <th className="text-left p-2">Recom. Mensual</th>
-                  <th className="text-left p-2">Frecuencia</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
-                {recomendacion.modelos?.map((m:any) => (
-                  <tr key={m.modelo_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="p-2">{m.nombre_modelo}</td>
-                    <td className="p-2">{m.cajas_totales_periodo}</td>
-                    <td className="p-2">{Number(m.promedio_diario).toFixed(3)}</td>
-                    <td className="p-2">{m.recomendacion_diaria}</td>
-                    <td className="p-2">{m.recomendacion_mensual}</td>
-                    <td className="p-2">{m.frecuencia_cada_dias ? `1 cada ${m.frecuencia_cada_dias} días` : (m.recomendacion_diaria>0? 'diario':'-')}</td>
-                  </tr>
-                ))}
+                {mixAgg.modelos_agregados?.map((m:any) => {
+                  const prom = Number(m.promedio_diario_cajas || 0);
+                  const recomDiaria = prom >= 1 ? Math.round(prom) : 0;
+                  const recomMensual = Math.ceil(prom * 30);
+                  return (
+                    <tr key={m.modelo_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="p-2">{m.nombre_modelo}</td>
+                      <td className="p-2">{m.total_cajas}</td>
+                      <td className="p-2">{prom.toFixed(3)}</td>
+                      <td className="p-2">{recomDiaria || (prom > 0 ? `1 cada ${Math.round(1 / prom)} días` : 0)}</td>
+                      <td className="p-2">{recomMensual}</td>
+                    </tr>
+                  );
+                })}
                 <tr className="font-semibold bg-green-50 dark:bg-green-900/30">
                   <td className="p-2">TOTAL</td>
-                  <td className="p-2">{recomendacion.modelos?.reduce((s:number,x:any)=> s + (x.cajas_totales_periodo||0),0)}</td>
-                  <td className="p-2">{Number(recomendacion.resumen?.promedio_diario_total||0).toFixed(3)}</td>
-                  <td className="p-2">{/* suma recomendación diaria */}{(() => { const sum = recomendacion.modelos?.reduce((s:number,x:any)=> s + (x.recomendacion_diaria||0),0) || 0; return sum; })()}</td>
-                  <td className="p-2">{/* suma recomendación mensual */}{(() => { const sum = recomendacion.modelos?.reduce((s:number,x:any)=> s + (x.recomendacion_mensual||0),0) || 0; return sum; })()}</td>
-                  <td className="p-2">-</td>
+                  <td className="p-2">{mixAgg.modelos_agregados?.reduce((s:number,x:any)=> s + (x.total_cajas||0),0)}</td>
+                  <td className="p-2">{(() => { const sum = (mixAgg.modelos_agregados||[]).reduce((s:number,x:any)=> s + (x.promedio_diario_cajas||0),0); return Number(sum).toFixed(3); })()}</td>
+                  <td className="p-2">{(() => { const sum = (mixAgg.modelos_agregados||[]).reduce((s:number,x:any)=> s + (x.promedio_diario_cajas||0),0); return sum >= 1 ? Math.round(sum) : (sum > 0 ? `1 cada ${Math.round(1 / sum)} días` : 0); })()}</td>
+                  <td className="p-2">{(() => { const sum = (mixAgg.modelos_agregados||[]).reduce((s:number,x:any)=> s + (x.promedio_diario_cajas||0),0); return Math.ceil(sum * 30); })()}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-2">Basado 100% en asignación real histórica de modelos a líneas, proyectado a 30 días. Valores &lt;1/día mostrados como frecuencia.</p>
         </div>
       )}
+
 
       {/* Historial */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">

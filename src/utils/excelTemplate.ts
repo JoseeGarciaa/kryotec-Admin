@@ -78,7 +78,7 @@ export async function downloadInventarioTemplate() {
   // Data validations for next 2000 rows
   const maxRows = 2000;
   for (let r = headerRow + 1; r <= headerRow + maxRows; r++) {
-    // Largo, Ancho, Alto: whole numbers >= 1
+    // Largo, Ancho, Alto: permitir decimales >= 0.1 (mm)
     ['C', 'D', 'E', 'F'].forEach((col) => {
       if (col === 'F') {
         // Cantidad
@@ -87,12 +87,16 @@ export async function downloadInventarioTemplate() {
           allowBlank: false, formulae: [1], errorStyle: 'error',
           errorTitle: 'Valor inválido', error: 'Debe ser un número entero mayor o igual a 1'
         } as any;
+        // Formato sin decimales para cantidad
+        ws.getCell(`${col}${r}`).numFmt = '0';
       } else {
         ws.getCell(`${col}${r}`).dataValidation = {
-          type: 'whole', operator: 'greaterThanOrEqual', showErrorMessage: true,
-          allowBlank: false, formulae: [1], errorStyle: 'error',
-          errorTitle: 'Valor inválido', error: 'Debe ser un número entero mayor o igual a 1 (mm)'
+          type: 'decimal', operator: 'greaterThanOrEqual', showErrorMessage: true,
+          allowBlank: false, formulae: [0.1], errorStyle: 'error',
+          errorTitle: 'Valor inválido', error: 'Debe ser un número mayor o igual a 0.1 (mm). Se aceptan decimales con coma (,).'
         } as any;
+        // Formato con dos decimales para ayudar a la visualización
+        ws.getCell(`${col}${r}`).numFmt = '0.00';
       }
     });
     // Fecha
@@ -109,6 +113,8 @@ export async function downloadInventarioTemplate() {
       type: 'textLength', operator: 'greaterThan', formulae: [0], allowBlank: false,
       showErrorMessage: true, errorTitle: 'Requerido', error: 'Orden_Despacho es obligatorio'
     } as any;
+    // Forzar texto para Orden_Despacho
+    ws.getCell(`H${r}`).numFmt = '@';
   }
 
   // Content background for data area (optional light band)
@@ -126,10 +132,10 @@ export async function downloadInventarioTemplate() {
     '1) Completa una fila por producto a ingresar en inventario.',
     '2) Descripcion: texto opcional con detalles del producto.',
     '3) Producto: el nombre o tipo (ej.: TAPAS, JERINGAS, ICOPOR, TERMICO).',
-    '4) Largo_mm, Ancho_mm, Alto_mm: ingresar valores ENTEROS en milímetros. No usar puntos ni comas.',
-    '5) Cantidad: ingresar un número entero mayor o igual a 1.',
+  '4) Largo_mm, Ancho_mm, Alto_mm: ingresar valores en milímetros. Se permiten decimales y usa coma (,) como separador (ej.: 87,2).',
+  '5) Cantidad: ingresar un número entero mayor o igual a 1 (sin decimales).',
     '6) Fecha_Despacho: usar el formato YYYY-MM-DD (ej.: 2025-01-15). Puede dejarse vacío si no aplica.',
-    '7) Orden_Despacho: obligatorio (ej.: OD-12345).',
+  '7) Orden_Despacho: obligatorio (ej.: OD-12345). Se guarda como texto, sin decimales.',
     '8) No modifiques los títulos de las columnas. Puedes añadir tantas filas como necesites.',
     '9) Evitamos duplicados por cliente usando la combinación: Descripcion + Producto + dimensiones (Largo/Ancho/Alto) + Cantidad + Orden.'
   ];
