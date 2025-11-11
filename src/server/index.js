@@ -4,6 +4,7 @@ require('dotenv').config();
 const pool = require('./config/db');
 const userService = require('./userService');
 const authService = require('./authService');
+const { ensureSecurityInfrastructure } = require('./utils/securitySetup');
 const credocubeService = require('./credocubeService');
 const tenantService = require('./tenantService');
 const clientesProspectosService = require('./clientesProspectosService');
@@ -80,10 +81,23 @@ app.get('/api/auth/me', (req, res) => {
   if (type !== 'Bearer' || !token) return res.json({ auth: false });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
-    pool.query('SELECT id, nombre, correo, rol, ultimo_ingreso, activo FROM admin_platform.admin_users WHERE id = $1', [decoded.sub])
+    pool.query(
+      `SELECT id, nombre, correo, rol, ultimo_ingreso, activo,
+              intentos_fallidos, bloqueado, bloqueado_hasta,
+              debe_cambiar_contraseña, ultimo_cambio_contraseña,
+              contraseña_expira_el, session_timeout_minutos
+       FROM admin_platform.admin_users
+       WHERE id = $1`,
+      [decoded.sub]
+    )
       .then(({ rows }) => {
         if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
-        res.json({ auth: true, user: rows[0] });
+        const userRow = rows[0];
+        const security = authService.buildSecurityMetadata({
+          ...userRow,
+          session_timeout_minutos: userRow.session_timeout_minutos
+        });
+        res.json({ auth: true, user: userRow, security });
       })
       .catch(err => {
         console.error('Error DB /auth/me:', err);
@@ -157,13 +171,19 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
       }
     }
     
-    // Si hay contraseña, usar authService para hashearla
     if (userData.contraseña) {
-      // Hashear la contraseña con bcrypt
-      userData.contraseña = await authService.hashPassword(userData.contraseña);
+      const resetResult = await authService.adminResetPassword(targetId, userData.contraseña);
+      if (!resetResult.success) {
+        return res.status(400).json({ error: resetResult.message || 'No se pudo actualizar la contraseña del usuario' });
+      }
+      delete userData.contraseña;
+    }
+
+    if (userData.session_timeout_minutos !== undefined) {
+      userData.session_timeout_minutos = authService.normalizeSessionTimeout(userData.session_timeout_minutos);
     }
     
-    const updatedUser = await userService.updateUser(parseInt(id), userData);
+  const updatedUser = await userService.updateUser(parseInt(id), userData);
     if (updatedUser) {
       res.json(updatedUser);
     } else {
@@ -286,7 +306,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (result.success) {
       res.json(result);
     } else {
-      res.status(401).json({ error: result.message });
+      const status = result.security?.isLocked ? 423 : 401;
+      res.status(status).json({ error: result.message, security: result.security });
     }
   } catch (error) {
     console.error('Error en POST /api/auth/login:', error);
@@ -1396,19 +1417,6 @@ app.post('/api/sugerencias', verifyToken, async (req, res) => {
 });
 
 app.delete('/api/sugerencias/:id', verifyToken, async (req, res) => {
-
-// Perfil actual
-app.get('/api/auth/me', verifyToken, async (req, res) => {
-  try {
-    if (!req.user) return res.status(200).json({ auth: false });
-    const { rows } = await pool.query('SELECT id, nombre, correo, rol, ultimo_ingreso, activo FROM admin_platform.admin_users WHERE id = $1', [req.user.sub]);
-    if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
-    res.json({ auth: true, user: rows[0] });
-  } catch (e) {
-    console.error('Error en GET /api/auth/me:', e);
-    res.status(500).json({ error: 'Error al obtener perfil' });
-  }
-});
   try {
     const sugerenciaEliminada = await sugerenciasService.deleteSugerencia(req.params.id);
     if (sugerenciaEliminada) {
@@ -1434,11 +1442,23 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await ensureSecurityInfrastructure();
+  } catch (error) {
+    console.error('Error al preparar los controles de seguridad requeridos:', error?.message || error);
+    if ((process.env.FAIL_ON_SECURITY_SETUP || 'true').toLowerCase() !== 'false') {
+      process.exit(1);
+    }
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Servidor corriendo en puerto ${PORT}`);
+  });
+};
+
+if (require.main === module) {
+  startServer();
+}
 
 module.exports = app;
-
-// ELIMINAR ESTAS LÍNEAS QUE ESTÁN DESPUÉS DEL app.listen() - YA NO SON NECESARIAS

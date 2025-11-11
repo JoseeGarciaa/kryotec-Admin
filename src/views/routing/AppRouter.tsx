@@ -9,8 +9,8 @@ import { useBreakpoint } from '../../utils/responsive';
 import ProspectosView from '../dashboard/prospectos/ProspectosView';
 
 // Componente para proteger rutas que requieren autenticación
-const ProtectedRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {
-  const { isAuthenticated, isLoading } = useAuthContext();
+const ProtectedRoute: React.FC<{ element: React.ReactNode }> = ({ element }: { element: React.ReactNode }) => {
+  const { isAuthenticated, isLoading, user } = useAuthContext();
   const location = useLocation();
   const { isMobile } = useBreakpoint();
   
@@ -26,6 +26,15 @@ const ProtectedRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => 
   // Redirigir al login si no está autenticado, guardando la ruta actual
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (user?.security?.mustChangePassword) {
+    const search = new URLSearchParams(location.search);
+    const tab = search.get('tab');
+    const isSettingsRoute = location.pathname === '/dashboard' && tab === 'settings';
+    if (!isSettingsRoute) {
+      return <Navigate to="/dashboard?tab=settings" replace state={{ forcedPasswordChange: true }} />;
+    }
   }
   
   // Renderizar el elemento protegido si está autenticado

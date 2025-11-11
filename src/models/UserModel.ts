@@ -5,11 +5,18 @@ export interface AdminUser {
   nombre: string;
   correo: string;
   telefono: string | null;
-  contraseña: string;
   rol: 'admin' | 'soporte';
   activo: boolean;
   ultimo_ingreso: Date | null;
   fecha_creacion: Date;
+  session_timeout_minutos?: number | null;
+  intentos_fallidos?: number;
+  bloqueado?: boolean;
+  bloqueado_hasta?: Date | null;
+  debe_cambiar_contraseña?: boolean;
+  ultimo_cambio_contraseña?: Date | null;
+  contraseña_expira_el?: Date | null;
+  contraseña?: string;
 }
 
 export class UserModel {
