@@ -1,4 +1,4 @@
-import { User, LoginCredentials } from './types/auth';
+import { User, LoginCredentials, UserSecurity } from './types/auth';
 import { apiClient } from '../services/api';
 
 // Clave para almacenar el usuario en localStorage
@@ -22,12 +22,31 @@ export class AuthModel {
         
         // Convertir el usuario de la API al formato de nuestra aplicación
         const apiUser = response.data.user;
+        const security: UserSecurity | undefined = response.data.security ? {
+          mustChangePassword: response.data.security.mustChangePassword ?? apiUser?.debe_cambiar_contraseña ?? false,
+          passwordExpiresAt: response.data.security.passwordExpiresAt ?? apiUser?.contraseña_expira_el ?? null,
+          passwordExpired: response.data.security.passwordExpired ?? false,
+          passwordChangedAt: response.data.security.passwordChangedAt ?? apiUser?.ultimo_cambio_contraseña ?? null,
+          sessionTimeoutMinutes: response.data.security.sessionTimeoutMinutes ?? apiUser?.session_timeout_minutos ?? undefined,
+          failedAttempts: response.data.security.failedAttempts ?? apiUser?.intentos_fallidos ?? undefined,
+          isLocked: response.data.security.isLocked ?? apiUser?.bloqueado ?? undefined,
+          lockoutUntil: response.data.security.lockoutUntil ?? apiUser?.bloqueado_hasta ?? null
+        } : apiUser ? {
+          mustChangePassword: apiUser.debe_cambiar_contraseña ?? false,
+          passwordExpiresAt: apiUser.contraseña_expira_el ?? null,
+          passwordChangedAt: apiUser.ultimo_cambio_contraseña ?? null,
+          sessionTimeoutMinutes: apiUser.session_timeout_minutos ?? undefined,
+          failedAttempts: apiUser.intentos_fallidos ?? undefined,
+          isLocked: apiUser.bloqueado ?? undefined,
+          lockoutUntil: apiUser.bloqueado_hasta ?? null
+        } : undefined;
         const user: User = {
           id: apiUser.id.toString(),
           email: apiUser.correo,
           name: apiUser.nombre,
           role: apiUser.rol,
-          avatar: undefined
+          avatar: undefined,
+          security
         };
         
         // Guardar usuario en localStorage para persistencia
@@ -41,7 +60,12 @@ export class AuthModel {
     } catch (error: any) {
       console.error('Error en login:', error);
       if (error.response) {
-        throw new Error(error.response.data?.error || 'Credenciales inválidas');
+        const err = new Error(error.response.data?.error || 'Credenciales inválidas');
+        if (error.response.data?.security) {
+          (err as any).security = error.response.data.security;
+        }
+        (err as any).status = error.response.status;
+        throw err;
       }
       throw error;
     }
@@ -67,12 +91,31 @@ export class AuthModel {
       const resp = await apiClient.get('/auth/me');
       if (resp.data && resp.data.auth && resp.data.user) {
         const apiUser = resp.data.user;
+        const security: UserSecurity | undefined = resp.data.security ? {
+          mustChangePassword: resp.data.security.mustChangePassword ?? apiUser?.debe_cambiar_contraseña ?? false,
+          passwordExpiresAt: resp.data.security.passwordExpiresAt ?? apiUser?.contraseña_expira_el ?? null,
+          passwordExpired: resp.data.security.passwordExpired ?? false,
+          passwordChangedAt: resp.data.security.passwordChangedAt ?? apiUser?.ultimo_cambio_contraseña ?? null,
+          sessionTimeoutMinutes: resp.data.security.sessionTimeoutMinutes ?? apiUser?.session_timeout_minutos ?? undefined,
+          failedAttempts: resp.data.security.failedAttempts ?? apiUser?.intentos_fallidos ?? undefined,
+          isLocked: resp.data.security.isLocked ?? apiUser?.bloqueado ?? undefined,
+          lockoutUntil: resp.data.security.lockoutUntil ?? apiUser?.bloqueado_hasta ?? null
+        } : apiUser ? {
+          mustChangePassword: apiUser.debe_cambiar_contraseña ?? false,
+          passwordExpiresAt: apiUser.contraseña_expira_el ?? null,
+          passwordChangedAt: apiUser.ultimo_cambio_contraseña ?? null,
+          sessionTimeoutMinutes: apiUser.session_timeout_minutos ?? undefined,
+          failedAttempts: apiUser.intentos_fallidos ?? undefined,
+          isLocked: apiUser.bloqueado ?? undefined,
+          lockoutUntil: apiUser.bloqueado_hasta ?? null
+        } : undefined;
         const user: User = {
           id: apiUser.id.toString(),
             email: apiUser.correo,
             name: apiUser.nombre,
             role: apiUser.rol,
-            avatar: undefined
+            avatar: undefined,
+            security
         };
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
         return user;

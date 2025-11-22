@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react';
-import { AuthState, LoginCredentials } from '../../models/types/auth';
+import { AuthState, LoginCredentials, UserSecurity } from '../../models/types/auth';
 import { useAuthController } from '../../controllers/AuthController';
 
 interface AuthContextType extends AuthState {
-  login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
+  login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string; security?: UserSecurity }>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
+  updateUserSecurity: (updates: Partial<UserSecurity>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

@@ -1,16 +1,39 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Input } from '../shared/ui/Input';
 import { Button } from '../shared/ui/Button';
 import { useAuthContext } from '../contexts/AuthContext';
 import { AuthAPI, UserAPI } from '../../services/api';
 
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+
 const SettingsView: React.FC = () => {
-  const { user, logout } = useAuthContext();
+  const { user, logout, updateUserSecurity, refreshUser } = useAuthContext();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChanging, setIsChanging] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const securityInfo = user?.security;
+  const passwordExpiresLabel = useMemo(() => {
+    if (!securityInfo?.passwordExpiresAt) return 'No disponible';
+    try {
+      const date = new Date(securityInfo.passwordExpiresAt);
+      return date.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+    } catch {
+      return securityInfo.passwordExpiresAt;
+    }
+  }, [securityInfo?.passwordExpiresAt]);
+
+  const passwordChangedLabel = useMemo(() => {
+    if (!securityInfo?.passwordChangedAt) return 'Pendiente';
+    try {
+      const date = new Date(securityInfo.passwordChangedAt);
+      return date.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+    } catch {
+      return securityInfo.passwordChangedAt;
+    }
+  }, [securityInfo?.passwordChangedAt]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,14 +46,26 @@ const SettingsView: React.FC = () => {
       alert('La nueva contraseña y la confirmación no coinciden');
       return;
     }
-    if (newPassword.length < 8) {
-      alert('La nueva contraseña debe tener al menos 8 caracteres');
+    if (newPassword === oldPassword) {
+      alert('La nueva contraseña no puede ser igual a la actual');
+      return;
+    }
+    if (!PASSWORD_POLICY_REGEX.test(newPassword)) {
+      alert('La contraseña debe tener mínimo 8 caracteres e incluir mayúsculas, minúsculas, números y caracteres especiales.');
       return;
     }
     try {
       setIsChanging(true);
       const uid = parseInt(user.id);
-      await AuthAPI.changePassword(uid, oldPassword, newPassword);
+      const result = await AuthAPI.changePassword(uid, oldPassword, newPassword);
+      if (result.security) {
+        updateUserSecurity({
+          ...result.security,
+          passwordChangedAt: new Date().toISOString()
+        });
+      } else {
+        await refreshUser();
+      }
       alert('Contraseña actualizada correctamente');
       setOldPassword('');
       setNewPassword('');
@@ -66,24 +101,42 @@ const SettingsView: React.FC = () => {
 
         <form onSubmit={handleChangePassword} className="space-y-4 bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-medium">Cambiar contraseña</h3>
+          {securityInfo?.mustChangePassword && (
+            <div className="p-3 border border-amber-300 bg-amber-50 text-amber-800 rounded">
+              Debes cambiar tu contraseña antes de continuar usando el sistema.
+            </div>
+          )}
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            La contraseña debe tener al menos 8 caracteres e incluir mayúsculas, minúsculas, números y un caracter especial.
+          </p>
           <Input
             type="password"
             label="Contraseña actual"
             value={oldPassword}
-            onChange={(e) => setOldPassword(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPassword(e.target.value)}
           />
           <Input
             type="password"
             label="Nueva contraseña"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
           />
           <Input
             type="password"
             label="Confirmar nueva contraseña"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
           />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600 dark:text-gray-400">
+            <div>
+              <span className="font-medium text-gray-700 dark:text-gray-200">Último cambio:</span>
+              <p>{passwordChangedLabel}</p>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700 dark:text-gray-200">Vencimiento:</span>
+              <p>{passwordExpiresLabel}</p>
+            </div>
+          </div>
           <div className="flex gap-3">
             <Button type="submit" isLoading={isChanging}>Guardar</Button>
             <Button type="button" variant="secondary" onClick={() => { setOldPassword(''); setNewPassword(''); setConfirmPassword(''); }}>Cancelar</Button>

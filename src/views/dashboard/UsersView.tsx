@@ -1,8 +1,27 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useUserController } from '../../controllers/UserController';
 import { AdminUser } from '../../models/UserModel';
 import { Edit, Trash2, UserPlus, Search, Users, LayoutGrid, List } from 'lucide-react';
 import { formatDate as formatDateCO } from '../../utils/dateUtils';
+
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+
+const clampSessionTimeout = (rawValue: string, fallback = 120) => {
+  const numeric = parseInt(rawValue, 10);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(15, Math.min(480, numeric));
+};
+
+type UserFormState = {
+  nombre: string;
+  correo: string;
+  telefono: string;
+  contraseña: string;
+  rol: 'admin' | 'soporte';
+  activo: boolean;
+  session_timeout_minutos: number;
+  debe_cambiar_contraseña: boolean;
+};
 
 export const UsersView: React.FC = () => {
   const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser } = useUserController();
@@ -12,22 +31,28 @@ export const UsersView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   
   // Estado para el formulario
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<UserFormState>({
     nombre: '',
     correo: '',
     telefono: '',
     contraseña: '',
     rol: 'soporte' as 'admin' | 'soporte',
-    activo: true
+    activo: true,
+    session_timeout_minutos: 120,
+    debe_cambiar_contraseña: true
   });
 
   // Manejar cambios en el formulario
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
     
-    setFormData(prev => ({
+    setFormData((prev: UserFormState) => ({
       ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+      [name]: type === 'checkbox'
+        ? (e.target as HTMLInputElement).checked
+        : name === 'session_timeout_minutos'
+          ? clampSessionTimeout(value, prev.session_timeout_minutos)
+          : value
     }));
   };
 
@@ -39,7 +64,9 @@ export const UsersView: React.FC = () => {
       telefono: '',
       contraseña: '',
       rol: 'soporte',
-      activo: true
+      activo: true,
+      session_timeout_minutos: 120,
+      debe_cambiar_contraseña: true
     });
   };
 
@@ -48,6 +75,10 @@ export const UsersView: React.FC = () => {
     e.preventDefault();
     
     try {
+      if (!PASSWORD_POLICY_REGEX.test(formData.contraseña)) {
+        alert('La contraseña debe tener mínimo 8 caracteres e incluir mayúsculas, minúsculas, números y un caracter especial.');
+        return;
+      }
       await createUser(formData);
       setShowCreateForm(false);
       resetForm();
@@ -64,6 +95,10 @@ export const UsersView: React.FC = () => {
     if (!editingUser) return;
     
     try {
+      if (formData.contraseña && !PASSWORD_POLICY_REGEX.test(formData.contraseña)) {
+        alert('La contraseña debe cumplir la política de seguridad (mínimo 8 caracteres, mayúsculas, minúsculas, números y caracter especial).');
+        return;
+      }
       const { id } = editingUser;
       // No enviamos la contraseña si está vacía (para no cambiarla)
       const dataToUpdate: Partial<typeof formData> = { ...formData };
@@ -89,7 +124,9 @@ export const UsersView: React.FC = () => {
       telefono: user.telefono || '',
       contraseña: '', // No mostramos la contraseña actual
       rol: user.rol,
-      activo: user.activo
+      activo: user.activo,
+      session_timeout_minutos: user.session_timeout_minutos ?? 120,
+      debe_cambiar_contraseña: user.debe_cambiar_contraseña ?? false
     });
   };
 
@@ -114,6 +151,53 @@ export const UsersView: React.FC = () => {
 
   // Formatear fecha
   const formatDate = (date: Date | null | string) => formatDateCO(date) || 'N/A';
+
+  const passwordPolicyHint = useMemo(
+    () => 'Debe incluir mayúsculas, minúsculas, números y caracteres especiales (mínimo 8).',
+    []
+  );
+
+  const renderSecurityTags = (user: AdminUser) => {
+    const tags: { label: string; tone: 'warning' | 'danger' | 'info'; key: string }[] = [];
+    if (user.debe_cambiar_contraseña) {
+      tags.push({ label: 'Cambio obligatorio', tone: 'warning', key: 'must-change' });
+    }
+    if (user.intentos_fallidos && user.intentos_fallidos >= 1) {
+      tags.push({ label: `${user.intentos_fallidos} intentos fallidos`, tone: 'warning', key: 'failed' });
+    }
+    const now = new Date();
+    const isLocked = user.bloqueado || (user.bloqueado_hasta ? user.bloqueado_hasta > now : false);
+    if (isLocked) {
+      tags.push({ label: 'Bloqueado', tone: 'danger', key: 'locked' });
+    }
+    if (user.contraseña_expira_el) {
+      const expires = user.contraseña_expira_el;
+      const diff = expires.getTime() - now.getTime();
+      const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      if (days <= 7) {
+        tags.push({ label: `Expira en ${days} día${days === 1 ? '' : 's'}`, tone: 'warning', key: 'expires' });
+      }
+    }
+    if (!tags.length) return null;
+    return (
+      <div className="flex flex-wrap gap-2 mt-3">
+        {tags.map(tag => (
+          <span
+            key={`${user.id}-${tag.key}`}
+            className={`px-2 py-1 text-xs font-medium rounded-full border ${
+              tag.tone === 'danger'
+                ? 'border-red-400 text-red-600 bg-red-50 dark:bg-red-900/10 dark:text-red-200 dark:border-red-700'
+                : tag.tone === 'warning'
+                  ? 'border-amber-400 text-amber-700 bg-amber-50 dark:bg-amber-900/10 dark:text-amber-200 dark:border-amber-700'
+                  : 'border-blue-400 text-blue-700 bg-blue-50 dark:bg-blue-900/10 dark:text-blue-200 dark:border-blue-700'
+            }`}
+          >
+            {tag.label}
+          </span>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="p-6">
@@ -145,7 +229,7 @@ export const UsersView: React.FC = () => {
               type="text"
               placeholder="Buscar usuarios..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             />
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -218,6 +302,21 @@ export const UsersView: React.FC = () => {
                 required
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{passwordPolicyHint}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tiempo de sesión (minutos)</label>
+              <input
+                type="number"
+                name="session_timeout_minutos"
+                value={formData.session_timeout_minutos}
+                onChange={handleInputChange}
+                min={15}
+                max={480}
+                step={5}
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Define el tiempo máximo inactivo antes de cerrar sesión (entre 15 y 480 minutos).</p>
             </div>
             
             <div>
@@ -242,6 +341,16 @@ export const UsersView: React.FC = () => {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">Usuario activo</label>
+            </div>
+            <div className="flex items-center mt-2">
+              <input
+                type="checkbox"
+                name="debe_cambiar_contraseña"
+                checked={formData.debe_cambiar_contraseña}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">Solicitar cambio de contraseña en el próximo inicio</label>
             </div>
             
             <div className="md:col-span-2 flex justify-end gap-2 mt-4">
@@ -312,6 +421,21 @@ export const UsersView: React.FC = () => {
                 onChange={handleInputChange}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{passwordPolicyHint}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tiempo de sesión (minutos)</label>
+              <input
+                type="number"
+                name="session_timeout_minutos"
+                value={formData.session_timeout_minutos}
+                onChange={handleInputChange}
+                min={15}
+                max={480}
+                step={5}
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Aplica al siguiente inicio de sesión del usuario.</p>
             </div>
             
             <div>
@@ -336,6 +460,16 @@ export const UsersView: React.FC = () => {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">Usuario activo</label>
+            </div>
+            <div className="flex items-center mt-2">
+              <input
+                type="checkbox"
+                name="debe_cambiar_contraseña"
+                checked={formData.debe_cambiar_contraseña}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">Solicitar cambio de contraseña en el próximo inicio</label>
             </div>
             
             <div className="md:col-span-2 flex justify-end gap-2 mt-4">
@@ -419,7 +553,14 @@ export const UsersView: React.FC = () => {
                         <p className="flex items-center">
                           <span className="font-medium mr-2">Creado:</span> {formatDate(user.fecha_creacion)}
                         </p>
+                        <p className="flex items-center">
+                          <span className="font-medium mr-2">Tiempo sesión:</span> {user.session_timeout_minutos ?? 'N/D'} min
+                        </p>
+                        <p className="flex items-center">
+                          <span className="font-medium mr-2">Intentos fallidos:</span> {user.intentos_fallidos ?? 0}
+                        </p>
                       </div>
+                      {renderSecurityTags(user)}
                     </div>
                     
                     {/* Acciones */}
@@ -462,8 +603,10 @@ export const UsersView: React.FC = () => {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Teléfono</th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Rol</th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sesión (min)</th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Último Ingreso</th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha Creación</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Seguridad</th>
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
                     </tr>
                   </thead>
@@ -493,8 +636,14 @@ export const UsersView: React.FC = () => {
                               {user.activo ? 'Activo' : 'Inactivo'}
                             </span>
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                            {user.session_timeout_minutos ?? 'N/D'}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{formatDate(user.ultimo_ingreso)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{formatDate(user.fecha_creacion)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                            {renderSecurityTags(user)}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end gap-2">
                               <button

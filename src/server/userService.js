@@ -7,7 +7,12 @@ const userService = {
   getAllUsers: async () => {
     try {
       const result = await pool.query(
-        'SELECT * FROM admin_platform.admin_users ORDER BY id'
+        `SELECT id, nombre, correo, telefono, rol, activo, ultimo_ingreso, fecha_creacion,
+                intentos_fallidos, bloqueado, bloqueado_hasta,
+                debe_cambiar_contraseña, ultimo_cambio_contraseña,
+                contraseña_expira_el, session_timeout_minutos
+         FROM admin_platform.admin_users
+         ORDER BY id`
       );
       return result.rows;
     } catch (error) {
@@ -20,7 +25,12 @@ const userService = {
   getUserById: async (id) => {
     try {
       const result = await pool.query(
-        'SELECT * FROM admin_platform.admin_users WHERE id = $1',
+        `SELECT id, nombre, correo, telefono, rol, activo, ultimo_ingreso, fecha_creacion,
+                intentos_fallidos, bloqueado, bloqueado_hasta,
+                debe_cambiar_contraseña, ultimo_cambio_contraseña,
+                contraseña_expira_el, session_timeout_minutos
+         FROM admin_platform.admin_users
+         WHERE id = $1`,
         [id]
       );
       return result.rows.length > 0 ? result.rows[0] : null;
