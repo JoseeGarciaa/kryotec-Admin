@@ -713,21 +713,27 @@ const sugerenciasService = {
         return (a.volumen_total_contenedores || 0) - (b.volumen_total_contenedores || 0);
       });
       
-      // Marcar mejor opción por defecto (solo si cumple umbral)
+      // Marcar mejor opción priorizando menor número de cajas (aunque la eficiencia sea baja)
       if (sugerencias.length > 0) {
         const UMBRAL = 80;
+        const minCajas = Math.min(...sugerencias.map(s => s.cantidad_sugerida || Infinity));
         for (const s of sugerencias) {
           const eff = s.eficiencia || 0;
-          s.es_recomendable = eff >= UMBRAL;
-          if (!s.es_recomendable) s.motivo_no_recomendable = 'Eficiencia baja (<80%)';
+          const esMinCajas = (s.cantidad_sugerida || 0) === minCajas;
+          if (esMinCajas) {
+            s.es_recomendable = true;
+            s.motivo_no_recomendable = undefined;
+            if (eff < UMBRAL) {
+              s.mensaje_comparacion = '💡 Prioriza menos cajas (mejor costo aunque haya sobrante)';
+              s.recomendacion = 'PREFERIDO - Menos cajas, mayor eficiencia operativa';
+            }
+          } else {
+            s.es_recomendable = eff >= UMBRAL;
+            if (!s.es_recomendable) s.motivo_no_recomendable = 'Eficiencia baja (<80%)';
+          }
         }
-        if ((sugerencias[0].eficiencia || 0) >= UMBRAL) {
-          sugerencias[0].es_mejor_opcion = true;
-          sugerencias[0].etiqueta_recomendacion = '🏆 MEJOR OPCIÓN';
-        } else {
-          sugerencias[0].es_mejor_opcion = false;
-          sugerencias[0].etiqueta_recomendacion = undefined;
-        }
+        sugerencias[0].es_mejor_opcion = true;
+        sugerencias[0].etiqueta_recomendacion = '🏆 MEJOR OPCIÓN';
       }
       
   // Se deshabilitan combinaciones de modelos: solo recomendaciones de un solo modelo por solicitud
@@ -878,18 +884,24 @@ const sugerenciasService = {
       // Marcar la mejor opción y calcular porcentaje de recomendación
       if (sugerencias.length > 0) {
         const UMBRAL = 80;
+        const minCajas = Math.min(...sugerencias.map(s => s.cantidad_sugerida || Infinity));
         for (const s of sugerencias) {
           const eff = s.eficiencia_porcentaje || 0;
-          s.es_recomendable = eff >= UMBRAL;
-          if (!s.es_recomendable) s.motivo_no_recomendable = 'Eficiencia baja (<80%)';
+          const esMinCajas = (s.cantidad_sugerida || 0) === minCajas;
+          if (esMinCajas) {
+            s.es_recomendable = true;
+            s.motivo_no_recomendable = undefined;
+            if (eff < UMBRAL) {
+              s.mensaje_comparacion = '💡 Prioriza menos cajas (mejor costo aunque haya sobrante)';
+              s.recomendacion = 'PREFERIDO - Menos cajas, mayor eficiencia operativa';
+            }
+          } else {
+            s.es_recomendable = eff >= UMBRAL;
+            if (!s.es_recomendable) s.motivo_no_recomendable = 'Eficiencia baja (<80%)';
+          }
         }
-        if ((sugerencias[0].eficiencia_porcentaje || 0) >= UMBRAL) {
-          sugerencias[0].es_mejor_opcion = true;
-          sugerencias[0].etiqueta_recomendacion = '🏆 MEJOR OPCIÓN';
-        } else {
-          sugerencias[0].es_mejor_opcion = false;
-          sugerencias[0].etiqueta_recomendacion = undefined;
-        }
+        sugerencias[0].es_mejor_opcion = true;
+        sugerencias[0].etiqueta_recomendacion = '🏆 MEJOR OPCIÓN';
 
         // Recomposición ponderando más la menor cantidad de cajas (70%) que la eficiencia (30%)
         const maxEff = Math.max(...sugerencias.map(s => (s.eficiencia_porcentaje || 0)));
@@ -1218,35 +1230,18 @@ const sugerenciasService = {
     // Modelos
     let modelos = opts.modelos || await sugerenciasService.obtenerModelosCubeCached();
     modelos = sugerenciasService._filterModelosPermitidos(modelos, modelos_permitidos);
-    // Helper: capacidades y packing por modelo
     const modelosValidos = (modelos || []).map(m => ({ m, cap: capacityFromDims(m).cap_m3 })).filter(x => x.cap > 0);
-    if (!modelosValidos.length) return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: 0, eficiencia: 0, sobrante_m3: 0 };
+    if (!modelosValidos.length) {
+      return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: 0, eficiencia: 0, sobrante_m3: 0 };
+    }
 
-    // Helper: máxima cantidad de unidades (para una sola línea) que caben en una caja del modelo, considerando rotación
-    const unitsPerBoxForDims = (m, l, a, h) => {
-      if (!(m && m.dim_int_frente && m.dim_int_profundo && m.dim_int_alto)) return 0;
-      const dims = [l, a, h];
-      const box = [m.dim_int_frente, m.dim_int_profundo, m.dim_int_alto];
-      // probar 6 permutaciones de la pieza
-      const perms = [
-        [0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]
-      ];
-      let best = 0;
-      for (const p of perms) {
-        const c1 = Math.floor(box[0] / (dims[p[0]] || Infinity));
-        const c2 = Math.floor(box[1] / (dims[p[1]] || Infinity));
-        const c3 = Math.floor(box[2] / (dims[p[2]] || Infinity));
-        const cap = (c1>0 && c2>0 && c3>0) ? (c1*c2*c3) : 0;
-        if (cap > best) best = cap;
-      }
-      return best;
-    };
-    // Memoización simple para upb por (modelo_id, l,a,h)
-    const upbCache = new Map();
-    // Asignación por línea
-    const counts = new Map(); // modelo_id -> cajas
-    let V_asignado = 0; // volumen m3 de líneas asignadas
-    let modelosUsadosSet = new Set();
+    const volumenTotalOrden = items.reduce((total, item) => total + (parseFloat(item.volumen_total_m3_producto) || 0), 0);
+    if (volumenTotalOrden <= 0) {
+      return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: 0, eficiencia: 0, sobrante_m3: 0 };
+    }
+
+    // Agrupar líneas por dimensiones para permitir combinar remanentes cuando las piezas son idénticas
+    const grupos = new Map();
     for (const it of items) {
       const cant = parseInt(it.cantidad_despachada) || 0;
       const l = parseFloat(it.largo_mm) || 0;
@@ -1254,63 +1249,99 @@ const sugerenciasService = {
       const h = parseFloat(it.alto_mm) || 0;
       const volLinea = parseFloat(it.volumen_total_m3_producto) || 0;
       if (!(cant > 0 && l > 0 && a > 0 && h > 0)) continue;
-      // modelos que ajustan físicamente esta línea con packing >= 1
-      const candidates = modelosValidos
-        .filter(x => (l <= x.m.dim_int_frente && a <= x.m.dim_int_profundo && h <= x.m.dim_int_alto))
-        .map(x => {
-          const cacheKey = `${x.m.modelo_id}:${l}:${a}:${h}`;
-          let upb = upbCache.get(cacheKey);
-          if (upb == null) {
-            upb = unitsPerBoxForDims(x.m, l, a, h);
-            upbCache.set(cacheKey, upb);
-          }
-          const cajas = upb > 0 ? Math.ceil(cant / upb) : Infinity;
-          return { m: x.m, cap_m3: x.cap, upb, cajas };
-        })
-        .filter(c => c.upb > 0 && Number.isFinite(c.cajas));
-      if (!candidates.length) { dlog('Línea sin modelo que ajuste por dimensiones:', { l, a, h, cant }); continue; }
-      // Eficiencia primero: minimizar capacidad total asignada a la línea (cajas * cap_m3)
-      candidates.sort((x,y) => {
-        const capTotX = x.cajas * x.cap_m3;
-        const capTotY = y.cajas * y.cap_m3;
-        return (capTotX - capTotY) || (x.cajas - y.cajas) || (x.cap_m3 - y.cap_m3);
-      });
-      const chosen = candidates[0];
-      counts.set(chosen.m.modelo_id, (counts.get(chosen.m.modelo_id) || 0) + chosen.cajas);
-      modelosUsadosSet.add(chosen.m.modelo_id);
-      V_asignado += volLinea; // sumamos volumen real de la línea asignada
+      const key = `${l}x${a}x${h}`;
+      if (!grupos.has(key)) {
+        grupos.set(key, { cantidad: 0, volumen: 0, dims: [l, a, h] });
+      }
+      const ref = grupos.get(key);
+      ref.cantidad += cant;
+      ref.volumen += volLinea;
+    }
+    const gruposArr = Array.from(grupos.values());
+
+    const unitsPerBoxForDims = (modelo, l, a, h) => {
+      if (!(modelo && modelo.dim_int_frente && modelo.dim_int_profundo && modelo.dim_int_alto)) return 0;
+      const dims = [l, a, h];
+      const box = [modelo.dim_int_frente, modelo.dim_int_profundo, modelo.dim_int_alto];
+      const perms = [
+        [0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]
+      ];
+      let best = 0;
+      for (const p of perms) {
+        const c1 = Math.floor(box[0] / (dims[p[0]] || Infinity));
+        const c2 = Math.floor(box[1] / (dims[p[1]] || Infinity));
+        const c3 = Math.floor(box[2] / (dims[p[2]] || Infinity));
+        const cap = (c1 > 0 && c2 > 0 && c3 > 0) ? (c1 * c2 * c3) : 0;
+        if (cap > best) best = cap;
+      }
+      return best;
+    };
+
+    const evaluaciones = modelosValidos.map(({ m, cap }) => {
+      if (!(cap > 0)) return null;
+      let cajasTotales = 0;
+      const detalle = [];
+      for (const grupo of gruposArr) {
+        const upb = unitsPerBoxForDims(m, grupo.dims[0], grupo.dims[1], grupo.dims[2]);
+        if (!upb || upb <= 0) return null;
+        const cajasGrupo = Math.ceil(grupo.cantidad / upb);
+        cajasTotales += cajasGrupo;
+        detalle.push({
+          dims: grupo.dims,
+          cantidad_total: grupo.cantidad,
+          unidades_por_caja: upb,
+          cajas: cajasGrupo
+        });
+      }
+      if (cajasTotales <= 0) return null;
+      const capacidadTotal = cajasTotales * cap;
+      const eficiencia = capacidadTotal > 0 ? volumenTotalOrden / capacidadTotal : 0;
+      const sobrante = Math.max(0, capacidadTotal - volumenTotalOrden);
+      return {
+        modelo: m,
+        cajas: cajasTotales,
+        capacidadTotal,
+        eficiencia,
+        sobrante,
+        detalle
+      };
+    }).filter(Boolean).sort((a, b) => {
+      if (a.cajas !== b.cajas) return a.cajas - b.cajas;
+      if (a.eficiencia !== b.eficiencia) return b.eficiencia - a.eficiencia;
+      return a.capacidadTotal - b.capacidadTotal;
+    });
+
+    if (!evaluaciones.length) {
+      dlog('No se encontró un modelo que pueda agrupar toda la orden, devolviendo vacío', { orden_despacho });
+      return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: volumenTotalOrden, eficiencia: 0, sobrante_m3: volumenTotalOrden };
     }
 
-    // Construcción de combinación y métricas
-    const combinacion = Array.from(counts.entries()).map(([modelo_id, cantidad]) => {
-      const m = (modelos || []).find(mm => mm.modelo_id === modelo_id);
-      const capDims = m ? capacityFromDims(m).cap_m3 : 0;
-      return { modelo_id, nombre_modelo: m ? m.nombre_modelo : String(modelo_id), volumen_modelo_m3: capDims, cantidad };
-    }).sort((a,b) => (b.volumen_modelo_m3 - a.volumen_modelo_m3));
+    const mejor = evaluaciones[0];
+    const combinacion = [{
+      modelo_id: mejor.modelo.modelo_id,
+      nombre_modelo: mejor.modelo.nombre_modelo,
+      volumen_modelo_m3: capacityFromDims(mejor.modelo).cap_m3,
+      cantidad: mejor.cajas
+    }];
 
-    const capacidad_total_m3 = combinacion.reduce((s,c) => s + (c.volumen_modelo_m3 * c.cantidad), 0);
-    const cajas_totales = combinacion.reduce((s,c) => s + c.cantidad, 0);
-    const sobrante_m3 = Math.max(0, capacidad_total_m3 - V_asignado);
-    const eficiencia = capacidad_total_m3 > 0 ? (V_asignado / capacidad_total_m3) * 100 : 0;
-    dlog('Resultado por asignación de líneas:', {
+    dlog('Resultado agrupado por orden:', {
       orden_despacho,
-      cajas_totales,
-      modelos_usados: modelosUsadosSet.size,
-      capacidad_total_m3,
-      volumen_total_m3_asignado: V_asignado,
-      sobrante_m3,
-      eficiencia: Math.round(eficiencia * 10) / 10
+      modelo: mejor.modelo.nombre_modelo,
+      cajas: mejor.cajas,
+      eficiencia: Math.round(mejor.eficiencia * 1000) / 10,
+      sobrante_m3: Math.round(mejor.sobrante * 1000) / 1000
     });
 
     return {
       orden_despacho,
-      cajas_minimas: cajas_totales,
+      cajas_minimas: mejor.cajas,
       combinacion,
-      volumen_total_m3: V_asignado,
-      capacidad_total_m3,
-      eficiencia: Math.round(eficiencia * 10) / 10,
-      sobrante_m3: Math.round(sobrante_m3 * 1000) / 1000,
-      modelos_considerados: modelosUsadosSet.size
+      volumen_total_m3: volumenTotalOrden,
+      capacidad_total_m3: mejor.capacidadTotal,
+      eficiencia: Math.round(mejor.eficiencia * 1000) / 10,
+      sobrante_m3: Math.round(mejor.sobrante * 1000) / 1000,
+      modelos_considerados: evaluaciones.length,
+      detalle_grupos: mejor.detalle
     };
   },
 
