@@ -82,7 +82,7 @@ export const LoginView: React.FC = () => {
         {/* Footer */}
         <div className="text-center mt-6 sm:mt-8 px-4">
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 transition-colors">
-            © 2025 Softdatai. Desarrollado por Softdatai.
+            © 2025. Desarrollado por Softdatai.
           </p>
         </div>
       </div>
