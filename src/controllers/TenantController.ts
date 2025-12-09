@@ -113,21 +113,22 @@ export const useTenantController = () => {
       return;
     }
 
-    // Mostrar inmediatamente el modal con las credenciales ingresadas
-    setNewTenantCredentials({
+    // Construir por adelantado las credenciales para mostrarlas cuando exista éxito.
+    const pendingCredentials = {
       usuario: formData.email_contacto,
       contraseña: formData.contraseña || '',
       tenantName: formData.nombre
-    });
-    setShowCredentialsModal(true);
-    
-    // Luego procedemos con la creación en el backend
+    };
+
+    // Proceder con la creación en el backend
     setState(prev => ({ ...prev, loading: true, error: null }));
     try {
       await createTenant(formData);
       await loadTenants();
       setShowCreateForm(false);
       setFormErrors({});
+      setNewTenantCredentials(pendingCredentials);
+      setShowCredentialsModal(true);
     } catch (error: any) {
       const backendMsg = error?.response?.data?.error as string | undefined;
       setState(prev => ({ 

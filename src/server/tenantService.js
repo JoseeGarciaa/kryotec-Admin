@@ -1,6 +1,113 @@
 const pool = require('./config/db'); // Importación directa del pool
 const { hashPassword } = require('./authService');
 const cache = require('./utils/cache');
+const format = require('pg-format');
+
+const EMAIL_COLUMN_PATTERNS = ['%correo%', '%email%'];
+
+const ensureEmailIsAvailable = async (client, email, { ignoreTenantId } = {}) => {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    const err = new Error('El email de contacto es obligatorio');
+    err.code = '23505';
+    throw err;
+  }
+
+  const adminEmailCheck = await client.query(
+    'SELECT id FROM admin_platform.admin_users WHERE LOWER(correo) = $1 LIMIT 1',
+    [normalizedEmail]
+  );
+  if (adminEmailCheck.rows.length) {
+    const err = new Error(`El correo ${email} ya está usado por un usuario administrador`);
+    err.code = '23505';
+    throw err;
+  }
+
+  const tenantContactCheck = await client.query(
+    `SELECT id, nombre FROM admin_platform.tenants WHERE LOWER(email_contacto) = $1`,
+    [normalizedEmail]
+  );
+  for (const tenantRow of tenantContactCheck.rows || []) {
+    if (ignoreTenantId && tenantRow.id === ignoreTenantId) continue;
+    const err = new Error(`Ya existe una empresa registrada con el correo ${email}`);
+    err.code = '23505';
+    throw err;
+  }
+
+  const { rows: tenantSchemas } = await client.query(
+    `SELECT id, nombre, esquema FROM admin_platform.tenants`
+  );
+
+  for (const tenantRow of tenantSchemas || []) {
+    if (!tenantRow?.esquema) continue;
+    if (ignoreTenantId && tenantRow.id === ignoreTenantId) continue;
+
+    const columnsQuery = `
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = $1
+        AND data_type IN ('character varying', 'text')
+        AND (
+          ${EMAIL_COLUMN_PATTERNS.map((_, idx) => `column_name ILIKE $${idx + 2}`).join(' OR ')}
+        )
+        AND table_name NOT ILIKE 'pg_%'
+        AND table_name NOT ILIKE 'sql_%'
+    `;
+
+    let candidateColumns;
+    try {
+      const params = [tenantRow.esquema, ...EMAIL_COLUMN_PATTERNS];
+      const { rows } = await client.query(columnsQuery, params);
+      candidateColumns = rows;
+    } catch (infoError) {
+      console.error(`No se pudieron inspeccionar columnas en el esquema ${tenantRow.esquema}:`, infoError?.message);
+      continue;
+    }
+
+    const filteredColumns = (candidateColumns || []).filter(col => {
+      const table = (col?.table_name || '').toLowerCase();
+      const column = (col?.column_name || '').toLowerCase();
+      if (!table || !column) return false;
+      if (table.startsWith('pg_') || table.startsWith('sql_')) return false;
+      // Evitar contar la propia tabla de tenants globales
+      if (tenantRow.esquema === 'admin_platform' && table === 'tenants') return false;
+      // Ignorar metadatos comunes
+      if (column.includes('created') || column.includes('updated') || column.includes('modificado')) return false;
+      return true;
+    });
+
+    if (!filteredColumns.length) continue;
+
+    for (const columnInfo of filteredColumns) {
+      const { table_name: tableName, column_name: columnName } = columnInfo || {};
+      if (!tableName || !columnName) continue;
+
+      const emailLookupQuery = format(
+        'SELECT 1 FROM %I.%I WHERE LOWER(%I) = LOWER($1) LIMIT 1',
+        tenantRow.esquema,
+        tableName,
+        columnName
+      );
+
+      try {
+        const { rows } = await client.query(emailLookupQuery, [normalizedEmail]);
+        if (rows.length) {
+          const err = new Error(`El correo ${email} ya está asignado a un usuario en la empresa "${tenantRow.nombre}"`);
+          err.code = '23505';
+          throw err;
+        }
+      } catch (lookupError) {
+        if (lookupError?.code === '23505') {
+          throw lookupError;
+        }
+        if (lookupError?.code === '42P01' || lookupError?.code === '42703') {
+          continue;
+        }
+        console.error(`No se pudo validar correos en ${tenantRow.esquema}.${tableName}:`, lookupError?.message);
+      }
+    }
+  }
+};
 
 // Constantes para la caché
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
@@ -100,6 +207,8 @@ const createTenant = async (tenantData) => {
       throw err;
     }
 
+    await ensureEmailIsAvailable(client, tenantData.email_contacto);
+
     // Hashear la contraseña
     const hashedPassword = await hashPassword(tenantData.contraseña);
     
@@ -193,7 +302,7 @@ const updateTenant = async (id, tenantData) => {
     
     // Obtener el tenant actual antes de actualizarlo para tener el esquema original
     const currentTenantResult = await client.query(
-      'SELECT esquema, nombre FROM admin_platform.tenants WHERE id = $1',
+      'SELECT esquema, nombre, email_contacto FROM admin_platform.tenants WHERE id = $1',
       [id]
     );
     
@@ -218,6 +327,10 @@ const updateTenant = async (id, tenantData) => {
       newSchema = `tenant_${tenantData.nombre.toLowerCase().replace(/\s+/g, '_')}`;
       console.log(`Nombre cambiado de "${currentTenant.nombre}" a "${tenantData.nombre}"`);  
       console.log(`Esquema cambiado de "${originalSchema}" a "${newSchema}"`);  
+    }
+
+    if (tenantData.email_contacto !== undefined) {
+      await ensureEmailIsAvailable(client, tenantData.email_contacto, { ignoreTenantId: id });
     }
     
     // Mapeo de campos a actualizar
