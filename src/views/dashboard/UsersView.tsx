@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useUserController } from '../../controllers/UserController';
 import { AdminUser } from '../../models/UserModel';
-import { Edit, Trash2, UserPlus, Search, Users, LayoutGrid, List } from 'lucide-react';
+import { Edit, Trash2, UserPlus, Search, Users, LayoutGrid, List, Eye, EyeOff } from 'lucide-react';
 import { formatDate as formatDateCO } from '../../utils/dateUtils';
 
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
@@ -41,6 +41,8 @@ export const UsersView: React.FC = () => {
     session_timeout_minutos: 120,
     debe_cambiar_contraseña: true
   });
+  const [isCreatePasswordVisible, setIsCreatePasswordVisible] = useState(false);
+  const [isEditPasswordVisible, setIsEditPasswordVisible] = useState(false);
 
   // Manejar cambios en el formulario
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -68,6 +70,8 @@ export const UsersView: React.FC = () => {
       session_timeout_minutos: 120,
       debe_cambiar_contraseña: true
     });
+    setIsCreatePasswordVisible(false);
+    setIsEditPasswordVisible(false);
   };
 
   // Manejar envío del formulario de creación
@@ -118,6 +122,7 @@ export const UsersView: React.FC = () => {
   // Iniciar edición de usuario
   const startEditing = (user: AdminUser) => {
     setEditingUser(user);
+    setShowCreateForm(false);
     setFormData({
       nombre: user.nombre,
       correo: user.correo,
@@ -128,6 +133,8 @@ export const UsersView: React.FC = () => {
       session_timeout_minutos: user.session_timeout_minutos ?? 120,
       debe_cambiar_contraseña: user.debe_cambiar_contraseña ?? false
     });
+    setIsCreatePasswordVisible(false);
+    setIsEditPasswordVisible(false);
   };
 
   // Manejar eliminación de usuario
@@ -294,14 +301,24 @@ export const UsersView: React.FC = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña</label>
-              <input
-                type="password"
-                name="contraseña"
-                value={formData.contraseña}
-                onChange={handleInputChange}
-                required
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              />
+              <div className="relative">
+                <input
+                  type={isCreatePasswordVisible ? 'text' : 'password'}
+                  name="contraseña"
+                  value={formData.contraseña}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full p-2 pr-10 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsCreatePasswordVisible(prev => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  aria-label={isCreatePasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {isCreatePasswordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{passwordPolicyHint}</p>
             </div>
             <div>
@@ -356,7 +373,10 @@ export const UsersView: React.FC = () => {
             <div className="md:col-span-2 flex justify-end gap-2 mt-4">
               <button
                 type="button"
-                onClick={() => setShowCreateForm(false)}
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setIsCreatePasswordVisible(false);
+                }}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 dark:text-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 Cancelar
@@ -414,13 +434,23 @@ export const UsersView: React.FC = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña (dejar en blanco para no cambiar)</label>
-              <input
-                type="password"
-                name="contraseña"
-                value={formData.contraseña}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              />
+              <div className="relative">
+                <input
+                  type={isEditPasswordVisible ? 'text' : 'password'}
+                  name="contraseña"
+                  value={formData.contraseña}
+                  onChange={handleInputChange}
+                  className="w-full p-2 pr-10 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsEditPasswordVisible(prev => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  aria-label={isEditPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {isEditPasswordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{passwordPolicyHint}</p>
             </div>
             <div>
@@ -475,7 +505,11 @@ export const UsersView: React.FC = () => {
             <div className="md:col-span-2 flex justify-end gap-2 mt-4">
               <button
                 type="button"
-                onClick={() => setEditingUser(null)}
+                onClick={() => {
+                  setEditingUser(null);
+                  setIsEditPasswordVisible(false);
+                  resetForm();
+                }}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 dark:text-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 Cancelar

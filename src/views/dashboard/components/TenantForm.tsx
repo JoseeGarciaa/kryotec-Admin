@@ -181,6 +181,7 @@ export const TenantForm: React.FC<TenantFormProps> = ({
               onChange={handleInputChange}
               error={errors.contraseña}
               required={!initialData}
+              enablePasswordToggle
             />
           </div>
         )}
@@ -194,6 +195,7 @@ export const TenantForm: React.FC<TenantFormProps> = ({
               value={formData.contraseña || ''}
               onChange={handleInputChange}
               error={errors.contraseña}
+              enablePasswordToggle
             />
           </div>
         )}
