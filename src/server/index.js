@@ -919,7 +919,10 @@ app.post('/api/sugerencias/calcular-por-rango-orden-a-orden-combinacion', verify
               capacidad_total_m3: res.capacidad_total_m3,
               sobrante_m3: res.sobrante_m3,
               combinacion: res.combinacion,
-              modelos_considerados: res.modelos_considerados
+              modelos_considerados: res.modelos_considerados,
+              detalle_grupos: res.detalle_grupos,
+              detalle_cajas: res.detalle_cajas,
+              estrategia_utilizada: res.estrategia_utilizada
             });
           }
         } catch (e) {

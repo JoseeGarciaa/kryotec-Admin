@@ -1277,16 +1277,30 @@ const sugerenciasService = {
       return best;
     };
 
-    const evaluaciones = modelosValidos.map(({ m, cap }) => {
-      if (!(cap > 0)) return null;
+    const modelosEvaluados = modelosValidos.length;
+
+    const buildGruposData = (modelo) => gruposArr.map((grupo) => {
+      const unidadesPorCaja = unitsPerBoxForDims(modelo, grupo.dims[0], grupo.dims[1], grupo.dims[2]);
+      const unidadVolumen = grupo.cantidad > 0 ? (grupo.volumen / grupo.cantidad) : 0;
+      return {
+        key: grupo.dims.join('x'),
+        dims: grupo.dims,
+        cantidad: grupo.cantidad,
+        volumen_total: grupo.volumen,
+        unidad_volumen: unidadVolumen,
+        unidades_por_caja: unidadesPorCaja
+      };
+    });
+
+    const evaluarIndividual = (gruposData, cap) => {
       let cajasTotales = 0;
-      const detalle = [];
-      for (const grupo of gruposArr) {
-        const upb = unitsPerBoxForDims(m, grupo.dims[0], grupo.dims[1], grupo.dims[2]);
+      const detalleGrupos = [];
+      for (const grupo of gruposData) {
+        const upb = Math.floor(grupo.unidades_por_caja || 0);
         if (!upb || upb <= 0) return null;
         const cajasGrupo = Math.ceil(grupo.cantidad / upb);
         cajasTotales += cajasGrupo;
-        detalle.push({
+        detalleGrupos.push({
           dims: grupo.dims,
           cantidad_total: grupo.cantidad,
           unidades_por_caja: upb,
@@ -1298,22 +1312,136 @@ const sugerenciasService = {
       const eficiencia = capacidadTotal > 0 ? volumenTotalOrden / capacidadTotal : 0;
       const sobrante = Math.max(0, capacidadTotal - volumenTotalOrden);
       return {
-        modelo: m,
         cajas: cajasTotales,
         capacidadTotal,
         eficiencia,
         sobrante,
-        detalle
+        detalle_grupos: detalleGrupos,
+        detalle_cajas: null,
+        estrategia: 'individual'
       };
-    }).filter(Boolean).sort((a, b) => {
+    };
+
+    const evaluarMixto = (gruposData, cap) => {
+      if (!gruposData.length) return null;
+      const gruposValidos = gruposData.filter((g) => (g.unidades_por_caja || 0) > 0 && g.unidad_volumen > 0);
+      if (gruposValidos.length !== gruposData.length) return null;
+
+      const cajas = [];
+      const grupoMap = new Map(gruposValidos.map((g) => [g.key, g]));
+      const ordenados = [...gruposValidos].sort((a, b) => b.unidad_volumen - a.unidad_volumen);
+
+      for (const grupo of ordenados) {
+        let restante = grupo.cantidad;
+        let guard = 0;
+        while (restante > 0) {
+          guard += 1;
+          if (guard > 10000) return null;
+          let colocado = false;
+          for (const caja of cajas) {
+            const usadosGrupo = caja.porGrupo.get(grupo.key) || 0;
+            const limiteGrupo = grupo.unidades_por_caja - usadosGrupo;
+            if (limiteGrupo <= 0) continue;
+            const capacidadLibre = cap - caja.ocupado;
+            const maxPorVolumen = Math.floor((capacidadLibre + 1e-9) / grupo.unidad_volumen);
+            const asignable = Math.min(restante, limiteGrupo, maxPorVolumen);
+            if (asignable > 0) {
+              caja.ocupado += asignable * grupo.unidad_volumen;
+              caja.porGrupo.set(grupo.key, usadosGrupo + asignable);
+              const existente = caja.contenido.find((item) => item.groupKey === grupo.key);
+              if (existente) existente.cantidad += asignable; else caja.contenido.push({ groupKey: grupo.key, cantidad: asignable });
+              restante -= asignable;
+              colocado = true;
+              if (restante <= 0) break;
+            }
+          }
+          if (!colocado) {
+            if (grupo.unidad_volumen > cap) return null;
+            cajas.push({ ocupado: 0, porGrupo: new Map(), contenido: [] });
+          }
+        }
+      }
+
+      const cajasTotales = cajas.length;
+      if (cajasTotales <= 0) return null;
+
+      const capacidadTotal = cajasTotales * cap;
+      const eficiencia = capacidadTotal > 0 ? volumenTotalOrden / capacidadTotal : 0;
+      const sobrante = Math.max(0, capacidadTotal - volumenTotalOrden);
+
+      const detalleGrupos = gruposValidos.map((grupo) => {
+        const cajasConGrupo = cajas.reduce((sum, caja) => sum + ((caja.porGrupo.get(grupo.key) || 0) > 0 ? 1 : 0), 0);
+        return {
+          dims: grupo.dims,
+          cantidad_total: grupo.cantidad,
+          unidades_por_caja: Math.floor(grupo.unidades_por_caja || 0),
+          cajas: cajasConGrupo
+        };
+      });
+
+      const detalleCajas = cajas.map((caja, idx) => ({
+        numero_caja: idx + 1,
+        capacidad_total_m3: cap,
+        capacidad_usada_m3: caja.ocupado,
+        sobrante_m3: Math.max(0, cap - caja.ocupado),
+        contenido: caja.contenido.map((item) => {
+          const ref = grupoMap.get(item.groupKey);
+          return {
+            dims: ref?.dims,
+            cantidad: item.cantidad
+          };
+        })
+      }));
+
+      return {
+        cajas: cajasTotales,
+        capacidadTotal,
+        eficiencia,
+        sobrante,
+        detalle_grupos: detalleGrupos,
+        detalle_cajas: detalleCajas,
+        estrategia: 'mix'
+      };
+    };
+
+    const evaluaciones = [];
+    for (const { m, cap } of modelosValidos) {
+      if (!(cap > 0)) continue;
+      const gruposData = buildGruposData(m);
+      if (!gruposData.length) continue;
+
+      const mixEval = evaluarMixto(gruposData, cap);
+      if (mixEval) {
+        evaluaciones.push({ modelo: m, cap, ...mixEval });
+      }
+
+      const individualEval = evaluarIndividual(gruposData, cap);
+      if (individualEval) {
+        evaluaciones.push({ modelo: m, cap, ...individualEval });
+      }
+    }
+
+    evaluaciones.sort((a, b) => {
       if (a.cajas !== b.cajas) return a.cajas - b.cajas;
       if (a.eficiencia !== b.eficiencia) return b.eficiencia - a.eficiencia;
-      return a.capacidadTotal - b.capacidadTotal;
+      if (a.capacidadTotal !== b.capacidadTotal) return a.capacidadTotal - b.capacidadTotal;
+      if (a.estrategia !== b.estrategia) return a.estrategia === 'mix' ? -1 : 1;
+      return 0;
     });
 
     if (!evaluaciones.length) {
       dlog('No se encontró un modelo que pueda agrupar toda la orden, devolviendo vacío', { orden_despacho });
-      return { orden_despacho, combinacion: [], cajas_minimas: 0, volumen_total_m3: volumenTotalOrden, eficiencia: 0, sobrante_m3: volumenTotalOrden };
+      return {
+        orden_despacho,
+        combinacion: [],
+        cajas_minimas: 0,
+        volumen_total_m3: volumenTotalOrden,
+        eficiencia: 0,
+        sobrante_m3: volumenTotalOrden,
+        modelos_considerados: modelosEvaluados,
+        detalle_grupos: [],
+        detalle_cajas: []
+      };
     }
 
     const mejor = evaluaciones[0];
@@ -1329,7 +1457,8 @@ const sugerenciasService = {
       modelo: mejor.modelo.nombre_modelo,
       cajas: mejor.cajas,
       eficiencia: Math.round(mejor.eficiencia * 1000) / 10,
-      sobrante_m3: Math.round(mejor.sobrante * 1000) / 1000
+      sobrante_m3: Math.round(mejor.sobrante * 1000) / 1000,
+      estrategia: mejor.estrategia
     });
 
     return {
@@ -1340,8 +1469,10 @@ const sugerenciasService = {
       capacidad_total_m3: mejor.capacidadTotal,
       eficiencia: Math.round(mejor.eficiencia * 1000) / 10,
       sobrante_m3: Math.round(mejor.sobrante * 1000) / 1000,
-      modelos_considerados: evaluaciones.length,
-      detalle_grupos: mejor.detalle
+      modelos_considerados: modelosEvaluados,
+      detalle_grupos: mejor.detalle_grupos,
+      detalle_cajas: Array.isArray(mejor.detalle_cajas) ? mejor.detalle_cajas : [],
+      estrategia_utilizada: mejor.estrategia
     };
   },
 

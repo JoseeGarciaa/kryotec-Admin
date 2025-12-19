@@ -1,0 +1,18 @@
+stateDiagram-v2
+    direction LR
+    state "Activo" as ActivoState
+    state "Debe cambio Pwd" as DebeCambioPwd
+    state "Bloqueo temporal" as BloqueoTemporal
+    state "Bloqueo manual" as BloqueoManual
+    state "Inactivo" as InactivoState
+
+    [*] --> Registrado : createUser()
+    Registrado --> ActivoState : login ok
+    ActivoState --> DebeCambioPwd : pwd expira
+    DebeCambioPwd --> ActivoState : changePassword
+    ActivoState --> BloqueoTemporal : muchos intentos
+    BloqueoTemporal --> ActivoState : minutos cumplidos
+    ActivoState --> BloqueoManual : admin bloquea
+    BloqueoManual --> ActivoState : admin desbloquea
+    ActivoState --> InactivoState : inactivar o eliminar
+    InactivoState --> ActivoState : reactivar

@@ -6,6 +6,72 @@ import { useSugerenciasController } from '../../../../controllers/hooks/useSuger
 import { useClienteProspectoController } from '../../../../controllers/hooks/useClienteProspectoController';
 import { apiClient } from '../../../../services/api';
 
+type CombinacionItem = {
+  modelo_id: number | null;
+  nombre_modelo: string;
+  cantidad: number;
+  volumen_modelo_m3?: number;
+};
+
+type GrupoDetalle = {
+  dims?: number[];
+  cantidad_total?: number;
+  unidades_por_caja?: number;
+  cajas?: number;
+};
+
+type CajaContenido = {
+  dims?: number[];
+  cantidad: number;
+};
+
+type CajaDetalle = {
+  numero_caja: number;
+  capacidad_total_m3: number;
+  capacidad_usada_m3: number;
+  sobrante_m3: number;
+  contenido: CajaContenido[];
+};
+
+type OrdenDetalle = {
+  orden_despacho: string | number;
+  cajas_minimas?: number;
+  eficiencia?: number;
+  volumen_total_m3?: number;
+  capacidad_total_m3?: number;
+  sobrante_m3?: number;
+  combinacion?: CombinacionItem[];
+  modelos_considerados?: number;
+  detalle_grupos?: GrupoDetalle[];
+  detalle_cajas?: CajaDetalle[];
+  estrategia_utilizada?: 'mix' | 'individual';
+};
+
+type ModeloAgregado = {
+  modelo_id: number;
+  nombre_modelo: string;
+  total_cajas: number;
+  promedio_diario_cajas?: number;
+};
+
+type MixAggResponse = {
+  resumen?: {
+    startDate?: string;
+    endDate?: string;
+    total_dias?: number;
+    total_ordenes_unicas?: number;
+    total_productos_reales?: number;
+    volumen_total_m3_reales?: number;
+    total_productos_modelados?: number;
+    volumen_total_m3_modelados?: number;
+    cobertura_productos_pct?: number;
+    cobertura_volumen_pct?: number;
+    total_dias_activos?: number;
+  };
+  modelos_agregados?: ModeloAgregado[];
+  ordenes?: OrdenDetalle[];
+};
+
 const SugerenciasView: React.FC = () => {
   // Util para formatear fechas sin desplazamiento de zona (cuando viene como YYYY-MM-DD)
   const formatFecha = (v: any) => {
@@ -36,7 +102,7 @@ const SugerenciasView: React.FC = () => {
   const [resumenError, setResumenError] = useState<string | null>(null);
   const [calculando, setCalculando] = useState(false);
   // Resultado agregado: combinación mínima por orden (rango)
-  const [mixAgg, setMixAgg] = useState<any|null>(null);
+  const [mixAgg, setMixAgg] = useState<MixAggResponse | null>(null);
   // Días
   const [diasActivos, setDiasActivos] = useState<number | null>(null);
   const [diasRango, setDiasRango] = useState<number | null>(null);
@@ -44,6 +110,29 @@ const SugerenciasView: React.FC = () => {
   const [modelos, setModelos] = useState<Array<{ modelo_id: number; nombre_modelo: string; volumen_litros: number }>>([]);
   const [modelosPermitidos, setModelosPermitidos] = useState<number[]>([]);
   const [guardando, setGuardando] = useState<boolean>(false);
+
+  const formatNumeric = (value: number | null | undefined, options?: Intl.NumberFormatOptions) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '0';
+    return numeric.toLocaleString('es-CO', options);
+  };
+  const formatDecimal = (value: number | null | undefined, digits = 2) => formatNumeric(value, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const formatInteger = (value: number | null | undefined) => formatNumeric(value, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const formatPercent = (value: number | null | undefined) => `${formatDecimal(value, 1)}%`;
+  const formatVolume = (value: number | null | undefined) => `${formatDecimal(value, 3)} m³`;
+  const totalCajasOrden = (orden: OrdenDetalle) => (orden.combinacion || []).reduce((acc, item) => acc + (item?.cantidad || 0), 0);
+  const resumenCombinacion = (orden: OrdenDetalle) => {
+    if (!orden.combinacion || orden.combinacion.length === 0) return 'Sin combinación calculada';
+    return orden.combinacion.map(item => `${formatInteger(item.cantidad)} x ${item.nombre_modelo}`).join(', ');
+  };
+  const dimsLabel = (dims?: number[]) => {
+    if (!Array.isArray(dims) || dims.length < 3) return 'Dimensiones no disponibles';
+    return `${dims.map(v => formatInteger(v)).join(' x ')} mm`;
+  };
+  const cajaContenidoLabel = (contenido?: CajaContenido[]) => {
+    if (!Array.isArray(contenido) || contenido.length === 0) return 'Sin detalle de contenido';
+    return contenido.map(item => `${formatInteger(item.cantidad)} uds (${dimsLabel(item.dims)})`).join(' · ');
+  };
 
   // Historial
   const [limit] = useState(20);
@@ -122,7 +211,7 @@ const SugerenciasView: React.FC = () => {
       setDiasRango(diasCalendario || null);
       const activos = rMixAgg.data?.resumen?.total_dias_activos ?? null;
       setDiasActivos(activos);
-      setMixAgg(rMixAgg.data);
+      setMixAgg(rMixAgg.data as MixAggResponse);
     } catch { alert('Error al calcular'); }
     finally { setCalculando(false); }
   };
@@ -275,6 +364,10 @@ const SugerenciasView: React.FC = () => {
   };
   const generarPDF = () => pdfGenerico(pdfItems.length ? pdfItems : sugerencias, pdfTitulo || 'Reporte_Completo');
 
+  const modelosAgregados = mixAgg?.modelos_agregados ?? [];
+  const totalPromedioDiario = modelosAgregados.reduce((sum, item) => sum + (item.promedio_diario_cajas ?? 0), 0);
+  const totalCajasPeriodo = modelosAgregados.reduce((sum, item) => sum + item.total_cajas, 0);
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">Sugerencias (Rango de Fechas)</h1>
@@ -366,8 +459,8 @@ const SugerenciasView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
-                {mixAgg.modelos_agregados?.map((m:any) => {
-                  const prom = Number(m.promedio_diario_cajas || 0);
+                {modelosAgregados.map((m: ModeloAgregado) => {
+                  const prom = Number(m.promedio_diario_cajas ?? 0);
                   const recomDiaria = prom >= 1 ? Math.round(prom) : 0;
                   const recomMensual = Math.ceil(prom * 30);
                   return (
@@ -382,14 +475,136 @@ const SugerenciasView: React.FC = () => {
                 })}
                 <tr className="font-semibold bg-green-50 dark:bg-green-900/30">
                   <td className="p-2">TOTAL</td>
-                  <td className="p-2">{mixAgg.modelos_agregados?.reduce((s:number,x:any)=> s + (x.total_cajas||0),0)}</td>
-                  <td className="p-2">{(() => { const sum = (mixAgg.modelos_agregados||[]).reduce((s:number,x:any)=> s + (x.promedio_diario_cajas||0),0); return Number(sum).toFixed(3); })()}</td>
-                  <td className="p-2">{(() => { const sum = (mixAgg.modelos_agregados||[]).reduce((s:number,x:any)=> s + (x.promedio_diario_cajas||0),0); return sum >= 1 ? Math.round(sum) : (sum > 0 ? `1 cada ${Math.round(1 / sum)} días` : 0); })()}</td>
-                  <td className="p-2">{(() => { const sum = (mixAgg.modelos_agregados||[]).reduce((s:number,x:any)=> s + (x.promedio_diario_cajas||0),0); return Math.ceil(sum * 30); })()}</td>
+                  <td className="p-2">{totalCajasPeriodo}</td>
+                  <td className="p-2">{Number(totalPromedioDiario).toFixed(3)}</td>
+                  <td className="p-2">{totalPromedioDiario >= 1 ? Math.round(totalPromedioDiario) : (totalPromedioDiario > 0 ? `1 cada ${Math.round(1 / totalPromedioDiario)} días` : 0)}</td>
+                  <td className="p-2">{Math.ceil(totalPromedioDiario * 30)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+          {Array.isArray(mixAgg.ordenes) && mixAgg.ordenes.length > 0 && (
+            <div className="mt-8">
+              <h3 className="font-semibold text-gray-800 dark:text-white mb-3 text-sm">Detalle por orden</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-300 mb-4">
+                Cada registro muestra la combinación mínima encontrada para la orden, junto con la capacidad usada y el motivo de la selección del modelo.
+              </p>
+              <div className="space-y-3">
+                {mixAgg.ordenes.map((orden, idx) => {
+                  const cajasTotales = totalCajasOrden(orden);
+                  const combinacionResumen = resumenCombinacion(orden);
+                  const eficienciaTexto = orden.eficiencia != null ? formatPercent(orden.eficiencia) : '0,0%';
+                  const volumenTexto = orden.volumen_total_m3 != null ? formatVolume(orden.volumen_total_m3) : '0,000 m³';
+                  const capacidadTexto = orden.capacidad_total_m3 != null ? formatVolume(orden.capacidad_total_m3) : null;
+                  const sobranteTexto = orden.sobrante_m3 != null ? formatVolume(orden.sobrante_m3) : null;
+                  const modelosEvaluados = orden.modelos_considerados != null ? formatInteger(orden.modelos_considerados) : 'varios';
+                  const capacidadTotalOrden = (orden.combinacion || []).reduce((sum, item) => sum + ((item?.volumen_modelo_m3 || 0) * (item?.cantidad || 0)), 0);
+                  const estrategiaNota = orden.estrategia_utilizada === 'mix' ? ' Se combinaron productos compatibles en la misma caja cuando fue posible.' : '';
+                  const mezclaCajasNota = Array.isArray(orden.detalle_cajas) && orden.detalle_cajas.some((caja) => (caja.contenido || []).length > 1) ? ' Al menos una caja agrupa líneas distintas.' : '';
+                  return (
+                    <details key={`${orden.orden_despacho}-${idx}`} className="border border-green-200 dark:border-green-700 rounded-md bg-white dark:bg-gray-900/40" defaultOpen={idx === 0}>
+                      <summary className="flex flex-col gap-1 p-3 cursor-pointer select-none">
+                        <span className="text-sm font-medium text-gray-800 dark:text-white">Orden {orden.orden_despacho || 'N/A'}</span>
+                        <span className="text-xs text-gray-600 dark:text-gray-300">{combinacionResumen}</span>
+                        <span className="text-[11px] text-green-700 dark:text-green-300">Eficiencia {eficienciaTexto}{sobranteTexto ? ` · Sobrante ${sobranteTexto}` : ''}</span>
+                      </summary>
+                      <div className="pt-3 px-3 pb-4 text-xs text-gray-700 dark:text-gray-200 space-y-3 border-t border-green-200 dark:border-green-700">
+                        <p>
+                          Se evaluaron {modelosEvaluados} modelos y se eligió la combinación {combinacionResumen}. Esto requiere {formatInteger(orden.cajas_minimas ?? cajasTotales)} cajas para trasladar {volumenTexto}{capacidadTexto ? ` sobre una capacidad total de ${capacidadTexto}` : ''}{sobranteTexto ? `, dejando ${sobranteTexto} sin usar` : ''}.{estrategiaNota}{mezclaCajasNota}
+                        </p>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-[11px]">
+                            <thead className="bg-green-50 dark:bg-green-900/40 text-green-700 dark:text-green-200">
+                              <tr>
+                                <th className="text-left p-2">Modelo</th>
+                                <th className="text-left p-2">Cajas</th>
+                                <th className="text-left p-2">Capacidad caja</th>
+                                <th className="text-left p-2">Capacidad total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                              {(orden.combinacion || []).map((item, comboIdx) => {
+                                const capacidadUnidad = item?.volumen_modelo_m3 || 0;
+                                const capacidadTotal = capacidadUnidad * (item?.cantidad || 0);
+                                return (
+                                  <tr key={`${orden.orden_despacho}-${item?.modelo_id ?? comboIdx}`} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                                    <td className="p-2">{item?.nombre_modelo || 'Modelo no identificado'}</td>
+                                    <td className="p-2">{formatInteger(item?.cantidad || 0)}</td>
+                                    <td className="p-2">{formatVolume(capacidadUnidad)}</td>
+                                    <td className="p-2">{formatVolume(capacidadTotal)}</td>
+                                  </tr>
+                                );
+                              })}
+                              <tr className="font-semibold bg-green-50 dark:bg-green-900/20">
+                                <td className="p-2">TOTAL</td>
+                                <td className="p-2">{formatInteger(cajasTotales)}</td>
+                                <td className="p-2 text-gray-500 dark:text-gray-400">—</td>
+                                <td className="p-2">{formatVolume(capacidadTotalOrden)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        {Array.isArray(orden.detalle_grupos) && orden.detalle_grupos.length > 0 && (
+                          <div>
+                            <div className="font-semibold text-gray-800 dark:text-white mb-2 text-xs">Cómo se llenan las cajas</div>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full text-[11px]">
+                                <thead className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200">
+                                  <tr>
+                                    <th className="text-left p-2">Línea agrupada</th>
+                                    <th className="text-left p-2">Cantidad total</th>
+                                    <th className="text-left p-2">Unidades por caja</th>
+                                    <th className="text-left p-2">Cajas asignadas</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                  {orden.detalle_grupos.map((grupo, grupoIdx) => (
+                                    <tr key={`${orden.orden_despacho}-grupo-${grupoIdx}`} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                                      <td className="p-2">{dimsLabel(grupo.dims)}</td>
+                                      <td className="p-2">{formatInteger(grupo.cantidad_total || 0)}</td>
+                                      <td className="p-2">{formatInteger(grupo.unidades_por_caja || 0)}</td>
+                                      <td className="p-2">{formatInteger(grupo.cajas || 0)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                        {Array.isArray(orden.detalle_cajas) && orden.detalle_cajas.length > 0 && (
+                          <div>
+                            <div className="font-semibold text-gray-800 dark:text-white mb-2 text-xs">Detalle por caja</div>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full text-[11px]">
+                                <thead className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200">
+                                  <tr>
+                                    <th className="text-left p-2">Caja</th>
+                                    <th className="text-left p-2">Capacidad usada</th>
+                                    <th className="text-left p-2">Sobrante</th>
+                                    <th className="text-left p-2">Contenido</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                  {orden.detalle_cajas.map((caja) => (
+                                    <tr key={`${orden.orden_despacho}-box-${caja.numero_caja}`} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                                      <td className="p-2">Caja {formatInteger(caja.numero_caja)}</td>
+                                      <td className="p-2">{formatVolume(caja.capacidad_usada_m3)}</td>
+                                      <td className="p-2">{formatVolume(caja.sobrante_m3)}</td>
+                                      <td className="p-2">{cajaContenidoLabel(caja.contenido)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
