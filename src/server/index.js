@@ -11,6 +11,7 @@ const clientesProspectosService = require('./clientesProspectosService');
 const clientesProspectosRoutes = require('./routes/clientesProspectosRoutes'); // Agregar esta línea
 const inventarioProspectosService = require('./inventarioProspectosService');
 const sugerenciasService = require('./sugerenciasService');
+const inventarioAdminService = require('./inventarioAdminService');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const jwt = require('jsonwebtoken');
@@ -248,6 +249,116 @@ app.get('/api/inventario-credocubes', async (req, res) => {
   } catch (error) {
     console.error('Error al obtener inventario de Credocubes:', error);
     res.status(500).json({ error: 'Error al obtener datos del inventario' });
+  }
+});
+
+const parseBooleanQuery = (value) => {
+  if (value === undefined) return undefined;
+  const normalized = String(value).toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  return undefined;
+};
+
+app.get('/api/tenant-inventory', verifyToken, async (req, res) => {
+  try {
+    const { schema, search, estado, categoria, sedeId, zonaId, seccionId, page, pageSize } = req.query;
+    const activo = parseBooleanQuery(req.query.activo);
+
+    const filters = {
+      search: search || undefined,
+      estado: estado || undefined,
+      categoria: categoria || undefined,
+      sede_id: sedeId || undefined,
+      zona_id: zonaId || undefined,
+      seccion_id: seccionId || undefined
+    };
+
+    if (activo !== undefined) {
+      filters.activo = activo;
+    }
+
+    const result = await inventarioAdminService.getInventario(schema, filters, {
+      page,
+      pageSize
+    });
+    res.json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    console.error('Error en GET /api/tenant-inventory:', error);
+    res.status(status).json({ error: error.message || 'Error al obtener inventario del tenant' });
+  }
+});
+
+app.post('/api/tenant-inventory', verifyToken, async (req, res) => {
+  try {
+    const { schema, item } = req.body || {};
+    const created = await inventarioAdminService.createInventarioItem(schema, item || {});
+    res.status(201).json(created);
+  } catch (error) {
+    const status = error.status || (error.code === '23505' ? 409 : 500);
+    console.error('Error en POST /api/tenant-inventory:', error);
+    res.status(status).json({ error: error.message || 'Error al crear item de inventario' });
+  }
+});
+
+app.put('/api/tenant-inventory/:id', verifyToken, async (req, res) => {
+  try {
+    const { schema, item } = req.body || {};
+    const updated = await inventarioAdminService.updateInventarioItem(schema, req.params.id, item || {});
+    res.json(updated);
+  } catch (error) {
+    const status = error.status || (error.code === '23505' ? 409 : 500);
+    console.error(`Error en PUT /api/tenant-inventory/${req.params.id}:`, error);
+    res.status(status).json({ error: error.message || 'Error al actualizar item de inventario' });
+  }
+});
+
+app.get('/api/tenant-inventory/models', verifyToken, async (req, res) => {
+  try {
+    const { schema } = req.query;
+    const modelos = await inventarioAdminService.getModelos(schema);
+    res.json(modelos);
+  } catch (error) {
+    const status = error.status || 500;
+    console.error('Error en GET /api/tenant-inventory/models:', error);
+    res.status(status).json({ error: error.message || 'Error al obtener modelos del tenant' });
+  }
+});
+
+app.get('/api/tenant-inventory/sedes', verifyToken, async (req, res) => {
+  try {
+    const { schema } = req.query;
+    const sedes = await inventarioAdminService.getSedes(schema);
+    res.json(sedes);
+  } catch (error) {
+    const status = error.status || 500;
+    console.error('Error en GET /api/tenant-inventory/sedes:', error);
+    res.status(status).json({ error: error.message || 'Error al obtener sedes del tenant' });
+  }
+});
+
+app.get('/api/tenant-inventory/zonas', verifyToken, async (req, res) => {
+  try {
+    const { schema, sedeId } = req.query;
+    const zonas = await inventarioAdminService.getZonas(schema, sedeId);
+    res.json(zonas);
+  } catch (error) {
+    const status = error.status || 500;
+    console.error('Error en GET /api/tenant-inventory/zonas:', error);
+    res.status(status).json({ error: error.message || 'Error al obtener zonas del tenant' });
+  }
+});
+
+app.get('/api/tenant-inventory/secciones', verifyToken, async (req, res) => {
+  try {
+    const { schema, zonaId } = req.query;
+    const secciones = await inventarioAdminService.getSecciones(schema, zonaId);
+    res.json(secciones);
+  } catch (error) {
+    const status = error.status || 500;
+    console.error('Error en GET /api/tenant-inventory/secciones:', error);
+    res.status(status).json({ error: error.message || 'Error al obtener secciones del tenant' });
   }
 });
 

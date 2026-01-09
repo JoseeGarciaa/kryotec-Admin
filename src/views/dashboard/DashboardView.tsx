@@ -6,7 +6,8 @@ import {
   CreditCard,
   UserPlus,
   Package,
-  Lightbulb
+  Lightbulb,
+  Boxes
 } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { useThemeContext } from '../contexts/ThemeContext';
@@ -18,6 +19,7 @@ import SettingsView from './SettingsView';
 import { InventarioCredocubesSection } from './components/InventarioCredocubesSection';
 import { UsersView } from './UsersView';
 import { CredocubesView } from './CredocubesView';
+import { TenantInventoryView } from './TenantInventoryView';
 import { TenantsView } from './TenantsView';
 import ProspectosView from './prospectos/ProspectosView';
 
@@ -96,6 +98,11 @@ export const DashboardView: React.FC = () => {
       icon: Building2 
     },
     { 
+      id: 'tenant-inventory',
+      label: 'Inventarios tenant',
+      icon: Boxes 
+    },
+    { 
       id: 'credocubes', 
       label: 'Credocubes', 
       icon: CreditCard 
@@ -157,6 +164,7 @@ export const DashboardView: React.FC = () => {
           
           {activeTab === 'usuarios' && <UsersView />}
           {activeTab === 'empresas' && <TenantsView />}
+          {activeTab === 'tenant-inventory' && <TenantInventoryView />}
           {activeTab === 'credocubes' && <CredocubesView />}
           {(activeTab === 'prospectos' || activeTab.startsWith('prospectos-')) && <ProspectosView activeSubTab={activeTab} />}
         </main>
