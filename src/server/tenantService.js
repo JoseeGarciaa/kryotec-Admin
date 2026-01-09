@@ -317,7 +317,6 @@ const updateTenant = async (id, tenantData) => {
     let updateFields = [];
     let queryParams = [];
     let paramIndex = 1;
-    let adminPasswordHash = null;
     
     // Guardar el esquema original y el nuevo esquema para usarlos más tarde
     let newSchema = originalSchema; // Por defecto, asumimos que no cambia
@@ -362,9 +361,9 @@ const updateTenant = async (id, tenantData) => {
     
     // Si se proporciona una nueva contraseña, hashearla y agregarla a la consulta
     if (tenantData.contraseña) {
-      adminPasswordHash = await hashPassword(tenantData.contraseña);
+      const hashedPassword = await hashPassword(tenantData.contraseña);
       updateFields.push(`contraseña = $${paramIndex}`);
-      queryParams.push(adminPasswordHash);
+      queryParams.push(hashedPassword);
       paramIndex++;
     }
     
@@ -399,23 +398,25 @@ const updateTenant = async (id, tenantData) => {
     // Llamar a la función para actualizar el esquema del tenant
     const updatedTenant = result.rows[0];
     console.log(`Ejecutando función admin_platform.actualizar_tenant con parámetros:`);
-    console.log(`- Esquema actual: ${originalSchema}`);
-    console.log(`- Esquema nuevo: ${newSchema}`);
+    console.log(`- Esquema actual: ${updatedTenant.esquema}`);
+    console.log(`- Esquema nuevo: ${updatedTenant.esquema}`);
     console.log(`- Nombre: ${updatedTenant.nombre}`);
     console.log(`- Email: ${updatedTenant.email_contacto}`);
     console.log(`- Teléfono: ${updatedTenant.telefono_contacto}`);
     
     // Obtener la contraseña hasheada (si se proporcionó una nueva) o la actual
-    if (!adminPasswordHash) {
+    let hashedPassword;
+    if (tenantData.contraseña) {
+      hashedPassword = queryParams.find((param, index) => {
+        return updateFields[index] && updateFields[index].startsWith('contraseña');
+      });
+    } else {
       // Si no se proporcionó una nueva contraseña, obtenemos la actual de la base de datos
       const passwordResult = await client.query(
         'SELECT contraseña FROM admin_platform.tenants WHERE id = $1',
         [id]
       );
-      adminPasswordHash = passwordResult.rows[0]?.contraseña;
-      if (!adminPasswordHash) {
-        throw new Error('No se pudo recuperar la contraseña del administrador para actualizar el esquema');
-      }
+      hashedPassword = passwordResult.rows[0].contraseña;
     }
     
     // Verificar si el esquema original existe en la base de datos
@@ -442,7 +443,7 @@ const updateTenant = async (id, tenantData) => {
             updatedTenant.nombre,
             updatedTenant.email_contacto,
             updatedTenant.telefono_contacto || '',
-            adminPasswordHash
+            hashedPassword
           ]
         );
         console.log('Resultado de crear_tenant:', createSchemaResult.rows[0]);
@@ -460,24 +461,40 @@ const updateTenant = async (id, tenantData) => {
       console.log(`- Teléfono: ${updatedTenant.telefono_contacto}`);
       
       try {
+        // Verificamos si el nombre del esquema ha cambiado
         if (originalSchema !== newSchema) {
           console.log(`El nombre del esquema ha cambiado de ${originalSchema} a ${newSchema}. Renombrando esquema...`);
+          
+          // Llamamos a la función para renombrar el esquema
+          const updateSchemaResult = await client.query(
+            'SELECT admin_platform.actualizar_tenant($1, $2, $3, $4, $5, $6)',
+            [
+              originalSchema,                  // esquema original
+              newSchema,                      // esquema nuevo
+              updatedTenant.nombre,
+              updatedTenant.email_contacto,
+              updatedTenant.telefono_contacto || '',  // Aseguramos que no sea null
+              hashedPassword
+            ]
+          );
+          console.log('Resultado de actualizar_tenant (renombrar esquema):', updateSchemaResult.rows[0]);
         } else {
-          console.log(`El nombre del esquema no ha cambiado. Aplicando actualización dentro de ${originalSchema}...`);
+          // Si el nombre del esquema no ha cambiado, solo actualizamos los datos
+          console.log(`El nombre del esquema no ha cambiado. Actualizando datos del esquema ${originalSchema}...`);
+          
+          const updateSchemaResult = await client.query(
+            'SELECT admin_platform.actualizar_tenant($1, $2, $3, $4, $5, $6)',
+            [
+              originalSchema,                  // esquema original
+              originalSchema,                  // esquema nuevo (igual al original)
+              updatedTenant.nombre,
+              updatedTenant.email_contacto,
+              updatedTenant.telefono_contacto || '',  // Aseguramos que no sea null
+              hashedPassword
+            ]
+          );
+          console.log('Resultado de actualizar_tenant (actualizar datos):', updateSchemaResult.rows[0]);
         }
-
-        const updateSchemaResult = await client.query(
-          'SELECT admin_platform.actualizar_tenant($1, $2, $3, $4, $5, $6)',
-          [
-            originalSchema,
-            newSchema,
-            updatedTenant.nombre,
-            updatedTenant.email_contacto,
-            updatedTenant.telefono_contacto || '',
-            adminPasswordHash
-          ]
-        );
-        console.log('Resultado de actualizar_tenant:', updateSchemaResult.rows[0]);
       } catch (schemaError) {
         console.error(`Error al actualizar esquema de ${originalSchema} a ${newSchema}:`, schemaError);
         // Continuamos con la transacción aunque falle la actualización del esquema
