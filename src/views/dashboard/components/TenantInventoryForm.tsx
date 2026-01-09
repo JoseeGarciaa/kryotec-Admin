@@ -3,107 +3,44 @@ import { Input } from '../../../components/ui/Input';
 import {
   TenantInventoryItem,
   TenantInventoryModelInfo,
-  TenantInventoryPayload,
-  TenantInventorySede,
-  TenantInventorySeccion,
-  TenantInventoryZona
+  TenantInventoryPayload
 } from '../../../models/TenantInventoryModel';
 
 interface TenantInventoryFormProps {
   mode: 'create' | 'edit';
   saving: boolean;
   modelos: TenantInventoryModelInfo[];
-  sedes: TenantInventorySede[];
-  zonas: TenantInventoryZona[];
-  secciones: TenantInventorySeccion[];
   item?: TenantInventoryItem | null;
   onSubmit: (payload: TenantInventoryPayload) => Promise<void>;
   onClose: () => void;
-  onLoadZonas: (sedeId?: number) => Promise<void>;
-  onLoadSecciones: (zonaId?: number) => Promise<void>;
 }
 
 interface FormState {
   modelo_id: number | null;
   rfid: string;
-  lote: string;
-  estado: string;
-  sub_estado: string;
-  categoria: string;
   activo: boolean;
-  numero_orden: string;
-  sede_id: number | null;
-  zona_id: number | null;
-  seccion_id: number | null;
-  validacion_limpieza: string;
-  validacion_goteo: string;
-  validacion_desinfeccion: string;
-  temp_salida_c: string;
-  temp_llegada_c: string;
-  sensor_id: string;
-  fecha_vencimiento: string;
 }
 
 const DEFAULT_FORM_STATE: FormState = {
   modelo_id: null,
   rfid: '',
-  lote: '',
-  estado: 'Pre Acondicionamiento',
-  sub_estado: '',
-  categoria: 'Cube',
-  activo: true,
-  numero_orden: '',
-  sede_id: null,
-  zona_id: null,
-  seccion_id: null,
-  validacion_limpieza: '',
-  validacion_goteo: '',
-  validacion_desinfeccion: '',
-  temp_salida_c: '',
-  temp_llegada_c: '',
-  sensor_id: '',
-  fecha_vencimiento: ''
-};
-
-const sanitizeOptional = (value: string) => {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  activo: true
 };
 
 export const TenantInventoryForm: React.FC<TenantInventoryFormProps> = ({
   mode,
   saving,
   modelos,
-  sedes,
-  zonas,
-  secciones,
   item,
   onSubmit,
-  onClose,
-  onLoadZonas,
-  onLoadSecciones
+  onClose
 }) => {
   const [form, setForm] = useState<FormState>(() => {
     if (mode === 'edit' && item) {
       return {
         modelo_id: item.modelo_id,
         rfid: item.rfid,
-        lote: item.lote || '',
-        estado: item.estado || 'Pre Acondicionamiento',
-        sub_estado: item.sub_estado || '',
-        categoria: item.categoria || item.tipo_modelo || 'Cube',
-        activo: item.activo,
-        numero_orden: item.numero_orden || '',
-        sede_id: item.sede_id ?? null,
-        zona_id: item.zona_id ?? null,
-        seccion_id: item.seccion_id ?? null,
-        validacion_limpieza: item.validacion_limpieza || '',
-        validacion_goteo: item.validacion_goteo || '',
-        validacion_desinfeccion: item.validacion_desinfeccion || '',
-        temp_salida_c: item.temp_salida_c?.toString() || '',
-        temp_llegada_c: item.temp_llegada_c?.toString() || '',
-        sensor_id: item.sensor_id || '',
-        fecha_vencimiento: item.fecha_vencimiento || ''
+        activo: item.activo
       };
     }
     return DEFAULT_FORM_STATE;
@@ -138,24 +75,11 @@ export const TenantInventoryForm: React.FC<TenantInventoryFormProps> = ({
   }, [form.modelo_id, modelos]);
 
   useEffect(() => {
-    if (mode === 'edit' && item?.sede_id) {
-      onLoadZonas(item.sede_id).catch(() => undefined);
+    if (!tipos.length) return;
+    if (!selectedTipo || !tipos.includes(selectedTipo)) {
+      setSelectedTipo((prev) => (prev && tipos.includes(prev) ? prev : tipos[0]));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, item?.sede_id]);
-
-  useEffect(() => {
-    if (mode === 'edit' && item?.zona_id) {
-      onLoadSecciones(item.zona_id).catch(() => undefined);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, item?.zona_id]);
-
-  useEffect(() => {
-    if (selectedModelo?.tipo && form.categoria !== selectedModelo.tipo) {
-      setForm(prev => ({ ...prev, categoria: selectedModelo.tipo || prev.categoria }));
-    }
-  }, [selectedModelo, form.categoria]);
+  }, [tipos, selectedTipo]);
 
   const handleChange = (field: keyof FormState, value: string | boolean | number | null) => {
     setForm(prev => ({
@@ -168,40 +92,20 @@ export const TenantInventoryForm: React.FC<TenantInventoryFormProps> = ({
     setSelectedTipo(value);
     setForm(prev => ({
       ...prev,
-      modelo_id: null,
-      categoria: value || prev.categoria
+      modelo_id: null
     }));
   };
 
   const handleModeloChange = (value: string) => {
     const modeloId = Number(value);
+    setForm(prev => ({
+      ...prev,
+      modelo_id: Number.isNaN(modeloId) ? null : modeloId
+    }));
     const model = modelos.find(m => m.modelo_id === modeloId);
-    setForm(prev => ({
-      ...prev,
-      modelo_id: Number.isNaN(modeloId) ? null : modeloId,
-      categoria: model?.tipo || prev.categoria
-    }));
-  };
-
-  const handleSedeChange = async (value: string) => {
-    const sedeId = value ? Number(value) : null;
-    await onLoadZonas(sedeId ?? undefined);
-    setForm(prev => ({
-      ...prev,
-      sede_id: sedeId,
-      zona_id: null,
-      seccion_id: null
-    }));
-  };
-
-  const handleZonaChange = async (value: string) => {
-    const zonaId = value ? Number(value) : null;
-    await onLoadSecciones(zonaId ?? undefined);
-    setForm(prev => ({
-      ...prev,
-      zona_id: zonaId,
-      seccion_id: null
-    }));
+    if (model?.tipo) {
+      setSelectedTipo(model.tipo);
+    }
   };
 
   const validateForm = () => {
@@ -209,8 +113,8 @@ export const TenantInventoryForm: React.FC<TenantInventoryFormProps> = ({
     if (!form.modelo_id) {
       currentErrors.modelo_id = 'Seleccione un modelo';
     }
-    if (!form.rfid || form.rfid.length !== 24 || !/^\d{24}$/.test(form.rfid)) {
-      currentErrors.rfid = 'El RFID debe tener 24 dígitos';
+    if (!form.rfid || form.rfid.length !== 24 || !/^[A-Za-z0-9]{24}$/.test(form.rfid)) {
+      currentErrors.rfid = 'El RFID debe tener 24 caracteres alfanuméricos';
     }
     if (!selectedTipo) {
       currentErrors.tipo = 'Seleccione el tipo';
@@ -226,22 +130,9 @@ export const TenantInventoryForm: React.FC<TenantInventoryFormProps> = ({
     const payload: TenantInventoryPayload = {
       modelo_id: form.modelo_id!,
       rfid: form.rfid.trim(),
-      lote: sanitizeOptional(form.lote) ?? null,
-      estado: form.estado.trim() || 'Pre Acondicionamiento',
-      sub_estado: sanitizeOptional(form.sub_estado) ?? null,
-      categoria: form.categoria,
-      activo: form.activo,
-      numero_orden: sanitizeOptional(form.numero_orden) ?? null,
-      sede_id: form.sede_id ?? undefined,
-      zona_id: form.zona_id ?? undefined,
-      seccion_id: form.seccion_id ?? undefined,
-      validacion_limpieza: sanitizeOptional(form.validacion_limpieza) ?? null,
-      validacion_goteo: sanitizeOptional(form.validacion_goteo) ?? null,
-      validacion_desinfeccion: sanitizeOptional(form.validacion_desinfeccion) ?? null,
-      temp_salida_c: form.temp_salida_c ? Number(form.temp_salida_c) : undefined,
-      temp_llegada_c: form.temp_llegada_c ? Number(form.temp_llegada_c) : undefined,
-      sensor_id: sanitizeOptional(form.sensor_id) ?? null,
-      fecha_vencimiento: sanitizeOptional(form.fecha_vencimiento) ?? null
+      estado: item?.estado?.trim() || 'En Bodega',
+      categoria: selectedModelo?.tipo || selectedTipo || item?.categoria || undefined,
+      activo: form.activo
     };
 
     await onSubmit(payload);
@@ -316,135 +207,18 @@ export const TenantInventoryForm: React.FC<TenantInventoryFormProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <Input
               label="RFID"
               value={form.rfid}
               onChange={(event) => {
-                const value = event.target.value.replace(/\D/g, '').slice(0, 24);
+                const value = event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 24);
                 handleChange('rfid', value);
               }}
               required
               maxLength={24}
-              inputMode="numeric"
               error={errors.rfid}
-            />
-            <Input
-              label="Lote"
-              value={form.lote}
-              onChange={(event) => handleChange('lote', event.target.value)}
-              placeholder="Opcional"
-            />
-            <Input
-              label="Estado"
-              value={form.estado}
-              onChange={(event) => handleChange('estado', event.target.value)}
-            />
-            <Input
-              label="Sub estado"
-              value={form.sub_estado}
-              onChange={(event) => handleChange('sub_estado', event.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Sede</label>
-              <select
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                value={form.sede_id ?? ''}
-                onChange={(event) => handleSedeChange(event.target.value)}
-              >
-                <option value="">Sin sede</option>
-                {sedes.map(sede => (
-                  <option key={sede.sede_id} value={sede.sede_id}>{sede.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Zona</label>
-              <select
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                value={form.zona_id ?? ''}
-                onChange={(event) => handleZonaChange(event.target.value)}
-                disabled={!form.sede_id}
-              >
-                <option value="">Sin zona</option>
-                {zonas.map(zona => (
-                  <option key={zona.zona_id} value={zona.zona_id}>{zona.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Sección</label>
-              <select
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                value={form.seccion_id ?? ''}
-                onChange={(event) => handleChange('seccion_id', event.target.value ? Number(event.target.value) : null)}
-                disabled={!form.zona_id}
-              >
-                <option value="">Sin sección</option>
-                {secciones.map(seccion => (
-                  <option key={seccion.seccion_id} value={seccion.seccion_id}>{seccion.nombre}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              label="Validación limpieza"
-              value={form.validacion_limpieza}
-              onChange={(event) => handleChange('validacion_limpieza', event.target.value)}
-              placeholder="Opcional"
-            />
-            <Input
-              label="Validación goteo"
-              value={form.validacion_goteo}
-              onChange={(event) => handleChange('validacion_goteo', event.target.value)}
-              placeholder="Opcional"
-            />
-            <Input
-              label="Validación desinfección"
-              value={form.validacion_desinfeccion}
-              onChange={(event) => handleChange('validacion_desinfeccion', event.target.value)}
-              placeholder="Opcional"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              label="Temperatura salida (°C)"
-              value={form.temp_salida_c}
-              onChange={(event) => handleChange('temp_salida_c', event.target.value)}
-              placeholder="Opcional"
-            />
-            <Input
-              label="Temperatura llegada (°C)"
-              value={form.temp_llegada_c}
-              onChange={(event) => handleChange('temp_llegada_c', event.target.value)}
-              placeholder="Opcional"
-            />
-            <Input
-              label="Sensor ID"
-              value={form.sensor_id}
-              onChange={(event) => handleChange('sensor_id', event.target.value)}
-              placeholder="Opcional"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Número de orden"
-              value={form.numero_orden}
-              onChange={(event) => handleChange('numero_orden', event.target.value)}
-              placeholder="Opcional"
-            />
-            <Input
-              label="Fecha vencimiento"
-              type="datetime-local"
-              value={form.fecha_vencimiento}
-              onChange={(event) => handleChange('fecha_vencimiento', event.target.value)}
+              placeholder="24 caracteres alfanuméricos"
             />
           </div>
 

@@ -22,13 +22,8 @@ export const TenantInventoryView: React.FC = () => {
     saving,
     error,
     modelos,
-    sedes,
-    zonas,
-    secciones,
     loadInventory,
     loadMetadata,
-    loadZonas,
-    loadSecciones,
     createItem,
     updateItem,
     toggleActive,
@@ -132,12 +127,6 @@ export const TenantInventoryView: React.FC = () => {
   const handleOpenEdit = async (item: TenantInventoryItem) => {
     setEditingItem(item);
     setFormMode('edit');
-    if (item.sede_id) {
-      await loadZonas(selectedSchema, item.sede_id);
-    }
-    if (item.zona_id) {
-      await loadSecciones(selectedSchema, item.zona_id);
-    }
   };
 
   const closeForm = () => {
@@ -484,14 +473,9 @@ export const TenantInventoryView: React.FC = () => {
           mode={formMode}
           saving={saving}
           modelos={modelos}
-          sedes={sedes}
-          zonas={zonas}
-          secciones={secciones}
           item={formMode === 'edit' ? editingItem : null}
           onSubmit={formMode === 'create' ? handleCreate : handleUpdate}
           onClose={closeForm}
-          onLoadZonas={(sedeId) => loadZonas(selectedSchema, sedeId).then(() => undefined)}
-          onLoadSecciones={(zonaId) => loadSecciones(selectedSchema, zonaId).then(() => undefined)}
         />
       )}
     </div>

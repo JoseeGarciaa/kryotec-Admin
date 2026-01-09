@@ -302,6 +302,35 @@ app.post('/api/tenant-inventory', verifyToken, async (req, res) => {
   }
 });
 
+app.post('/api/tenant-inventory/validate', verifyToken, async (req, res) => {
+  try {
+    const { schema, rfids, sedeId } = req.body || {};
+    const list = Array.isArray(rfids)
+      ? rfids
+      : rfids ? [rfids] : [];
+    const result = await inventarioAdminService.validateInventarioRfids(schema, list, { sedeId });
+    res.json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    console.error('Error en POST /api/tenant-inventory/validate:', error);
+    res.status(status).json({ error: error.message || 'Error al validar RFIDs' });
+  }
+});
+
+app.post('/api/tenant-inventory/bulk', verifyToken, async (req, res) => {
+  try {
+    const { schema, item, rfids } = req.body || {};
+    const list = Array.isArray(rfids) ? rfids : [];
+    const payload = item || {};
+    const result = await inventarioAdminService.bulkCreateInventarioItems(schema, payload, list);
+    res.status(result.created.length > 0 ? 201 : 200).json(result);
+  } catch (error) {
+    const status = error.status || (error.code === '23505' ? 409 : 500);
+    console.error('Error en POST /api/tenant-inventory/bulk:', error);
+    res.status(status).json({ error: error.message || 'Error al registrar ítems de inventario' });
+  }
+});
+
 app.put('/api/tenant-inventory/:id', verifyToken, async (req, res) => {
   try {
     const { schema, item } = req.body || {};

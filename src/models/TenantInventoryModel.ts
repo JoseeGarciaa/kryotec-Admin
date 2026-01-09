@@ -75,6 +75,38 @@ export interface TenantInventoryPayload {
   fecha_vencimiento?: string | null;
 }
 
+export type TenantInventoryRfidStatus =
+  | 'accepted'
+  | 'duplicate_input'
+  | 'duplicate_existing'
+  | 'conflict_other_sede'
+  | 'already_exists'
+  | 'invalid_format';
+
+export interface TenantInventoryRfidValidationEntry {
+  index: number;
+  original: string;
+  normalized: string | null;
+  status: TenantInventoryRfidStatus | 'pending';
+  message?: string;
+  existing?: {
+    id?: number | null;
+    sede_id?: number | null;
+    sede_nombre?: string | null;
+    [key: string]: unknown;
+  };
+}
+
+export interface TenantInventoryRfidValidationResult {
+  results: TenantInventoryRfidValidationEntry[];
+  accepted: string[];
+}
+
+export interface TenantInventoryBulkCreateResult {
+  created: Array<{ rfid: string; item: TenantInventoryItem }>;
+  failures: Array<{ rfid: string; error: string; status?: number }>;
+}
+
 export interface TenantInventoryModelInfo {
   modelo_id: number;
   nombre_modelo: string;
@@ -154,6 +186,32 @@ export const updateTenantInventoryItem = async (
   payload: Partial<TenantInventoryPayload>
 ): Promise<TenantInventoryItem> => {
   const response = await apiClient.put(`${INVENTORY_PATH}/${id}`, { schema, item: payload });
+  return response.data;
+};
+
+export const validateTenantInventoryRfids = async (
+  schema: string,
+  rfids: string[],
+  options: { sedeId?: number } = {}
+): Promise<TenantInventoryRfidValidationResult> => {
+  const response = await apiClient.post(`${INVENTORY_PATH}/validate`, {
+    schema,
+    rfids,
+    sedeId: options.sedeId
+  });
+  return response.data;
+};
+
+export const bulkCreateTenantInventoryItems = async (
+  schema: string,
+  payload: Omit<TenantInventoryPayload, 'rfid'>,
+  rfids: string[]
+): Promise<TenantInventoryBulkCreateResult> => {
+  const response = await apiClient.post(`${INVENTORY_PATH}/bulk`, {
+    schema,
+    item: payload,
+    rfids
+  });
   return response.data;
 };
 
