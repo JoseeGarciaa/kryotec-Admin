@@ -10,8 +10,8 @@ const PASSWORD_EXPIRATION_DAYS = Math.max(parseNumber(process.env.PASSWORD_EXPIR
 const PASSWORD_REMINDER_DAYS = Math.max(parseNumber(process.env.PASSWORD_REMINDER_DAYS, 5), 1);
 const MAX_FAILED_ATTEMPTS = Math.max(parseNumber(process.env.AUTH_MAX_FAILED_ATTEMPTS, 5), 3);
 const LOCKOUT_MINUTES = parseNumber(process.env.AUTH_LOCKOUT_MINUTES, 30);
-const SESSION_TIMEOUT_MINUTES_DEFAULT = Math.max(parseNumber(process.env.SESSION_TIMEOUT_MINUTES_DEFAULT, 120), 15);
-const SESSION_TIMEOUT_MINUTES_MIN = Math.max(parseNumber(process.env.SESSION_TIMEOUT_MINUTES_MIN, 15), 5);
+const SESSION_TIMEOUT_MINUTES_DEFAULT = Math.max(parseNumber(process.env.SESSION_TIMEOUT_MINUTES_DEFAULT, 10), 10);
+const SESSION_TIMEOUT_MINUTES_MIN = Math.max(parseNumber(process.env.SESSION_TIMEOUT_MINUTES_MIN, 10), 5);
 const SESSION_TIMEOUT_MINUTES_MAX = Math.max(parseNumber(process.env.SESSION_TIMEOUT_MINUTES_MAX, 480), SESSION_TIMEOUT_MINUTES_DEFAULT);
 
 const PASSWORD_COMPLEXITY_REGEX = new RegExp(

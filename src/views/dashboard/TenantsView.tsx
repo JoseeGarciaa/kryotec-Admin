@@ -310,13 +310,13 @@ export const TenantsView: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm(`¿Está seguro que desea eliminar la empresa ${tenant.nombre}?`)) {
+                    if (confirm(`¿Está seguro que desea inhabilitar la empresa ${tenant.nombre}?`)) {
                       handleDelete(tenant.id);
                     }
                   }}
                   className="p-2 rounded-full bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 transition-colors"
-                  title="Eliminar"
-                  aria-label="Eliminar empresa"
+                  title="Inhabilitar"
+                  aria-label="Inhabilitar empresa"
                 >
                   <Trash2 size={18} />
                 </button>
@@ -384,12 +384,12 @@ export const TenantsView: React.FC = () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`¿Está seguro que desea eliminar la empresa ${tenant.nombre}?`)) {
+                      if (confirm(`¿Está seguro que desea inhabilitar la empresa ${tenant.nombre}?`)) {
                         handleDelete(tenant.id);
                       }
                     }}
                     className="p-1 text-red-600 hover:text-red-800"
-                    title="Eliminar"
+                    title="Inhabilitar"
                   >
                     <Trash2 size={18} />
                   </button>

@@ -178,10 +178,6 @@ export const useTenantController = () => {
 
   // Eliminar un tenant
   const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Está seguro de que desea eliminar esta empresa?')) {
-      return;
-    }
-
     setState(prev => ({ ...prev, loading: true, error: null }));
     try {
       await deleteTenant(id);
@@ -189,10 +185,10 @@ export const useTenantController = () => {
     } catch (error) {
       setState(prev => ({ 
         ...prev, 
-        loading: false, 
-        error: 'Error al eliminar empresa. Por favor, intente nuevamente.' 
+        loading: false,
+        error: 'Error al inhabilitar empresa. Por favor, intente nuevamente.' 
       }));
-      console.error('Error al eliminar tenant:', error);
+      console.error('Error al inhabilitar tenant:', error);
     }
   };
 

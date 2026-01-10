@@ -137,11 +137,14 @@ app.post('/api/users', verifyToken, async (req, res) => {
   try {
     // Usar el servicio de autenticación para crear usuarios con hash bcrypt
     const newUser = await authService.register(req.body);
-    res.status(201).json(newUser);
+    const normalized = newUser?.rol === 'soporte' ? { ...newUser, rol: 'comercial' } : newUser;
+    res.status(201).json(normalized);
   } catch (error) {
     console.error('Error en POST /api/users:', error);
     if (error.code === '23505') { // Código de error de PostgreSQL para violación de clave única
       res.status(409).json({ error: 'El correo electrónico ya está registrado' });
+    } else if (error.code === 'ADMIN_LIMIT') {
+      res.status(409).json({ error: 'Solo se permiten 2 administradores activos.' });
     } else {
       res.status(500).json({ error: 'Error al crear usuario' });
     }
@@ -154,13 +157,18 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
     let userData = req.body;
     const targetId = parseInt(id);
 
+    const targetUser = await userService.getUserById(targetId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
     // Protección: no permitir desactivar o cambiar rol del último admin
+    if (userData.rol === 'comercial') {
+      userData.rol = 'soporte';
+    }
+
     if ((userData.activo === false || (userData.rol && userData.rol !== 'admin'))) {
       try {
-        const targetUser = await userService.getUserById(targetId);
-        if (!targetUser) {
-          return res.status(404).json({ error: 'Usuario no encontrado' });
-        }
         const activeAdminCount = await userService.getActiveAdminCount();
         const isTargetLastActiveAdmin = targetUser.rol === 'admin' && targetUser.activo === true && activeAdminCount === 1;
         if (isTargetLastActiveAdmin) {
@@ -170,6 +178,20 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
         console.error('Error en validación de último admin (PUT):', guardError);
         return res.status(500).json({ error: 'Error al validar último administrador' });
       }
+    }
+
+    try {
+      const { rows } = await pool.query("SELECT COUNT(*)::int AS count FROM admin_platform.admin_users WHERE rol = 'admin'");
+      const adminCount = rows?.[0]?.count ?? 0;
+      const nextRole = userData.rol ?? targetUser.rol;
+      const targetCurrentlyAdmin = targetUser.rol === 'admin';
+      const addingNewAdmin = nextRole === 'admin' && !targetCurrentlyAdmin;
+      if (addingNewAdmin && adminCount >= 2) {
+        return res.status(409).json({ error: 'Solo se permiten 2 administradores.' });
+      }
+    } catch (guardError) {
+      console.error('Error en validación de límite de administradores (PUT):', guardError);
+      return res.status(500).json({ error: 'Error al validar límite de administradores' });
     }
     
     if (userData.contraseña) {
@@ -186,7 +208,8 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
     
   const updatedUser = await userService.updateUser(parseInt(id), userData);
     if (updatedUser) {
-      res.json(updatedUser);
+      const normalized = updatedUser.rol === 'soporte' ? { ...updatedUser, rol: 'comercial' } : updatedUser;
+      res.json(normalized);
     } else {
       res.status(404).json({ error: 'Usuario no encontrado' });
     }
@@ -468,7 +491,8 @@ app.post('/api/auth/change-password', verifyToken, async (req, res) => {
     if (result.success) {
       res.json(result);
     } else {
-      res.status(401).json({ error: result.message });
+      // No cerrar sesión por contraseña actual incorrecta → usar 400
+      res.status(400).json({ error: result.message });
     }
   } catch (error) {
     console.error('Error en POST /api/auth/change-password:', error);
@@ -593,14 +617,14 @@ app.put('/api/tenants/:id', verifyToken, async (req, res) => {
 
 app.delete('/api/tenants/:id', verifyToken, async (req, res) => {
   try {
-    const success = await tenantService.deleteTenant(parseInt(req.params.id));
+    await tenantService.deleteTenant(parseInt(req.params.id));
     res.json({ success: true });
   } catch (error) {
     console.error(`Error en DELETE /api/tenants/${req.params.id}:`, error);
     if (error.message === 'Empresa no encontrada') {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
-    res.status(500).json({ error: 'Error al eliminar empresa' });
+    res.status(500).json({ error: 'Error al inhabilitar empresa' });
   }
 });
 

@@ -85,8 +85,14 @@ const buildSecurityMetadata = (userRow) => {
     }
   }
 
+  const failedAttempts = userRow.intentos_fallidos || 0;
+  const maxFailedAttempts = securityPolicy.MAX_FAILED_ATTEMPTS;
+  const remainingAttempts = Math.max(maxFailedAttempts - failedAttempts, 0);
+
   return {
-    failedAttempts: userRow.intentos_fallidos || 0,
+    failedAttempts,
+    maxFailedAttempts,
+    remainingAttempts,
     isLocked: Boolean(userRow.bloqueado) || (lockoutUntil ? lockoutUntil > now : false),
     lockoutUntil: lockoutUntil ? lockoutUntil.toISOString() : null,
     mustChangePassword,
@@ -179,14 +185,17 @@ const authService = {
           [...values, user.id]
         );
 
+        const securityInfo = buildSecurityMetadata({
+          ...user,
+          intentos_fallidos: failedAttempts,
+          bloqueado: locked,
+          bloqueado_hasta: lockedUntil
+        });
+
         return {
           success: false,
           message: 'Contraseña incorrecta',
-          security: {
-            failedAttempts,
-            isLocked: locked,
-            lockoutUntil: lockedUntil ? lockedUntil.toISOString() : null
-          }
+          security: securityInfo
         };
       }
 
@@ -261,11 +270,25 @@ const authService = {
         session_timeout_minutos
       } = userData;
 
+      const storedRole = rol === 'comercial' ? 'soporte' : rol;
+
       if (!isPasswordComplex(contraseña)) {
         const message = `La contraseña debe tener al menos ${securityPolicy.MIN_PASSWORD_LENGTH} caracteres, incluir mayúsculas, minúsculas, números y caracteres especiales.`;
         const error = new Error(message);
         error.code = 'PASSWORD_WEAK';
         throw error;
+      }
+
+      if (storedRole === 'admin') {
+        const { rows } = await pool.query(
+          "SELECT COUNT(*)::int AS count FROM admin_platform.admin_users WHERE rol = 'admin'"
+        );
+        const activeAdmins = rows?.[0]?.count ?? 0;
+        if (activeAdmins >= 2) {
+          const error = new Error('Solo se permiten 2 administradores activos.');
+          error.code = 'ADMIN_LIMIT';
+          throw error;
+        }
       }
 
       const hashedPassword = await hashPassword(contraseña);
@@ -277,14 +300,17 @@ const authService = {
          (nombre, correo, telefono, contraseña, rol, activo, fecha_creacion, intentos_fallidos, bloqueado, bloqueado_hasta, debe_cambiar_contraseña, ultimo_cambio_contraseña, contraseña_expira_el, session_timeout_minutos) 
          VALUES ($1, $2, $3, $4, $5, $6, (now() AT TIME ZONE 'America/Bogota'), 0, false, NULL, true, NULL, $7, $8) 
          RETURNING *`,
-        [nombre, correo, telefono, hashedPassword, rol, activo, passwordExpiresAt, sessionTimeout]
+        [nombre, correo, telefono, hashedPassword, storedRole, activo, passwordExpiresAt, sessionTimeout]
       );
 
       const newUser = result.rows[0];
-      await recordPasswordHistory(newUser.id, rol, hashedPassword);
+      await recordPasswordHistory(newUser.id, storedRole, hashedPassword);
       await trimPasswordHistory(newUser.id);
 
       const { contraseña: _, ...userWithoutPassword } = newUser;
+      if (userWithoutPassword.rol === 'soporte') {
+        userWithoutPassword.rol = 'comercial';
+      }
       return userWithoutPassword;
     } catch (error) {
       console.error('Error en registro:', error);

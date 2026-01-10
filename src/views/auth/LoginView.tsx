@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 import credocubeLogo from '../../assets/images/favicon.png';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -6,13 +6,15 @@ import { LoginForm } from '../../views/auth/components/LoginForm';
 import { useAuthContext } from '../contexts/AuthContext';
 import { useThemeContext } from '../contexts/ThemeContext';
 import { Button } from '../shared/ui/Button';
-import { LoginCredentials } from '../../models/types/auth';
+import { LoginCredentials, UserSecurity } from '../../models/types/auth';
+import { getVersionLabel } from '../../config/appVersion';
 
 export const LoginView: React.FC = () => {
   const { login, isLoading, error, isAuthenticated } = useAuthContext();
   const { theme, toggleTheme } = useThemeContext();
   const navigate = useNavigate();
   const location = useLocation();
+  const [securityFeedback, setSecurityFeedback] = useState<UserSecurity | undefined>(undefined);
 
   // Redirigir si el usuario ya está autenticado
   useEffect(() => {
@@ -23,10 +25,13 @@ export const LoginView: React.FC = () => {
   }, [isAuthenticated, navigate, location]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
+    setSecurityFeedback(undefined);
     const result = await login(credentials);
     if (result.success) {
       navigate('/dashboard', { replace: true });
+      return;
     }
+    setSecurityFeedback(result.security);
   };
 
   return (
@@ -70,19 +75,20 @@ export const LoginView: React.FC = () => {
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 transition-colors">
               Accede a tu panel de administración
             </p>
-          </div>
+        </div>
 
           <LoginForm
             onSubmit={handleLogin}
             isLoading={isLoading}
             error={error}
+            security={securityFeedback}
           />
         </div>
 
         {/* Footer */}
         <div className="text-center mt-6 sm:mt-8 px-4">
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 transition-colors">
-            © 2025. Desarrollado por Softdatai.
+            © 2025. Desarrollado por Softdatai. <span className="font-semibold text-blue-600 dark:text-blue-300">Versión 0.3.0</span>
           </p>
         </div>
       </div>

@@ -29,7 +29,8 @@ apiClient.interceptors.response.use(
     const url = error?.config?.url || '';
     // No destruir sesión si es el login mismo fallando
     const isLogin = url.includes('/auth/login');
-    if (status === 401 && !isLogin) {
+    const isChangePassword = url.includes('/auth/change-password');
+    if (status === 401 && !isLogin && !isChangePassword) {
       localStorage.removeItem('kryotec_token');
       localStorage.removeItem('kryotec_user');
       if (window.location.pathname !== '/login') {
@@ -42,8 +43,10 @@ apiClient.interceptors.response.use(
 
 // Función para convertir fechas de string a Date en los objetos de usuario
 const convertDates = (user: any): AdminUser => {
+  const normalizedRole = user.rol === 'soporte' ? 'comercial' : user.rol;
   return {
     ...user,
+    rol: normalizedRole,
     ultimo_ingreso: user.ultimo_ingreso ? new Date(user.ultimo_ingreso) : null,
     fecha_creacion: user.fecha_creacion ? new Date(user.fecha_creacion) : null,
     bloqueado_hasta: user.bloqueado_hasta ? new Date(user.bloqueado_hasta) : null,

@@ -1,22 +1,52 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { Button } from '../../shared/ui/Button';
 import { Input } from '../../shared/ui/Input';
-import { LoginCredentials } from '../../../models/types/auth';
+import { LoginCredentials, UserSecurity } from '../../../models/types/auth';
 
 interface LoginFormProps {
   onSubmit: (credentials: LoginCredentials) => Promise<void>;
   isLoading: boolean;
   error: string | null;
+  security?: UserSecurity;
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error }: LoginFormProps) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error, security }: LoginFormProps) => {
   const [credentials, setCredentials] = useState<LoginCredentials>({
     email: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Partial<LoginCredentials>>({});
+
+  const attemptsMessage = useMemo(() => {
+    if (!security) return null;
+    const failed = security.failedAttempts ?? 0;
+    const max = security.maxFailedAttempts ?? undefined;
+    const remaining = security.remainingAttempts ?? (max !== undefined ? Math.max(max - failed, 0) : undefined);
+
+    const fragments: string[] = [];
+    if (max !== undefined) {
+      fragments.push(`Intentos fallidos: ${failed} de ${max}.`);
+    } else if (failed > 0) {
+      fragments.push(`Intentos fallidos: ${failed}.`);
+    }
+
+    if (security.isLocked) {
+      const lockoutUntil = security.lockoutUntil ? new Date(security.lockoutUntil) : null;
+      if (lockoutUntil) {
+        fragments.push(`Acceso bloqueado hasta ${lockoutUntil.toLocaleString('es-CO')}.`);
+      } else {
+        fragments.push('Acceso bloqueado. Contacta al administrador.');
+      }
+    } else if (remaining !== undefined) {
+      const plural = remaining === 1 ? 'intento' : 'intentos';
+      fragments.push(`Te quedan ${remaining} ${plural}.`);
+    }
+
+    if (!fragments.length) return null;
+    return fragments.join(' ');
+  }, [security]);
 
   const validateForm = (): boolean => {
     const errors: Partial<LoginCredentials> = {};
@@ -74,10 +104,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error
           type={showPassword ? 'text' : 'password'}
           label="Contraseña"
           placeholder="Tu contraseña"
-          autoComplete="current-password"
+          autoComplete="off"
           value={credentials.password}
           onChange={handleInputChange('password')}
           error={fieldErrors.password}
+          enforceManualInput
+          onPaste={(event) => event.preventDefault()}
+          onDrop={(event) => event.preventDefault()}
           leftIcon={<Lock className="w-4 h-4" />}
           rightIcon={
             <button
@@ -94,6 +127,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error
       {error && (
         <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg transition-colors">
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </div>
+      )}
+
+      {attemptsMessage && (
+        <div className={`p-3 rounded-lg transition-colors ${security?.isLocked ? 'bg-red-100 border border-red-300 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300' : 'bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-900/10 dark:border-amber-800 dark:text-amber-300'}`}>
+          <p className="text-sm leading-relaxed">{attemptsMessage}</p>
         </div>
       )}
 

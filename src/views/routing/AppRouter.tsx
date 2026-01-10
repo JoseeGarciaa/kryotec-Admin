@@ -74,13 +74,22 @@ const LoginRoute: React.FC = () => {
   return <LoginView />;
 };
 
+const AdminOnly: React.FC<{ element: React.ReactNode }> = ({ element }) => {
+  const { user } = useAuthContext();
+  const role = (user?.role ?? (user as any)?.rol) === 'admin' ? 'admin' : 'comercial';
+  if (role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{element}</>;
+};
+
 export const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/dashboard" element={<ProtectedRoute element={<DashboardView />} />} />
-        <Route path="/tenants" element={<ProtectedRoute element={<TenantsView />} />} />
+        <Route path="/tenants" element={<ProtectedRoute element={<AdminOnly element={<TenantsView />} />} />} />
         <Route path="/prospectos" element={<ProtectedRoute element={<ProspectosView />} />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<AuthRedirect />} />

@@ -12,7 +12,7 @@ import { useBreakpoint } from '../../utils/responsive';
 export const MobileNavigation: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { isMobile } = useBreakpoint();
-  const { logout } = useAuthContext();
+  const { logout, user } = useAuthContext();
   const { theme, toggleTheme } = useThemeContext();
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,6 +28,8 @@ export const MobileNavigation: React.FC = () => {
   const toggleMenu = () => setIsOpen(!isOpen);
   const closeMenu = () => setIsOpen(false);
 
+  const role = (user?.role ?? (user as any)?.rol) === 'admin' ? 'admin' : 'comercial';
+
   const menuItems = [
     { icon: <Home size={22} />, label: 'Dashboard', path: '/dashboard' },
     { icon: <Users size={22} />, label: 'Empresas', path: '/tenants' },
@@ -38,6 +40,10 @@ export const MobileNavigation: React.FC = () => {
   { icon: <Package size={22} />, label: 'Inventario (Prospectos)', path: '/dashboard?tab=prospectos-inventario' },
   { icon: <Lightbulb size={22} />, label: 'Sugerencias', path: '/dashboard?tab=prospectos-sugerencias' },
   ];
+
+  const filteredMenuItems = role === 'admin'
+    ? menuItems
+    : menuItems.filter(item => item.label === 'Dashboard' || item.path.includes('prospectos'));
 
   const isActive = (path: string) => {
     // Para rutas simples
@@ -108,7 +114,7 @@ export const MobileNavigation: React.FC = () => {
               {/* Elementos del menú */}
               <nav className="flex-1 overflow-y-auto py-4 px-4">
                 <ul className="space-y-2">
-                  {menuItems.map((item) => (
+                  {filteredMenuItems.map((item) => (
                     <li key={item.path}>
                       <Link
                         to={item.path}

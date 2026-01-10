@@ -5,7 +5,7 @@ export interface AdminUser {
   nombre: string;
   correo: string;
   telefono: string | null;
-  rol: 'admin' | 'soporte';
+  rol: 'admin' | 'comercial';
   activo: boolean;
   ultimo_ingreso: Date | null;
   fecha_creacion: Date;

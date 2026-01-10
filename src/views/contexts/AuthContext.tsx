@@ -14,6 +14,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }: { children: React.ReactNode }) => {
   const authValue = useAuthController();
   const logoutTimerRef = useRef<number | null>(null);
+  const inactivityTimerRef = useRef<number | null>(null);
 
   // Decodificar JWT sin librería externa (base64url decode)
   const decodeToken = (token: string): { exp?: number } | null => {
@@ -61,6 +62,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Re-schedule cuando cambie autenticación (login/logout)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authValue.isAuthenticated, authValue.user]);
+
+  // Logout por inactividad basado en sessionTimeoutMinutes
+  useEffect(() => {
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+
+    const clearInactivityTimer = () => {
+      if (inactivityTimerRef.current) {
+        window.clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+    };
+
+    const startInactivityTimer = () => {
+      clearInactivityTimer();
+      const minutes = authValue.user?.security?.sessionTimeoutMinutes ?? 10;
+      const timeoutMs = Math.max(minutes, 1) * 60 * 1000;
+      inactivityTimerRef.current = window.setTimeout(() => {
+        authValue.logout();
+      }, timeoutMs);
+    };
+
+    const handleActivity = () => {
+      startInactivityTimer();
+    };
+
+    if (authValue.isAuthenticated) {
+      events.forEach(evt => window.addEventListener(evt, handleActivity));
+      startInactivityTimer();
+    }
+
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, handleActivity));
+      clearInactivityTimer();
+    };
+  }, [authValue.isAuthenticated, authValue.user?.security?.sessionTimeoutMinutes, authValue.logout]);
 
   // Limpieza al desmontar
   useEffect(() => () => { if (logoutTimerRef.current) window.clearTimeout(logoutTimerRef.current); }, []);

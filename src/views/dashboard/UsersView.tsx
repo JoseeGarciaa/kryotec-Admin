@@ -6,10 +6,10 @@ import { formatDate as formatDateCO } from '../../utils/dateUtils';
 
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 
-const clampSessionTimeout = (rawValue: string, fallback = 120) => {
+const clampSessionTimeout = (rawValue: string, fallback = 10) => {
   const numeric = parseInt(rawValue, 10);
   if (!Number.isFinite(numeric)) return fallback;
-  return Math.max(15, Math.min(480, numeric));
+  return Math.max(10, Math.min(480, numeric));
 };
 
 type UserFormState = {
@@ -17,7 +17,7 @@ type UserFormState = {
   correo: string;
   telefono: string;
   contraseña: string;
-  rol: 'admin' | 'soporte';
+  rol: 'admin' | 'comercial';
   activo: boolean;
   session_timeout_minutos: number;
   debe_cambiar_contraseña: boolean;
@@ -36,9 +36,9 @@ export const UsersView: React.FC = () => {
     correo: '',
     telefono: '',
     contraseña: '',
-    rol: 'soporte' as 'admin' | 'soporte',
+    rol: 'comercial' as 'admin' | 'comercial',
     activo: true,
-    session_timeout_minutos: 120,
+    session_timeout_minutos: 10,
     debe_cambiar_contraseña: true
   });
   const [isCreatePasswordVisible, setIsCreatePasswordVisible] = useState(false);
@@ -65,9 +65,9 @@ export const UsersView: React.FC = () => {
       correo: '',
       telefono: '',
       contraseña: '',
-      rol: 'soporte',
+      rol: 'comercial',
       activo: true,
-      session_timeout_minutos: 120,
+      session_timeout_minutos: 10,
       debe_cambiar_contraseña: true
     });
     setIsCreatePasswordVisible(false);
@@ -79,6 +79,11 @@ export const UsersView: React.FC = () => {
     e.preventDefault();
     
     try {
+      const adminCount = users.filter(u => u.rol === 'admin').length;
+      if (formData.rol === 'admin' && adminCount >= 2) {
+        alert('Solo se permiten 2 administradores. Cambia uno a comercial para crear otro admin.');
+        return;
+      }
       if (!PASSWORD_POLICY_REGEX.test(formData.contraseña)) {
         alert('La contraseña debe tener mínimo 8 caracteres e incluir mayúsculas, minúsculas, números y un caracter especial.');
         return;
@@ -89,6 +94,8 @@ export const UsersView: React.FC = () => {
       fetchUsers(); // Recargar la lista
     } catch (err) {
       console.error('Error al crear usuario:', err);
+      const message = (err as any)?.message || 'Error al crear usuario';
+      alert(message);
     }
   };
 
@@ -99,6 +106,12 @@ export const UsersView: React.FC = () => {
     if (!editingUser) return;
     
     try {
+      const adminCount = users.filter(u => u.rol === 'admin').length;
+      const changingToAdmin = editingUser.rol !== 'admin' && formData.rol === 'admin';
+      if (changingToAdmin && adminCount >= 2) {
+        alert('Solo se permiten 2 administradores. Cambia uno a comercial antes de promover otro.');
+        return;
+      }
       if (formData.contraseña && !PASSWORD_POLICY_REGEX.test(formData.contraseña)) {
         alert('La contraseña debe cumplir la política de seguridad (mínimo 8 caracteres, mayúsculas, minúsculas, números y caracter especial).');
         return;
@@ -116,6 +129,8 @@ export const UsersView: React.FC = () => {
       fetchUsers(); // Recargar la lista
     } catch (err) {
       console.error('Error al actualizar usuario:', err);
+      const message = (err as any)?.message || 'Error al actualizar usuario';
+      alert(message);
     }
   };
 
@@ -123,14 +138,15 @@ export const UsersView: React.FC = () => {
   const startEditing = (user: AdminUser) => {
     setEditingUser(user);
     setShowCreateForm(false);
+    const normalizedRole = user.rol === 'soporte' ? 'comercial' : user.rol;
     setFormData({
       nombre: user.nombre,
       correo: user.correo,
       telefono: user.telefono || '',
       contraseña: '', // No mostramos la contraseña actual
-      rol: user.rol,
+      rol: normalizedRole,
       activo: user.activo,
-      session_timeout_minutos: user.session_timeout_minutos ?? 120,
+      session_timeout_minutos: user.session_timeout_minutos ?? 10,
       debe_cambiar_contraseña: user.debe_cambiar_contraseña ?? false
     });
     setIsCreatePasswordVisible(false);
@@ -308,6 +324,9 @@ export const UsersView: React.FC = () => {
                   value={formData.contraseña}
                   onChange={handleInputChange}
                   required
+                  autoComplete="off"
+                  onPaste={(event) => event.preventDefault()}
+                  onDrop={(event) => event.preventDefault()}
                   className="w-full p-2 pr-10 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
                 <button
@@ -328,12 +347,12 @@ export const UsersView: React.FC = () => {
                 name="session_timeout_minutos"
                 value={formData.session_timeout_minutos}
                 onChange={handleInputChange}
-                min={15}
+                min={10}
                 max={480}
                 step={5}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Define el tiempo máximo inactivo antes de cerrar sesión (entre 15 y 480 minutos).</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Define el tiempo máximo inactivo antes de cerrar sesión (entre 10 y 480 minutos).</p>
             </div>
             
             <div>
@@ -345,7 +364,7 @@ export const UsersView: React.FC = () => {
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
                 <option value="admin">Administrador</option>
-                <option value="soporte">Soporte</option>
+                <option value="comercial">Comercial</option>
               </select>
             </div>
             
@@ -440,6 +459,9 @@ export const UsersView: React.FC = () => {
                   name="contraseña"
                   value={formData.contraseña}
                   onChange={handleInputChange}
+                  autoComplete="off"
+                  onPaste={(event) => event.preventDefault()}
+                  onDrop={(event) => event.preventDefault()}
                   className="w-full p-2 pr-10 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
                 <button
@@ -460,7 +482,7 @@ export const UsersView: React.FC = () => {
                 name="session_timeout_minutos"
                 value={formData.session_timeout_minutos}
                 onChange={handleInputChange}
-                min={15}
+                min={10}
                 max={480}
                 step={5}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -477,7 +499,7 @@ export const UsersView: React.FC = () => {
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
                 <option value="admin">Administrador</option>
-                <option value="soporte">Soporte</option>
+                <option value="comercial">Comercial</option>
               </select>
             </div>
             
@@ -565,7 +587,7 @@ export const UsersView: React.FC = () => {
                       <div className="flex justify-between items-center mb-3">
                         <div>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.rol === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
-                            {user.rol === 'admin' ? 'Administrador' : 'Soporte'}
+                            {user.rol === 'admin' ? 'Administrador' : 'Comercial'}
                           </span>
                         </div>
                         <div>
@@ -658,7 +680,7 @@ export const UsersView: React.FC = () => {
                                 ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
                                 : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                             }`}>
-                              {user.rol === 'admin' ? 'Administrador' : 'Soporte'}
+                              {user.rol === 'admin' ? 'Administrador' : 'Comercial'}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">

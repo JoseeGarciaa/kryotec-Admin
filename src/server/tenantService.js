@@ -519,65 +519,48 @@ const updateTenant = async (id, tenantData) => {
 };
 
 /**
- * Elimina un tenant por su ID
- * @param {number} id - ID del tenant a eliminar
- * @returns {Promise<boolean>} true si se eliminó correctamente
+ * Inhabilita un tenant por su ID
+ * @param {number} id - ID del tenant a inhabilitar
+ * @returns {Promise<boolean>} true si se inhabilitó correctamente
  */
 const deleteTenant = async (id) => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
-    // Primero obtenemos el esquema del tenant que vamos a eliminar
+
     const tenantResult = await client.query(
-      'SELECT esquema, nombre FROM admin_platform.tenants WHERE id = $1',
+      'SELECT id, nombre, esquema, estado FROM admin_platform.tenants WHERE id = $1',
       [id]
     );
-    
+
     if (tenantResult.rows.length === 0) {
       throw new Error('Empresa no encontrada');
     }
-    
-    const tenantSchema = tenantResult.rows[0].esquema;
-    const tenantNombre = tenantResult.rows[0].nombre;
-    
-    console.log(`Eliminando tenant ${tenantNombre} (ID: ${id}) con esquema: ${tenantSchema}`);
-    
-    try {
-      // Intentamos eliminar el esquema usando la función admin_platform.eliminar_tenant
-      console.log(`Ejecutando función admin_platform.eliminar_tenant('${tenantSchema}')`);
-      await client.query('SELECT admin_platform.eliminar_tenant($1)', [tenantSchema]);
-      console.log(`Esquema ${tenantSchema} eliminado correctamente`);
-    } catch (schemaError) {
-      // Si falla la eliminación del esquema, registramos el error pero continuamos
-      console.error(`Error al eliminar esquema ${tenantSchema}:`, schemaError);
-      console.log('Continuando con la eliminación del registro del tenant...');
+
+    const tenantRow = tenantResult.rows[0];
+
+    if (!tenantRow.estado) {
+      console.log(`La empresa ${tenantRow.nombre} (ID: ${id}) ya estaba inactiva`);
+    } else {
+      console.log(`Inhabilitando tenant ${tenantRow.nombre} (ID: ${id}) con esquema ${tenantRow.esquema}`);
+      await client.query(
+        `UPDATE admin_platform.tenants
+         SET estado = false
+         WHERE id = $1`,
+        [id]
+      );
     }
-    
-    // Eliminamos el registro del tenant de la tabla admin_platform.tenants
-    const result = await client.query(`
-      DELETE FROM admin_platform.tenants
-      WHERE id = $1
-      RETURNING id
-    `, [id]);
-    
-    if (result.rows.length === 0) {
-      throw new Error('No se pudo eliminar el registro de la empresa');
-    }
-    
-    console.log(`Registro del tenant con ID ${id} eliminado correctamente`);
-    
+
     await client.query('COMMIT');
-    
-    // Invalidar la caché de tenants
+
     cache.del(TENANTS_CACHE_KEY);
-    console.log('Caché de tenants invalidada tras eliminar tenant');
-    
+    console.log('Caché de tenants invalidada tras inhabilitar tenant');
+
     return true;
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error(`Error al eliminar tenant con ID ${id}:`, error);
+    console.error(`Error al inhabilitar tenant con ID ${id}:`, error);
     throw error;
   } finally {
     client.release();

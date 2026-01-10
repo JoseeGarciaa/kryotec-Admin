@@ -1,6 +1,11 @@
 import { User, LoginCredentials, UserSecurity } from './types/auth';
 import { apiClient } from '../services/api';
 
+const normalizeRole = (role?: string | null) => {
+  if (!role) return role;
+  return role === 'soporte' ? 'comercial' : role;
+};
+
 // Clave para almacenar el usuario en localStorage
 const USER_STORAGE_KEY = 'kryotec_user';
 const TOKEN_STORAGE_KEY = 'kryotec_token';
@@ -29,6 +34,8 @@ export class AuthModel {
           passwordChangedAt: response.data.security.passwordChangedAt ?? apiUser?.ultimo_cambio_contraseña ?? null,
           sessionTimeoutMinutes: response.data.security.sessionTimeoutMinutes ?? apiUser?.session_timeout_minutos ?? undefined,
           failedAttempts: response.data.security.failedAttempts ?? apiUser?.intentos_fallidos ?? undefined,
+          maxFailedAttempts: response.data.security.maxFailedAttempts ?? undefined,
+          remainingAttempts: response.data.security.remainingAttempts ?? undefined,
           isLocked: response.data.security.isLocked ?? apiUser?.bloqueado ?? undefined,
           lockoutUntil: response.data.security.lockoutUntil ?? apiUser?.bloqueado_hasta ?? null
         } : apiUser ? {
@@ -37,6 +44,8 @@ export class AuthModel {
           passwordChangedAt: apiUser.ultimo_cambio_contraseña ?? null,
           sessionTimeoutMinutes: apiUser.session_timeout_minutos ?? undefined,
           failedAttempts: apiUser.intentos_fallidos ?? undefined,
+          maxFailedAttempts: undefined,
+          remainingAttempts: undefined,
           isLocked: apiUser.bloqueado ?? undefined,
           lockoutUntil: apiUser.bloqueado_hasta ?? null
         } : undefined;
@@ -44,7 +53,7 @@ export class AuthModel {
           id: apiUser.id.toString(),
           email: apiUser.correo,
           name: apiUser.nombre,
-          role: apiUser.rol,
+          role: normalizeRole(apiUser.rol),
           avatar: undefined,
           security
         };
@@ -98,6 +107,8 @@ export class AuthModel {
           passwordChangedAt: resp.data.security.passwordChangedAt ?? apiUser?.ultimo_cambio_contraseña ?? null,
           sessionTimeoutMinutes: resp.data.security.sessionTimeoutMinutes ?? apiUser?.session_timeout_minutos ?? undefined,
           failedAttempts: resp.data.security.failedAttempts ?? apiUser?.intentos_fallidos ?? undefined,
+          maxFailedAttempts: resp.data.security.maxFailedAttempts ?? undefined,
+          remainingAttempts: resp.data.security.remainingAttempts ?? undefined,
           isLocked: resp.data.security.isLocked ?? apiUser?.bloqueado ?? undefined,
           lockoutUntil: resp.data.security.lockoutUntil ?? apiUser?.bloqueado_hasta ?? null
         } : apiUser ? {
@@ -106,6 +117,8 @@ export class AuthModel {
           passwordChangedAt: apiUser.ultimo_cambio_contraseña ?? null,
           sessionTimeoutMinutes: apiUser.session_timeout_minutos ?? undefined,
           failedAttempts: apiUser.intentos_fallidos ?? undefined,
+          maxFailedAttempts: undefined,
+          remainingAttempts: undefined,
           isLocked: apiUser.bloqueado ?? undefined,
           lockoutUntil: apiUser.bloqueado_hasta ?? null
         } : undefined;
@@ -113,7 +126,7 @@ export class AuthModel {
           id: apiUser.id.toString(),
             email: apiUser.correo,
             name: apiUser.nombre,
-            role: apiUser.rol,
+            role: normalizeRole(apiUser.rol),
             avatar: undefined,
             security
         };

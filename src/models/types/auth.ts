@@ -5,6 +5,8 @@ export interface UserSecurity {
   passwordChangedAt?: string | null;
   sessionTimeoutMinutes?: number;
   failedAttempts?: number;
+  maxFailedAttempts?: number;
+  remainingAttempts?: number;
   isLocked?: boolean;
   lockoutUntil?: string | null;
 }

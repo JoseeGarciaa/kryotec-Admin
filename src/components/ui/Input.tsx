@@ -5,6 +5,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   enablePasswordToggle?: boolean;
+  enforceManualInput?: boolean;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -13,16 +14,36 @@ export const Input: React.FC<InputProps> = ({
   className = '',
   type = 'text',
   enablePasswordToggle = false,
+  enforceManualInput = false,
+  onPaste,
+  onDrop,
+  autoComplete,
   ...props
 }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const isPasswordField = type === 'password';
+  const isPasswordField = type === 'password' || enforceManualInput;
   const resolvedType = enablePasswordToggle && isPasswordField
     ? (isPasswordVisible ? 'text' : 'password')
     : type;
 
   const togglePasswordVisibility = () => {
     setIsPasswordVisible(prev => !prev);
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    if (isPasswordField) {
+      event.preventDefault();
+      return;
+    }
+    if (onPaste) onPaste(event);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLInputElement>) => {
+    if (isPasswordField) {
+      event.preventDefault();
+      return;
+    }
+    if (onDrop) onDrop(event);
   };
 
   const inputClassName = `w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -43,6 +64,9 @@ export const Input: React.FC<InputProps> = ({
         <input
           type={resolvedType}
           className={inputClassName}
+          autoComplete={isPasswordField ? 'off' : autoComplete}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
           {...props}
         />
         {enablePasswordToggle && isPasswordField && (

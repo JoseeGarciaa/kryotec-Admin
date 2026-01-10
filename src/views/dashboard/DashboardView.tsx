@@ -52,11 +52,12 @@ export const DashboardView: React.FC = () => {
   
   // Actualizar la URL cuando cambie la pestaña activa manualmente
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    if (tab === 'dashboard') {
+    const safeTab = isTabAllowed(tab) ? tab : 'dashboard';
+    setActiveTab(safeTab);
+    if (safeTab === 'dashboard') {
       navigate('/dashboard', { replace: true });
     } else {
-      navigate(`/dashboard?tab=${tab}`, { replace: true });
+      navigate(`/dashboard?tab=${safeTab}`, { replace: true });
     }
   };
   
@@ -83,7 +84,21 @@ export const DashboardView: React.FC = () => {
   const { logout, user } = useAuthContext();
   const { theme, toggleTheme } = useThemeContext();
 
-  const navigationItems = [
+  const role = (user?.role ?? (user as any)?.rol) === 'admin' ? 'admin' : 'comercial';
+  const allowedTabsForComercial = new Set([
+    'dashboard',
+    'prospectos',
+    'prospectos-clientes',
+    'prospectos-inventario',
+    'prospectos-sugerencias'
+  ]);
+
+  const isTabAllowed = (tab: string) => {
+    if (role === 'admin') return true;
+    return allowedTabsForComercial.has(tab);
+  };
+
+  const baseNavigationItems = [
     { 
       id: 'dashboard', 
       label: 'Dashboard', 
@@ -125,6 +140,17 @@ export const DashboardView: React.FC = () => {
       ]
     },
   ];
+
+  const navigationItems = role === 'admin'
+    ? baseNavigationItems
+    : baseNavigationItems.filter(item => item.id === 'dashboard' || item.id === 'prospectos');
+
+  useEffect(() => {
+    if (!isTabAllowed(activeTab)) {
+      handleTabChange('dashboard');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
 
   // Ya no necesitamos datos falsos para gráficos y métricas
 
@@ -169,11 +195,11 @@ export const DashboardView: React.FC = () => {
           )}
           {activeTab === 'settings' && <SettingsView />}
           
-          {activeTab === 'usuarios' && <UsersView />}
-          {activeTab === 'empresas' && <TenantsView />}
-          {activeTab === 'tenant-inventory' && <TenantInventoryView />}
-          {activeTab === 'tenant-register' && <TenantInventoryRegisterView />}
-          {activeTab === 'credocubes' && <CredocubesView />}
+          {role === 'admin' && activeTab === 'usuarios' && <UsersView />}
+          {role === 'admin' && activeTab === 'empresas' && <TenantsView />}
+          {role === 'admin' && activeTab === 'tenant-inventory' && <TenantInventoryView />}
+          {role === 'admin' && activeTab === 'tenant-register' && <TenantInventoryRegisterView />}
+          {role === 'admin' && activeTab === 'credocubes' && <CredocubesView />}
           {(activeTab === 'prospectos' || activeTab.startsWith('prospectos-')) && <ProspectosView activeSubTab={activeTab} />}
         </main>
       </div>

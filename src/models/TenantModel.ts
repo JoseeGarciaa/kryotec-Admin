@@ -76,12 +76,12 @@ export const updateTenant = async (id: number, tenantData: Partial<TenantInput>)
   }
 };
 
-// Eliminar un tenant
+// Inhabilitar un tenant
 export const deleteTenant = async (id: number): Promise<void> => {
   try {
     await apiClient.delete(`${TENANTS_PATH}/${id}`);
   } catch (error) {
-    console.error(`Error al eliminar tenant con ID ${id}:`, error);
+    console.error(`Error al inhabilitar tenant con ID ${id}:`, error);
     throw error;
   }
 };

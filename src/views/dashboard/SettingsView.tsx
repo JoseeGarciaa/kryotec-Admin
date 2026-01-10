@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Input } from '../shared/ui/Input';
 import { Button } from '../shared/ui/Button';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -11,6 +12,9 @@ const SettingsView: React.FC = () => {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChanging, setIsChanging] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -44,10 +48,6 @@ const SettingsView: React.FC = () => {
     }
     if (newPassword !== confirmPassword) {
       alert('La nueva contraseña y la confirmación no coinciden');
-      return;
-    }
-    if (newPassword === oldPassword) {
-      alert('La nueva contraseña no puede ser igual a la actual');
       return;
     }
     if (!PASSWORD_POLICY_REGEX.test(newPassword)) {
@@ -110,22 +110,52 @@ const SettingsView: React.FC = () => {
             La contraseña debe tener al menos 8 caracteres e incluir mayúsculas, minúsculas, números y un caracter especial.
           </p>
           <Input
-            type="password"
+            type={showOldPassword ? 'text' : 'password'}
             label="Contraseña actual"
             value={oldPassword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPassword(e.target.value)}
+            rightIcon={(
+              <button
+                type="button"
+                onClick={() => setShowOldPassword(v => !v)}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200"
+                aria-label={showOldPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showOldPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            )}
           />
           <Input
-            type="password"
+            type={showNewPassword ? 'text' : 'password'}
             label="Nueva contraseña"
             value={newPassword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
+            rightIcon={(
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(v => !v)}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200"
+                aria-label={showNewPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            )}
           />
           <Input
-            type="password"
+            type={showConfirmPassword ? 'text' : 'password'}
             label="Confirmar nueva contraseña"
             value={confirmPassword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+            rightIcon={(
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(v => !v)}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200"
+                aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            )}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600 dark:text-gray-400">
             <div>

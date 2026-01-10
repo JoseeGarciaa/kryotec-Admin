@@ -5,6 +5,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  enforceManualInput?: boolean;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -13,10 +14,32 @@ export const Input: React.FC<InputProps> = ({
   leftIcon,
   rightIcon,
   className = '',
+  type = 'text',
+  enforceManualInput = false,
+  onPaste,
+  onDrop,
+  autoComplete,
   ...props
 }) => {
   const hasLeft = !!leftIcon;
   const hasRight = !!rightIcon;
+  const isSensitiveField = enforceManualInput || type === 'password';
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    if (isSensitiveField) {
+      event.preventDefault();
+      return;
+    }
+    if (onPaste) onPaste(event);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLInputElement>) => {
+    if (isSensitiveField) {
+      event.preventDefault();
+      return;
+    }
+    if (onDrop) onDrop(event);
+  };
   return (
     <div className="space-y-2">
       {label && (
@@ -32,6 +55,10 @@ export const Input: React.FC<InputProps> = ({
         )}
         <input
           className={`w-full ${hasLeft ? 'pl-10' : 'pl-3'} ${hasRight ? 'pr-10' : 'pr-3'} py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
+          type={type}
+          autoComplete={isSensitiveField ? 'off' : autoComplete}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
           {...props}
         />
         {hasRight && (
