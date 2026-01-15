@@ -85,6 +85,7 @@ export const DashboardView: React.FC = () => {
   const { theme, toggleTheme } = useThemeContext();
 
   const role = (user?.role ?? (user as any)?.rol) === 'admin' ? 'admin' : 'comercial';
+  const hiddenTabs = new Set(['tenant-inventory', 'tenant-register', 'credocubes']);
   const allowedTabsForComercial = new Set([
     'dashboard',
     'prospectos',
@@ -94,6 +95,7 @@ export const DashboardView: React.FC = () => {
   ]);
 
   const isTabAllowed = (tab: string) => {
+    if (hiddenTabs.has(tab)) return false;
     if (role === 'admin') return true;
     return allowedTabsForComercial.has(tab);
   };
@@ -144,6 +146,7 @@ export const DashboardView: React.FC = () => {
   const navigationItems = role === 'admin'
     ? baseNavigationItems
     : baseNavigationItems.filter(item => item.id === 'dashboard' || item.id === 'prospectos');
+  const visibleNavigationItems = navigationItems.filter(item => !hiddenTabs.has(item.id));
 
   useEffect(() => {
     if (!isTabAllowed(activeTab)) {
@@ -166,7 +169,7 @@ export const DashboardView: React.FC = () => {
 
       {/* Sidebar */}
       <Sidebar 
-        navigationItems={navigationItems}
+        navigationItems={visibleNavigationItems}
         activeTab={activeTab}
         setActiveTab={handleTabChange}
         sidebarOpen={sidebarOpen}
