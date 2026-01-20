@@ -353,78 +353,80 @@ export const CentralInventoryView: React.FC = () => {
       )}
 
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800">
-        <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-800 flex flex-col gap-4">
-          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-            <Search className="w-5 h-5" />
-            <span className="font-medium">Filtros</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
-            <input
-              type="text"
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              placeholder="Buscar por RFID o nombre"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleApplyFilters();
-                }
-              }}
-            />
-            <select
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              value={asignadoId}
-              onChange={(e) => setAsignadoId(e.target.value)}
-            >
-              <option value="">Asignado: todos</option>
-              {tenantOptions.map(opt => (
-                <option key={`a-${opt.value}`} value={opt.value}><TenantOption tenant={opt.tenant} /></option>
-              ))}
-            </select>
-            <select
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              value={modeloId}
-              onChange={(e) => setModeloId(e.target.value)}
-            >
-              <option value="">Modelo: todos</option>
-              {modeloOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              value={activo}
-              onChange={(e) => setActivo(e.target.value as 'all' | 'active' | 'inactive')}
-            >
-              <option value="all">Estado lógico</option>
-              <option value="active">Activos</option>
-              <option value="inactive">Inactivos</option>
-            </select>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleApplyFilters}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >Aplicar</button>
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >Limpiar</button>
-            <div className="flex items-center gap-2 ml-auto text-sm text-gray-600 dark:text-gray-300">
-              <span>Tamaño página:</span>
+        {activeTab !== 'admin' && (
+          <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-800 flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+              <Search className="w-5 h-5" />
+              <span className="font-medium">Filtros</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+              <input
+                type="text"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                placeholder="Buscar por RFID o nombre"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleApplyFilters();
+                  }
+                }}
+              />
               <select
-                value={pageSize}
-                onChange={handlePageSizeChange}
-                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                value={asignadoId}
+                onChange={(e) => setAsignadoId(e.target.value)}
               >
-                {[10, 20, 50, 100].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                <option value="">Asignado: todos</option>
+                {tenantOptions.map(opt => (
+                  <option key={`a-${opt.value}`} value={opt.value}><TenantOption tenant={opt.tenant} /></option>
+                ))}
+              </select>
+              <select
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                value={modeloId}
+                onChange={(e) => setModeloId(e.target.value)}
+              >
+                <option value="">Modelo: todos</option>
+                {modeloOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <select
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                value={activo}
+                onChange={(e) => setActivo(e.target.value as 'all' | 'active' | 'inactive')}
+              >
+                <option value="all">Estado lógico</option>
+                <option value="active">Activos</option>
+                <option value="inactive">Inactivos</option>
               </select>
             </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleApplyFilters}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >Aplicar</button>
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >Limpiar</button>
+              <div className="flex items-center gap-2 ml-auto text-sm text-gray-600 dark:text-gray-300">
+                <span>Tamaño página:</span>
+                <select
+                  value={pageSize}
+                  onChange={handlePageSizeChange}
+                  className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                >
+                  {[10, 20, 50, 100].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
