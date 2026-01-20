@@ -6,6 +6,34 @@ const BASE_SCHEMAS_TO_SKIP = new Set(['tenant_base']);
 const inventarioColumnsCache = new Map();
 const ensuredRfidIndexSchemas = new Set();
 
+const getAllTenantSchemas = async () => {
+  const { rows } = await pool.query(
+    `SELECT esquema, nombre FROM admin_platform.tenants WHERE esquema IS NOT NULL AND esquema LIKE 'tenant_%'`
+  );
+  return rows;
+};
+
+const findDuplicateInOtherTenants = async (currentSchema, normalizedRfid, tenantsList) => {
+  const tenants = tenantsList || await getAllTenantSchemas();
+  const current = sanitizeSchema(currentSchema);
+
+  for (const tenant of tenants) {
+    if (!tenant.esquema || tenant.esquema === current) continue;
+    const sql = format('SELECT activo FROM %I.inventario_credocubes WHERE rfid = $1 LIMIT 1', tenant.esquema);
+    try {
+      const { rows } = await pool.query(sql, [normalizedRfid]);
+      if (rows.length) {
+        const activo = rows[0]?.activo === true;
+        return { duplicate: true, activo, tenantNombre: tenant.nombre || tenant.esquema };
+      }
+    } catch (err) {
+      console.warn(`No se pudo verificar duplicado en ${tenant.esquema}:`, err.message);
+    }
+  }
+
+  return { duplicate: false, activo: false, tenantNombre: null };
+};
+
 const sanitizeSchema = (schema) => {
   if (!schema || typeof schema !== 'string') {
     throw Object.assign(new Error('Schema requerido'), { status: 400 });
@@ -294,6 +322,12 @@ const createInventarioItem = async (schema, payload) => {
     throw Object.assign(new Error('Modelo inválido'), { status: 400 });
   }
   data.rfid = requireRfid(data.rfid);
+
+  // Evita duplicados activos en otros tenants; solo se permite si el duplicado existe pero está inhabilitado
+  const dup = await findDuplicateInOtherTenants(tenantSchema, data.rfid);
+  if (dup.duplicate && dup.activo) {
+    throw Object.assign(new Error(`El RFID ya está activo en ${dup.tenantNombre}`), { status: 409 });
+  }
 
   const requiredColumns = ['modelo_id', 'rfid'];
   requiredColumns.forEach((column) => {
@@ -609,18 +643,23 @@ const validateInventarioRfids = async (schema, rfids = [], options = {}) => {
   }
 
   const accepted = [];
+  const tenantList = await getAllTenantSchemas();
 
-  results.forEach(entry => {
-    if (entry.status !== 'pending') {
-      return;
-    }
+  for (const entry of results) {
+    if (entry.status !== 'pending') continue;
 
     const existing = existingByRfid.get(entry.normalized);
     if (!existing) {
+      const dupOther = await findDuplicateInOtherTenants(tenantSchema, entry.normalized, tenantList);
+      if (dupOther.duplicate && dupOther.activo) {
+        entry.status = 'conflict_other_tenant';
+        entry.message = `El RFID ya está activo en ${dupOther.tenantNombre}`;
+        continue;
+      }
       entry.status = 'accepted';
       entry.message = 'Disponible para registro';
       accepted.push(entry.normalized);
-      return;
+      continue;
     }
 
     const existingSedeId = existing.sede_id === null || existing.sede_id === undefined
@@ -641,7 +680,7 @@ const validateInventarioRfids = async (schema, rfids = [], options = {}) => {
       entry.status = 'already_exists';
       entry.message = 'El RFID ya existe en el inventario';
     }
-  });
+  }
 
   return {
     results,
@@ -656,6 +695,8 @@ const bulkCreateInventarioItems = async (schema, payload = {}, rfids = []) => {
   }
 
   await ensureUniqueRfidIndex(tenantSchema);
+
+  const tenantList = await getAllTenantSchemas();
 
   const created = [];
   const failures = [];
@@ -676,6 +717,12 @@ const bulkCreateInventarioItems = async (schema, payload = {}, rfids = []) => {
       continue;
     }
     seen.add(normalized);
+
+    const dup = await findDuplicateInOtherTenants(tenantSchema, normalized, tenantList);
+    if (dup.duplicate && dup.activo) {
+      failures.push({ rfid: normalized, error: `El RFID ya está activo en ${dup.tenantNombre}`, status: 409 });
+      continue;
+    }
 
     try {
       const item = await createInventarioItem(tenantSchema, { ...payload, rfid: normalized });
