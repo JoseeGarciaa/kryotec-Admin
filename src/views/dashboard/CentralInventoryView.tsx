@@ -486,18 +486,21 @@ export const CentralInventoryView: React.FC = () => {
                 items.map(item => (
                   <tr key={`${item.id}-${item.rfid}`} className="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
                     <td className="px-4 py-3 align-top">
-                      <input
-                        type="checkbox"
-                        checked={selectedRfids.has(item.rfid)}
-                        disabled={!item.activo}
-                        onChange={(e) => {
-                          setSelectedRfids(prev => {
-                            const next = new Set(prev);
-                            if (e.target.checked) next.add(item.rfid); else next.delete(item.rfid);
-                            return next;
-                          });
-                        }}
-                      />
+                      {item.activo ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedRfids.has(item.rfid)}
+                          onChange={(e) => {
+                            setSelectedRfids(prev => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(item.rfid); else next.delete(item.rfid);
+                              return next;
+                            });
+                          }}
+                        />
+                      ) : (
+                        <span className="text-xs text-gray-400 dark:text-gray-600">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 align-top">{renderSource(item)}</td>
                     <td className="px-4 py-3 align-top">{renderModel(item)}</td>
