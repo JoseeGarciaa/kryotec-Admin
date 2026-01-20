@@ -3,7 +3,13 @@ const jwt = require('jsonwebtoken');
 
 // Importar la configuración de la base de datos centralizada
 const pool = require('./config/db');
-const { securityPolicy, isPasswordComplex, calculatePasswordExpiry } = require('./utils/securityPolicy');
+const { securityPolicy, isPasswordComplex, calculatePasswordExpiry, parseNumber } = require('./utils/securityPolicy');
+
+// Expiración absoluta del token (independiente del timer de inactividad en frontend)
+const ABSOLUTE_SESSION_MINUTES = Math.max(
+  parseNumber(process.env.SESSION_ABSOLUTE_MINUTES, 720), // 12h por defecto
+  securityPolicy.SESSION_TIMEOUT_MINUTES_DEFAULT
+);
 
 // Función para hashear contraseñas con bcrypt
 const hashPassword = async (password) => {
@@ -201,7 +207,9 @@ const authService = {
 
       // Contraseña válida → resetear estado de bloqueo
       const sessionTimeoutMinutes = normalizeSessionTimeout(user.session_timeout_minutos);
-      const expiresInCfg = `${sessionTimeoutMinutes}m`;
+      // Token con vencimiento absoluto amplio; la inactividad se maneja en frontend
+      const expiresInMinutes = Math.max(sessionTimeoutMinutes, ABSOLUTE_SESSION_MINUTES);
+      const expiresInCfg = `${expiresInMinutes}m`;
       const expiresAtDate = calculatePasswordExpiry(
         user.ultimo_cambio_contraseña || now
       );
