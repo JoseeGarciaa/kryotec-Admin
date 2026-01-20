@@ -80,6 +80,7 @@ export type TenantInventoryRfidStatus =
   | 'duplicate_input'
   | 'duplicate_existing'
   | 'conflict_other_sede'
+  | 'conflict_other_tenant'
   | 'already_exists'
   | 'invalid_format';
 

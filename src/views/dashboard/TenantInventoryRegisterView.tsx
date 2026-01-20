@@ -45,6 +45,11 @@ const statusStyles: Record<
     badge: 'text-red-500',
     label: 'otra sede'
   },
+  conflict_other_tenant: {
+    chip: 'border-red-300 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-900/40 dark:text-red-300',
+    badge: 'text-red-500',
+    label: 'otro tenant'
+  },
   already_exists: {
     chip: 'border-yellow-300 bg-yellow-50 text-yellow-900 dark:border-yellow-600 dark:bg-yellow-900/40 dark:text-yellow-200',
     badge: 'text-yellow-500',
@@ -556,7 +561,7 @@ export const TenantInventoryRegisterView: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">Escanea un RFID para verlo aquí.</p>
               )}
               {scanned.map(entry => {
-                const styles = statusStyles[entry.status];
+                const styles = statusStyles[entry.status] || statusStyles.accepted;
                 return (
                   <div
                     key={`${entry.value}-${entry.status}`}
