@@ -12,6 +12,7 @@ const clientesProspectosRoutes = require('./routes/clientesProspectosRoutes'); /
 const inventarioProspectosService = require('./inventarioProspectosService');
 const sugerenciasService = require('./sugerenciasService');
 const inventarioAdminService = require('./inventarioAdminService');
+const inventarioCentralService = require('./inventarioCentralService');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const jwt = require('jsonwebtoken');
@@ -249,32 +250,6 @@ app.delete('/api/users/:id', verifyToken, async (req, res) => {
   }
 });
 
-// Endpoint para obtener el inventario de Credocubes
-app.get('/api/inventario-credocubes', async (req, res) => {
-  try {
-    const query = `
-    SELECT
-      i.tenant_schema_name,      -- Esquema del tenant
-      i.nombre_unidad,           -- Nombre de la unidad
-      i.fecha_ingreso,           -- Fecha de ingreso
-      i.ultima_actualizacion,    -- Última actualización
-      i.activo,                  -- Activo/inactivo
-      i.categoria,               -- Categoría registrada en inventario
-      i.modelo_id,               -- FK al modelo
-      m.volumen_litros,          -- Volumen del modelo (para agrupar por litros)
-      m.nombre_modelo AS modelo_nombre, -- Nombre del modelo
-      m.tipo AS tipo_modelo      -- Tipo de modelo (esperado 'Cube')
-    FROM admin_platform.inventario_credocubes i
-    LEFT JOIN admin_platform.modelos m ON m.modelo_id = i.modelo_id
-    `;
-    const result = await pool.query(query);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error al obtener inventario de Credocubes:', error);
-    res.status(500).json({ error: 'Error al obtener datos del inventario' });
-  }
-});
-
 const parseBooleanQuery = (value) => {
   if (value === undefined) return undefined;
   const normalized = String(value).toLowerCase();
@@ -282,6 +257,88 @@ const parseBooleanQuery = (value) => {
   if (['false', '0', 'no', 'off'].includes(normalized)) return false;
   return undefined;
 };
+
+app.get('/api/inventario-central', verifyToken, async (req, res) => {
+  try {
+    const { search, source, tenantId, asignadoTenantId, modeloId, estado, categoria, page, pageSize, rfid } = req.query || {};
+    const esAlquiler = parseBooleanQuery(req.query.esAlquiler);
+    const activo = parseBooleanQuery(req.query.activo);
+
+    const filters = {
+      search: search || undefined,
+      source: source || undefined,
+      tenantId: tenantId || undefined,
+      asignadoTenantId: asignadoTenantId || undefined,
+      modeloId: modeloId || undefined,
+      estado: estado || undefined,
+      categoria: categoria || undefined,
+      es_alquiler: esAlquiler,
+      activo,
+      rfid: rfid || undefined
+    };
+
+    const result = await inventarioCentralService.getInventarioCentral(filters, { page, pageSize });
+    res.json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    console.error('Error en GET /api/inventario-central:', error);
+    res.status(status).json({ error: error.message || 'Error al obtener inventario central' });
+  }
+});
+
+app.post('/api/inventario-central', verifyToken, async (req, res) => {
+  try {
+    const created = await inventarioCentralService.createInventarioCentral(req.body || {});
+    res.status(201).json(created);
+  } catch (error) {
+    const status = error.status || (error.code === '23505' ? 409 : 500);
+    console.error('Error en POST /api/inventario-central:', error);
+    res.status(status).json({ error: error.message || 'Error al crear inventario central' });
+  }
+});
+
+app.post('/api/inventario-central/:rfid/reasignar', verifyToken, async (req, res) => {
+  try {
+    const { tenantId, cambiarDueno, motivo, force } = req.body || {};
+    if (tenantId === undefined || tenantId === null) {
+      return res.status(400).json({ error: 'tenantId es requerido' });
+    }
+    const updated = await inventarioCentralService.reassignInventarioCentral(req.params.rfid, {
+      tenantId,
+      cambiarDueno,
+      adminUserId: req.user?.sub,
+      motivo,
+      force: Boolean(force)
+    });
+    res.json(updated || { success: true });
+  } catch (error) {
+    const status = error.status || 500;
+    console.error(`Error en POST /api/inventario-central/${req.params.rfid}/reasignar:`, error);
+    res.status(status).json({ error: error.message || 'Error al reasignar inventario central' });
+  }
+});
+
+app.post('/api/inventario-central/:rfid/desasignar', verifyToken, async (req, res) => {
+  try {
+    const updated = await inventarioCentralService.desasignarInventarioCentral(req.params.rfid);
+    res.json(updated || { success: true });
+  } catch (error) {
+    const status = error.status || 500;
+    console.error(`Error en POST /api/inventario-central/${req.params.rfid}/desasignar:`, error);
+    res.status(status).json({ error: error.message || 'Error al desasignar inventario central' });
+  }
+});
+
+app.get('/api/inventario-central/:rfid/historial', verifyToken, async (req, res) => {
+  try {
+    const history = await inventarioCentralService.getHistorialAsignaciones(req.params.rfid, { limit: req.query?.limit });
+    res.json(history);
+  } catch (error) {
+    const status = error.status || 500;
+    console.error(`Error en GET /api/inventario-central/${req.params.rfid}/historial:`, error);
+    res.status(status).json({ error: error.message || 'Error al obtener historial de asignaciones' });
+  }
+});
 
 app.get('/api/tenant-inventory', verifyToken, async (req, res) => {
   try {
@@ -411,34 +468,6 @@ app.get('/api/tenant-inventory/secciones', verifyToken, async (req, res) => {
     const status = error.status || 500;
     console.error('Error en GET /api/tenant-inventory/secciones:', error);
     res.status(status).json({ error: error.message || 'Error al obtener secciones del tenant' });
-  }
-});
-
-// Endpoint para refrescar el inventario de Credocubes
-app.post('/api/refresh-inventario-credocubes', async (req, res) => {
-  try {
-    console.log('Ejecutando función para refrescar inventario de Credocubes');
-    const query = `SELECT admin_platform.refresh_inventario_credocubes_global()`;
-    await pool.query(query);
-    console.log('Inventario de Credocubes actualizado correctamente');
-    res.json({ success: true, message: 'Inventario actualizado correctamente' });
-  } catch (error) {
-    console.error('Error al refrescar inventario de Credocubes:', error);
-    res.status(500).json({ error: 'Error al actualizar el inventario' });
-  }
-});
-
-// Endpoint alternativo para refrescar el inventario de Credocubes (para compatibilidad)
-app.get('/api/refresh-inventario-credocubes', async (req, res) => {
-  try {
-    console.log('Ejecutando función para refrescar inventario de Credocubes (GET)');
-    const query = `SELECT admin_platform.refresh_inventario_credocubes_global()`;
-    await pool.query(query);
-    console.log('Inventario de Credocubes actualizado correctamente (GET)');
-    res.json({ success: true, message: 'Inventario actualizado correctamente' });
-  } catch (error) {
-    console.error('Error al refrescar inventario de Credocubes (GET):', error);
-    res.status(500).json({ error: 'Error al actualizar el inventario' });
   }
 });
 

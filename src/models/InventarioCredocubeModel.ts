@@ -1,39 +1,36 @@
-import axios from 'axios';
+import { apiClient } from '../services/api';
+import { CentralInventoryItem, CentralInventoryListResponse } from './CentralInventoryModel';
 
-export interface InventarioCredocube {
-  tenant_schema_name: string;
-  nombre_unidad: string;
-  fecha_ingreso: string;
-  ultima_actualizacion: string;
-  activo: boolean;
-  categoria?: string | null;
-  modelo_id?: number | null;
-  volumen_litros?: number | null;
-  modelo_nombre?: string | null;
-  tipo_modelo?: string | null;
-}
+export type InventarioCredocube = CentralInventoryItem;
 
-// URL base de la API - Usar ruta relativa en producción o localhost en desarrollo
-const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+const INVENTORY_PATH = '/inventario-central';
+const PAGE_SIZE = 200;
 
-// Función para interactuar con la API y obtener los datos reales de la tabla
-export const getInventarioCredocubes = async (): Promise<InventarioCredocube[]> => {
-  try {
-    const response = await axios.get(`${API_URL}/inventario-credocubes`);
-    return response.data;
-  } catch (error) {
-    console.error('Error al obtener inventario de Credocubes:', error);
-    throw new Error('Error al obtener datos del inventario');
-  }
+const fetchPage = async (page: number): Promise<CentralInventoryListResponse> => {
+  const response = await apiClient.get(INVENTORY_PATH, {
+    params: { page, pageSize: PAGE_SIZE }
+  });
+  return response.data;
 };
 
-// Función para refrescar el inventario ejecutando la función SQL
+// Cargar todo el inventario central (admin + tenants), paginando hasta el final
+export const getInventarioCredocubes = async (): Promise<InventarioCredocube[]> => {
+  let page = 1;
+  const items: InventarioCredocube[] = [];
+  let totalPages = 1;
+
+  do {
+    const data = await fetchPage(page);
+    items.push(...data.items);
+    totalPages = data.totalPages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return items;
+};
+
+// Compatibilidad: solo vuelve a obtener los datos; no hay endpoint de "refresh"
 export const refreshInventarioCredocubes = async (): Promise<{ success: boolean; message: string }> => {
-  try {
-    const response = await axios.post(`${API_URL}/refresh-inventario-credocubes`);
-    return response.data;
-  } catch (error) {
-    console.error('Error al refrescar inventario de Credocubes:', error);
-    throw new Error('Error al actualizar el inventario');
-  }
+  await getInventarioCredocubes();
+  return { success: true, message: 'Inventario actualizado' };
 };

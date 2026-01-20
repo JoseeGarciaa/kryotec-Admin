@@ -24,6 +24,7 @@ import { TenantInventoryView } from './TenantInventoryView';
 import { TenantInventoryRegisterView } from './TenantInventoryRegisterView';
 import { TenantsView } from './TenantsView';
 import ProspectosView from './prospectos/ProspectosView';
+import { CentralInventoryView } from './CentralInventoryView';
 
 export const DashboardView: React.FC = () => {
   const location = useLocation();
@@ -117,6 +118,11 @@ export const DashboardView: React.FC = () => {
       icon: Building2 
     },
     { 
+      id: 'inventario-central',
+      label: 'Inventario central',
+      icon: Boxes 
+    },
+    { 
       id: 'tenant-inventory',
       label: 'Inventarios tenant',
       icon: Boxes 
@@ -200,6 +206,7 @@ export const DashboardView: React.FC = () => {
           
           {role === 'admin' && activeTab === 'usuarios' && <UsersView />}
           {role === 'admin' && activeTab === 'empresas' && <TenantsView />}
+          {role === 'admin' && activeTab === 'inventario-central' && <CentralInventoryView />}
           {role === 'admin' && activeTab === 'tenant-inventory' && <TenantInventoryView />}
           {role === 'admin' && activeTab === 'tenant-register' && <TenantInventoryRegisterView />}
           {role === 'admin' && activeTab === 'credocubes' && <CredocubesView />}

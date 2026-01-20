@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { InventarioCredocube, getInventarioCredocubes, refreshInventarioCredocubes } from '../models/InventarioCredocubeModel';
+import { InventarioCredocube, getInventarioCredocubes } from '../models/InventarioCredocubeModel';
 import { toast } from 'react-toastify';
 
 export const useInventarioCredocubeController = () => {
@@ -32,9 +32,7 @@ export const useInventarioCredocubeController = () => {
   const refreshInventarioData = async () => {
     try {
       setRefreshing(true);
-      // Ejecutamos la función SQL para refrescar el inventario
-      await refreshInventarioCredocubes();
-      // Obtenemos los datos actualizados
+      // Solo recargamos datos; la fuente ya lee todo el inventario central
       await fetchInventario();
       toast.success('Inventario actualizado correctamente');
     } catch (err) {
@@ -56,7 +54,7 @@ export const useInventarioCredocubeController = () => {
   const prepareChartData = () => {
     // Agrupar por tenant_schema_name y contar unidades
     const tenantCounts = inventario.reduce((acc, item) => {
-      const tenant = item.tenant_schema_name;
+      const tenant = item.tenant_schema_name || 'admin_pool';
       acc[tenant] = (acc[tenant] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
