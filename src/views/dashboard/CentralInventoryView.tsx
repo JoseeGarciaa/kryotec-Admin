@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Boxes, Building2, Clock3, History, RefreshCw, Search } from 'lucide-react';
 import { useCentralInventoryController } from '../../controllers/CentralInventoryController';
-import { CentralInventoryItem, CreateCentralInventoryPayload } from '../../models/CentralInventoryModel';
+import { CentralInventoryFilters, CentralInventoryItem, CreateCentralInventoryPayload } from '../../models/CentralInventoryModel';
 import { Tenant } from '../../models/TenantModel';
 
 const Modal: React.FC<{ open: boolean; onClose: () => void; title: string; children?: React.ReactNode }> = ({ open, onClose, title, children }) => {
@@ -82,21 +82,34 @@ export const CentralInventoryView: React.FC = () => {
 
   const startIndex = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endIndex = total === 0 ? 0 : Math.min(total, startIndex + items.length - 1);
+  const activeItems = useMemo(() => items.filter((it: CentralInventoryItem) => it.activo), [items]);
 
   useEffect(() => {
     loadMetadata().then(() => loadInventory());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Limpia selección si los items seleccionados ya no están activos en el listado
+  useEffect(() => {
+    setSelectedRfids(prev => {
+      const next = new Set<string>();
+      const activeSet = new Set(items.filter(it => it.activo).map(it => it.rfid));
+      prev.forEach(rfid => { if (activeSet.has(rfid)) next.add(rfid); });
+      return next;
+    });
+  }, [items]);
+
   // Cambiar pestaña (general vs admin pool)
   const handleTabChange = async (tab: 'all' | 'admin') => {
     setActiveTab(tab);
-    const nextFilters = tab === 'admin' ? { ...filters, source: 'admin' } : (() => {
-      const copy = { ...filters } as any;
-      delete copy.source;
-      return copy;
-    })();
-    await loadInventory(nextFilters, { pagination: { page: 1 }, replaceFilters: true });
+    setSearch('');
+    setAsignadoId('');
+    setModeloId('');
+    setActivo('all');
+    setSelectedRfids(new Set());
+    setBulkMode('none');
+    const baseFilters: Partial<CentralInventoryFilters> = tab === 'admin' ? { source: 'admin' } : {};
+    await loadInventory(baseFilters, { pagination: { page: 1 }, replaceFilters: true });
   };
 
   const handleApplyFilters = async () => {
@@ -435,14 +448,15 @@ export const CentralInventoryView: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">
                   <input
                     type="checkbox"
-                    checked={selectedRfids.size > 0 && selectedRfids.size === items.length}
+                    checked={activeItems.length > 0 && selectedRfids.size === activeItems.length}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setSelectedRfids(new Set(items.map(it => it.rfid)));
+                        setSelectedRfids(new Set(activeItems.map(it => it.rfid)));
                       } else {
                         setSelectedRfids(new Set());
                       }
                     }}
+                    disabled={activeItems.length === 0}
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Origen</th>
@@ -475,6 +489,7 @@ export const CentralInventoryView: React.FC = () => {
                       <input
                         type="checkbox"
                         checked={selectedRfids.has(item.rfid)}
+                        disabled={!item.activo}
                         onChange={(e) => {
                           setSelectedRfids(prev => {
                             const next = new Set(prev);
