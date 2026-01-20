@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Boxes, Building2, Clock3, History, Plus, RefreshCw, Search, Shuffle } from 'lucide-react';
+import { Boxes, Building2, Clock3, History, RefreshCw, Search } from 'lucide-react';
 import { useCentralInventoryController } from '../../controllers/CentralInventoryController';
 import { CentralInventoryItem, CreateCentralInventoryPayload } from '../../models/CentralInventoryModel';
 import { Tenant } from '../../models/TenantModel';
