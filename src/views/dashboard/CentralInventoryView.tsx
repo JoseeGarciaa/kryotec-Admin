@@ -310,13 +310,6 @@ export const CentralInventoryView: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
           </button>
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4" /> Nuevo central
-          </button>
         </div>
       </div>
 
