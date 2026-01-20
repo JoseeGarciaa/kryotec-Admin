@@ -76,8 +76,9 @@ export const CentralInventoryView: React.FC = () => {
   const [reasignarTenantId, setReasignarTenantId] = useState('');
   const [reasignarCambiarDueno, setReasignarCambiarDueno] = useState(false);
   const [reasignarMotivo, setReasignarMotivo] = useState('');
-
   const [pendingUnassignRfid, setPendingUnassignRfid] = useState('');
+  const [selectedRfids, setSelectedRfids] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState<'none' | 'reassign' | 'admin'>('none');
 
   const startIndex = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endIndex = total === 0 ? 0 : Math.min(total, startIndex + items.length - 1);
@@ -132,6 +133,7 @@ export const CentralInventoryView: React.FC = () => {
   const modeloOptions = useMemo(() => modelos.map(m => ({ value: String(m.modelo_id), label: `${m.nombre_modelo}${m.volumen_litros ? ` • ${m.volumen_litros} L` : ''}` })), [modelos]);
 
   const openReassign = (item: CentralInventoryItem) => {
+    setBulkMode('none');
     setSelectedItem(item);
     setReasignarTenantId('');
     setReasignarCambiarDueno(false);
@@ -140,6 +142,7 @@ export const CentralInventoryView: React.FC = () => {
   };
 
   const openUnassign = (item: CentralInventoryItem) => {
+    setBulkMode('none');
     setSelectedItem(item);
     setPendingUnassignRfid(item.rfid);
     setUnassignConfirmOpen(true);
@@ -190,11 +193,61 @@ export const CentralInventoryView: React.FC = () => {
     await loadInventory(filters, { pagination: { page }, keepPage: true });
   };
 
+  const handleBulkReassign = async () => {
+    if (!reasignarTenantId || selectedRfids.size === 0) return;
+    for (const rfid of Array.from(selectedRfids)) {
+      try {
+        await reassignItem(rfid, {
+          tenantId: Number(reasignarTenantId),
+          cambiarDueno: reasignarCambiarDueno,
+          motivo: reasignarMotivo || undefined,
+          force: forceReassign
+        });
+      } catch (err: any) {
+        const status = err?.response?.status;
+        const conflictTenant = err?.response?.data?.conflictTenantNombre;
+        if (status === 409 && conflictTenant) {
+          const confirmForce = window.confirm(`La pieza ${rfid} está activa en ${conflictTenant}. ¿Inhabilitar allí y asignar al nuevo tenant?`);
+          if (confirmForce) {
+            await reassignItem(rfid, {
+              tenantId: Number(reasignarTenantId),
+              cambiarDueno: reasignarCambiarDueno,
+              motivo: reasignarMotivo || undefined,
+              force: true
+            });
+          }
+        } else {
+          console.error('Error reasignando', rfid, err);
+        }
+      }
+    }
+    setReassignOpen(false);
+    setForceReassign(false);
+    setSelectedRfids(new Set());
+    setBulkMode('none');
+    await loadInventory(filters, { pagination: { page }, keepPage: true });
+  };
+
   const handleUnassign = async () => {
     if (!pendingUnassignRfid) return;
     await unassignItem(pendingUnassignRfid);
     setUnassignConfirmOpen(false);
     setPendingUnassignRfid('');
+    setBulkMode('none');
+    await loadInventory(filters, { pagination: { page }, keepPage: true });
+  };
+
+  const handleBulkUnassign = async () => {
+    if (selectedRfids.size === 0) return;
+    for (const rfid of Array.from(selectedRfids)) {
+      try {
+        await unassignItem(rfid);
+      } catch (err) {
+        console.error('Error al pasar a admin', rfid, err);
+      }
+    }
+    setSelectedRfids(new Set());
+    setBulkMode('none');
     await loadInventory(filters, { pagination: { page }, keepPage: true });
   };
 
@@ -276,6 +329,30 @@ export const CentralInventoryView: React.FC = () => {
           className={`px-3 py-2 rounded-lg text-sm font-semibold border ${activeTab === 'admin' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-700'}`}
           onClick={() => handleTabChange('admin')}
         >Inventario en admin</button>
+      </div>
+
+      {/* Acciones masivas */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="text-sm text-gray-700 dark:text-gray-300">Seleccionados: {selectedRfids.size}</div>
+        <button
+          type="button"
+          disabled={selectedRfids.size === 0}
+          onClick={() => { setBulkMode('reassign'); setSelectedItem(null); setReassignOpen(true); setReasignarTenantId(''); setReasignarCambiarDueno(false); setReasignarMotivo(''); setForceReassign(false); }}
+          className={`px-3 py-2 rounded-lg text-white ${selectedRfids.size === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+        >{activeTab === 'admin' ? 'Asignar seleccionados' : 'Reasignar seleccionados'}</button>
+        {activeTab !== 'admin' && (
+          <button
+            type="button"
+            disabled={selectedRfids.size === 0}
+            onClick={() => { setBulkMode('admin'); setUnassignConfirmOpen(true); setPendingUnassignRfid(''); }}
+            className={`px-3 py-2 rounded-lg text-white ${selectedRfids.size === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-700'}`}
+          >Pasar a admin seleccionados</button>
+        )}
+        <button
+          type="button"
+          onClick={() => setSelectedRfids(new Set())}
+          className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200"
+        >Limpiar selección</button>
       </div>
 
       {error && (
@@ -360,6 +437,19 @@ export const CentralInventoryView: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
             <thead className="bg-gray-50 dark:bg-gray-800/60">
               <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={selectedRfids.size > 0 && selectedRfids.size === items.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedRfids(new Set(items.map(it => it.rfid)));
+                      } else {
+                        setSelectedRfids(new Set());
+                      }
+                    }}
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Origen</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Modelo</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Dueño / Uso</th>
@@ -371,7 +461,7 @@ export const CentralInventoryView: React.FC = () => {
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="w-5 h-5 animate-spin" /> Cargando inventario...
                     </div>
@@ -379,13 +469,26 @@ export const CentralInventoryView: React.FC = () => {
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
                     No hay registros para mostrar.
                   </td>
                 </tr>
               ) : (
                 items.map(item => (
                   <tr key={`${item.id}-${item.rfid}`} className="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
+                    <td className="px-4 py-3 align-top">
+                      <input
+                        type="checkbox"
+                        checked={selectedRfids.has(item.rfid)}
+                        onChange={(e) => {
+                          setSelectedRfids(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(item.rfid); else next.delete(item.rfid);
+                            return next;
+                          });
+                        }}
+                      />
+                    </td>
                     <td className="px-4 py-3 align-top">{renderSource(item)}</td>
                     <td className="px-4 py-3 align-top">{renderModel(item)}</td>
                     <td className="px-4 py-3 align-top">{renderOwner(item)}</td>
@@ -583,8 +686,12 @@ export const CentralInventoryView: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Modal reasignar */}
-      <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title={`Reasignar ${selectedItem?.rfid || ''}`}>
+      {/* Modal reasignar / asignar */}
+      <Modal
+        open={reassignOpen}
+        onClose={() => { setReassignOpen(false); setBulkMode('none'); setForceReassign(false); }}
+        title={`${activeTab === 'admin' ? 'Asignar' : 'Reasignar'} ${selectedItem?.rfid || (bulkMode === 'reassign' ? `${selectedRfids.size} seleccionados` : '')}`}
+      >
         <div className="space-y-3">
           <p className="text-sm text-gray-600 dark:text-gray-300">Selecciona el tenant destino y si cambia la propiedad.</p>
           <select
@@ -612,15 +719,18 @@ export const CentralInventoryView: React.FC = () => {
         <div className="flex justify-end gap-3">
           <button
             type="button"
-            onClick={() => setReassignOpen(false)}
+            onClick={() => { setReassignOpen(false); setBulkMode('none'); setForceReassign(false); }}
             className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200"
           >Cancelar</button>
           <button
             type="button"
-            onClick={handleReassign}
+            onClick={bulkMode === 'reassign' ? handleBulkReassign : handleReassign}
             disabled={saving || !reasignarTenantId}
             className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-          >Reasignar</button>
+          >{bulkMode === 'reassign'
+            ? `${activeTab === 'admin' ? 'Asignar' : 'Reasignar'} seleccionados`
+            : (activeTab === 'admin' ? 'Asignar' : 'Reasignar')}
+          </button>
         </div>
       </Modal>
 
@@ -654,17 +764,17 @@ export const CentralInventoryView: React.FC = () => {
       </Modal>
 
       {/* Modal retirar a pool */}
-      <Modal open={unassignConfirmOpen} onClose={() => setUnassignConfirmOpen(false)} title="Retirar a pool">
+      <Modal open={unassignConfirmOpen} onClose={() => { setUnassignConfirmOpen(false); setBulkMode('none'); }} title="Retirar a pool">
         <p className="text-sm text-gray-700 dark:text-gray-300">El item quedará sin asignar en el inventario central.</p>
         <div className="flex justify-end gap-3 mt-4">
           <button
             type="button"
-            onClick={() => setUnassignConfirmOpen(false)}
+            onClick={() => { setUnassignConfirmOpen(false); setBulkMode('none'); }}
             className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200"
           >Cancelar</button>
           <button
             type="button"
-            onClick={handleUnassign}
+            onClick={bulkMode === 'admin' ? handleBulkUnassign : handleUnassign}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 disabled:opacity-50"
           >Retirar</button>

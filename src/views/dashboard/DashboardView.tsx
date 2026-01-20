@@ -86,7 +86,7 @@ export const DashboardView: React.FC = () => {
   const { theme, toggleTheme } = useThemeContext();
 
   const role = (user?.role ?? (user as any)?.rol) === 'admin' ? 'admin' : 'comercial';
-  const hiddenTabs = new Set(['tenant-inventory', 'tenant-register', 'credocubes']);
+  const hiddenTabs = new Set(['tenant-inventory', 'credocubes']);
   const allowedTabsForComercial = new Set([
     'dashboard',
     'prospectos',
