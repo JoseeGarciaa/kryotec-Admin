@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Home, Users, LogOut, Moon, Sun, Package, Lightbulb } from 'lucide-react';
-import credocubeLogo from '../../assets/images/favicon.png';
+import logoBlue from '../../assets/images/Kry Sense RFID Render blue v2.png';
+import logoWhite from '../../assets/images/Kry Sense RFID Render white v2.png';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthContext } from '../../views/contexts/AuthContext';
 import { useThemeContext } from '../../views/contexts/ThemeContext';
@@ -39,6 +40,8 @@ export const MobileNavigation: React.FC = () => {
   { icon: <Package size={22} />, label: 'Inventario (Prospectos)', path: '/dashboard?tab=prospectos-inventario' },
   { icon: <Lightbulb size={22} />, label: 'Sugerencias', path: '/dashboard?tab=prospectos-sugerencias' },
   ];
+
+  const brandLogo = theme === 'dark' ? logoWhite : logoBlue;
 
   const filteredMenuItems = role === 'admin'
     ? menuItems
@@ -92,11 +95,11 @@ export const MobileNavigation: React.FC = () => {
               <div className="p-6 border-b border-gray-700/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-lg p-1">
-                      <img src={credocubeLogo} alt="KryoTec Logo" className="w-full h-full object-contain" />
+                    <div className="w-24 h-10 bg-white/90 dark:bg-transparent rounded-xl flex items-center justify-center shadow-lg dark:shadow-none p-1">
+                      <img src={brandLogo} alt="KryoSense Logo" className="w-full h-full object-contain" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-white">KryoTec</h2>
+                      <h2 className="text-xl font-bold text-white">KryoSense</h2>
                       <p className="text-xs text-blue-300 mt-0.5">Panel de Administración</p>
                     </div>
                   </div>

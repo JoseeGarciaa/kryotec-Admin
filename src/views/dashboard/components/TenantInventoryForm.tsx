@@ -130,7 +130,7 @@ export const TenantInventoryForm: React.FC<TenantInventoryFormProps> = ({
     const payload: TenantInventoryPayload = {
       modelo_id: form.modelo_id!,
       rfid: form.rfid.trim(),
-      estado: item?.estado?.trim() || 'En Bodega',
+      estado: form.activo ? 'En Bodega' : 'Fuera de inventario',
       categoria: selectedModelo?.tipo || selectedTipo || item?.categoria || undefined,
       activo: form.activo
     };

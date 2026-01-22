@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
-import credocubeLogo from '../../assets/images/favicon.png';
+import logoBlue from '../../assets/images/Kry Sense RFID Render blue v2.png';
+import logoWhite from '../../assets/images/Kry Sense RFID Render white v2.png';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LoginForm } from '../../views/auth/components/LoginForm';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -55,12 +56,13 @@ export const LoginView: React.FC = () => {
       <div className="w-full max-w-md mx-auto">
         {/* Logo and Header */}
         <div className="text-center mb-6 sm:mb-8">
-          <div className="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-2xl mb-4 shadow-lg p-2">
-            <img src={credocubeLogo} alt="KryoTec Logo" className="w-full h-full object-contain" />
+          <div className="inline-flex items-center justify-center w-44 h-14 sm:w-48 sm:h-16 bg-white dark:bg-transparent rounded-2xl mb-4 shadow-lg dark:shadow-none p-2">
+            <img
+              src={theme === 'dark' ? logoWhite : logoBlue}
+              alt="KryoSense Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2 transition-colors">
-            KryoTec
-          </h1>
           <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 transition-colors px-4">
             Panel de administración multitenant SaaS
           </p>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { LogOut, X, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Settings, Moon, Sun } from 'lucide-react';
-import credocubeLogo from '../../../assets/images/favicon.png';
+import logoBlue from '../../../assets/images/Kry Sense RFID Render blue v2.png';
+import logoWhite from '../../../assets/images/Kry Sense RFID Render white v2.png';
 import type { LucideIcon } from 'lucide-react';
 import { User } from '../../../models/types/auth';
 import { ThemeMode } from '../../../models/types/theme';
@@ -40,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(['prospectos']);
+  const brandLogo = theme === 'dark' ? logoWhite : logoBlue;
   
   useEffect(() => {
     // Verificar si la pantalla es grande (lg)
@@ -88,10 +90,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Encabezado con logo */}
         <div className={`p-6 ${!sidebarOpen ? 'lg:p-3' : ''}`}>
           <div className={`flex items-center gap-3 mb-8 ${!sidebarOpen ? 'lg:justify-center lg:mb-6' : ''}`}>
-            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-sm p-1">
-              <img src={credocubeLogo} alt="KryoTec Logo" className="w-full h-full object-contain" />
+            <div className="w-32 h-10 flex items-center justify-start">
+              <img src={brandLogo} alt="KryoSense Logo" className="w-full h-full object-contain" />
             </div>
-            {sidebarOpen && <h1 className="text-xl font-bold text-gray-900 dark:text-white">KryoTec</h1>}
           </div>
         </div>
 

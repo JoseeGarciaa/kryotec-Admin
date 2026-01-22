@@ -190,7 +190,10 @@ export const useTenantInventoryController = () => {
   }, []);
 
   const toggleActive = useCallback(async (schema: string, id: number, activo: boolean) => {
-    await updateItem(schema, id, { activo });
+    await updateItem(schema, id, {
+      activo,
+      estado: activo ? 'En Bodega' : 'Fuera de inventario'
+    });
   }, [updateItem]);
 
   const resetState = useCallback(() => {

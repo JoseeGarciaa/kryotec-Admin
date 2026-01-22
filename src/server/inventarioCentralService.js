@@ -478,15 +478,21 @@ const reassignInventarioCentral = async (rfid, { tenantId, cambiarDueno = false,
     const baseItem = found.item;
 
     if (originSchema) {
-      const deactivateSql = format('UPDATE %I.inventario_credocubes SET activo = false, ultima_actualizacion = now() WHERE rfid = $1', originSchema);
-      await client.query(deactivateSql, [normalizedRfid]);
+      const deactivateSql = format(
+        'UPDATE %I.inventario_credocubes SET activo = false, estado = $2, ultima_actualizacion = now() WHERE rfid = $1',
+        originSchema
+      );
+      await client.query(deactivateSql, [normalizedRfid, 'Fuera de inventario']);
     }
 
     // Si se fuerza, desactivar cualquier otro tenant que tuviera el RFID activo (evita duplicados)
     if (force && conflicting.length) {
       for (const { schema } of conflicting) {
-        const deactivateSql = format('UPDATE %I.inventario_credocubes SET activo = false, ultima_actualizacion = now() WHERE rfid = $1', schema);
-        await client.query(deactivateSql, [normalizedRfid]);
+        const deactivateSql = format(
+          'UPDATE %I.inventario_credocubes SET activo = false, estado = $2, ultima_actualizacion = now() WHERE rfid = $1',
+          schema
+        );
+        await client.query(deactivateSql, [normalizedRfid, 'Fuera de inventario']);
       }
     }
 
@@ -508,7 +514,7 @@ const reassignInventarioCentral = async (rfid, { tenantId, cambiarDueno = false,
         baseItem.nombre_unidad,
         normalizedRfid,
         baseItem.lote,
-        baseItem.estado,
+        'En Bodega',
         baseItem.sub_estado,
         baseItem.categoria,
         baseItem.fecha_ingreso
@@ -553,13 +559,17 @@ const desasignarInventarioCentral = async (rfid) => {
     // Inhabilitar en todos los tenants donde esté activo antes de pasarlo a admin
     const activeTenants = await findActiveTenantsForRfid(normalizedRfid, tenants);
     for (const { schema } of activeTenants) {
-      const deactivateSql = format('UPDATE %I.inventario_credocubes SET activo = false, ultima_actualizacion = now() WHERE rfid = $1', schema);
-      await client.query(deactivateSql, [normalizedRfid]);
+      const deactivateSql = format(
+        'UPDATE %I.inventario_credocubes SET activo = false, estado = $2, ultima_actualizacion = now() WHERE rfid = $1',
+        schema
+      );
+      await client.query(deactivateSql, [normalizedRfid, 'Fuera de inventario']);
     }
 
     const adminRow = await upsertAdmin(client, {
       ...found.item,
       rfid: normalizedRfid,
+      estado: 'En Bodega',
       activo: true,
       asignado_tenant_id: null,
       tenant_schema_name: ADMIN_SCHEMA_PLACEHOLDER
