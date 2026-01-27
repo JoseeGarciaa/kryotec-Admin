@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Home, Users, LogOut, Moon, Sun, Package, Lightbulb } from 'lucide-react';
+import { Menu, X, Home, Users, LogOut, Moon, Sun, Package, Lightbulb, Boxes, Scan } from 'lucide-react';
 import logoBlue from '../../assets/images/Kry Sense RFID Render blue v2.png';
 import logoWhite from '../../assets/images/Kry Sense RFID Render white v2.png';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -33,8 +33,10 @@ export const MobileNavigation: React.FC = () => {
 
   const menuItems = [
     { icon: <Home size={22} />, label: 'Dashboard', path: '/dashboard' },
+    { icon: <Boxes size={22} />, label: 'Inventario central', path: '/dashboard?tab=inventario-central' },
     { icon: <Users size={22} />, label: 'Empresas', path: '/tenants' },
     { icon: <Users size={22} />, label: 'Usuarios', path: '/dashboard?tab=usuarios' },
+    { icon: <Scan size={22} />, label: 'Registro', path: '/dashboard?tab=tenant-register' },
   // Prospectos (nuevo)
   { icon: <Users size={22} />, label: 'Prospectos', path: '/dashboard?tab=prospectos' },
   { icon: <Package size={22} />, label: 'Inventario (Prospectos)', path: '/dashboard?tab=prospectos-inventario' },
