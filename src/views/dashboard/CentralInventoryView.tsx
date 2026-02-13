@@ -186,6 +186,7 @@ export const CentralInventoryView: React.FC = () => {
 
     let buffer = raw.replace(/\s+/g, '');
     const nextTokens = [...rfidTokens];
+    const prevCount = nextTokens.length;
 
     while (buffer.length >= 24) {
       const chunk = buffer.slice(0, 24);
@@ -200,7 +201,10 @@ export const CentralInventoryView: React.FC = () => {
 
     setRfidTokens(nextTokens);
     setScanBuffer(buffer);
-    await handleApplyFilters({ rfidTokens: nextTokens, scanBuffer: buffer });
+    // Solo refrescamos cuando se agrega un RFID completo o se limpia el campo
+    if (nextTokens.length !== prevCount || buffer.length === 0) {
+      await handleApplyFilters({ rfidTokens: nextTokens, scanBuffer: buffer });
+    }
   };
 
   const handleRemoveToken = async (token: string) => {
