@@ -55,6 +55,7 @@ export const CentralInventoryView: React.FC = () => {
   const [asignadoId, setAsignadoId] = useState('');
   const [modeloId, setModeloId] = useState('');
   const [activo, setActivo] = useState<'all' | 'active' | 'inactive'>('all');
+  const [rfidTokens, setRfidTokens] = useState<string[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -103,6 +104,7 @@ export const CentralInventoryView: React.FC = () => {
   const handleTabChange = async (tab: 'all' | 'admin') => {
     setActiveTab(tab);
     setSearch('');
+    setRfidTokens([]);
     setAsignadoId('');
     setModeloId('');
     setActivo('all');
@@ -125,10 +127,35 @@ export const CentralInventoryView: React.FC = () => {
 
   const handleClearFilters = async () => {
     setSearch('');
+    setRfidTokens([]);
     setAsignadoId('');
     setModeloId('');
     setActivo('all');
     await loadInventory({}, { pagination: { page: 1 }, replaceFilters: true });
+  };
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = event.target.value.toUpperCase();
+    if (!raw) {
+      setRfidTokens([]);
+      setSearch('');
+      return;
+    }
+
+    let buffer = raw.replace(/\s+/g, '');
+    const nextTokens = [...rfidTokens];
+
+    while (buffer.length >= 24) {
+      const chunk = buffer.slice(0, 24);
+      if (!nextTokens.includes(chunk)) {
+        nextTokens.push(chunk);
+      }
+      buffer = buffer.slice(24);
+    }
+
+    const composed = [...nextTokens, buffer].filter(Boolean).join(' ');
+    setRfidTokens(nextTokens);
+    setSearch(composed);
   };
 
   const handleChangePage = async (nextPage: number) => {
@@ -378,7 +405,7 @@ export const CentralInventoryView: React.FC = () => {
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 placeholder="Buscar por RFID o nombre"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={handleSearchChange}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
