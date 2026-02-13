@@ -259,13 +259,13 @@ export const TenantInventoryRegisterView: React.FC = () => {
       return;
     }
 
-    setSuccessMessage(null);
-    setErrorMessage(null);
-
-    if (scanned.some(entry => entry.value === rfid && entry.status === 'accepted')) {
-      setScanned(prev => [...prev, { value: rfid, status: 'duplicate_input', message: 'Duplicado en esta sesión' }]);
+    const alreadyScanned = scanned.find(entry => entry.value === rfid);
+    if (alreadyScanned) {
       return;
     }
+
+    setSuccessMessage(null);
+    setErrorMessage(null);
 
     setValidating(true);
     try {
@@ -564,7 +564,7 @@ export const TenantInventoryRegisterView: React.FC = () => {
                 const styles = statusStyles[entry.status] || statusStyles.accepted;
                 return (
                   <div
-                    key={`${entry.value}-${entry.status}`}
+                    key={entry.value}
                     className={`flex flex-col items-start gap-1 px-3 py-2 border rounded-lg text-sm ${styles.chip}`}
                   >
                     <div className="flex items-center gap-2">
