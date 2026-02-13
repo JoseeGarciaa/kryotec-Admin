@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Boxes, Building2, Clock3, History, RefreshCw, Search } from 'lucide-react';
 import { useCentralInventoryController } from '../../controllers/CentralInventoryController';
-import { CentralInventoryFilters, CentralInventoryItem, CreateCentralInventoryPayload } from '../../models/CentralInventoryModel';
+import { CentralInventoryFilters, CentralInventoryItem, CreateCentralInventoryPayload, fetchCentralInventory } from '../../models/CentralInventoryModel';
 import { Tenant } from '../../models/TenantModel';
 
 const Modal: React.FC<{ open: boolean; onClose: () => void; title: string; children?: React.ReactNode }> = ({ open, onClose, title, children }) => {
@@ -134,7 +134,17 @@ export const CentralInventoryView: React.FC = () => {
     await loadInventory({}, { pagination: { page: 1 }, replaceFilters: true });
   };
 
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const checkRfidExists = async (rfid: string): Promise<boolean> => {
+    try {
+      const res = await fetchCentralInventory({ search: rfid }, { page: 1, pageSize: 1 });
+      return res.total > 0;
+    } catch (err) {
+      console.error('Error validando RFID', rfid, err);
+      return false;
+    }
+  };
+
+  const handleSearchChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.value.toUpperCase();
     if (!raw) {
       setRfidTokens([]);
@@ -148,7 +158,10 @@ export const CentralInventoryView: React.FC = () => {
     while (buffer.length >= 24) {
       const chunk = buffer.slice(0, 24);
       if (!nextTokens.includes(chunk)) {
-        nextTokens.push(chunk);
+        const exists = await checkRfidExists(chunk);
+        if (exists) {
+          nextTokens.push(chunk);
+        }
       }
       buffer = buffer.slice(24);
     }
