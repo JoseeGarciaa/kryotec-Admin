@@ -123,6 +123,39 @@ export const useCentralInventoryController = () => {
     }
   }, [filters, page, pageSize]);
 
+  const loadInventoryMultiSearch = useCallback(async (
+    baseFilters: Partial<CentralInventoryFilters>,
+    tokens: string[]
+  ) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const queries = tokens.map(token => fetchCentralInventory({ ...baseFilters, search: token }, { page: 1, pageSize: 200 }));
+      const results = await Promise.all(queries);
+      const mergedMap = new Map<string, CentralInventoryItem>();
+      results.forEach(res => {
+        res.items.forEach(item => {
+          mergedMap.set(item.rfid, item);
+        });
+      });
+      const mergedItems = Array.from(mergedMap.values());
+      setItems(mergedItems);
+      setTotal(mergedItems.length);
+      setPage(1);
+      setPageSize(Math.max(pageSize, mergedItems.length || 1));
+      setTotalPages(1);
+      const nextFilters = { ...baseFilters, search: tokens.join(' ') } as CentralInventoryFilters;
+      setFilters(nextFilters);
+      return mergedItems;
+    } catch (err) {
+      const message = extractErrorMessage(err);
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [pageSize]);
+
   const createItem = useCallback(async (payload: CreateCentralInventoryPayload) => {
     setSaving(true);
     setError(null);
@@ -217,6 +250,7 @@ export const useCentralInventoryController = () => {
     historyLoading,
     loadMetadata,
     loadInventory,
+    loadInventoryMultiSearch,
     createItem,
     reassignItem,
     unassignItem,

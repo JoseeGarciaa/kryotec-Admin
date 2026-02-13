@@ -45,6 +45,7 @@ export const CentralInventoryView: React.FC = () => {
     historyLoading,
     loadMetadata,
     loadInventory,
+    loadInventoryMultiSearch,
     createItem,
     reassignItem,
     unassignItem,
@@ -143,7 +144,14 @@ export const CentralInventoryView: React.FC = () => {
 
   const handleApplyFilters = async (overrides: Parameters<typeof buildFilters>[0] = {}) => {
     const filtersToApply = buildFilters(overrides);
-    await loadInventory(filtersToApply, { pagination: { page: 1 }, replaceFilters: true });
+    const tokens = overrides.rfidTokens ?? rfidTokens;
+    const base = activeTab === 'admin' ? { source: 'admin' as const } : {};
+    if (tokens.length > 1) {
+      await loadInventoryMultiSearch({ ...base, ...filtersToApply }, tokens);
+      setSearch(tokens.join(' '));
+      return;
+    }
+    await loadInventory({ ...base, ...filtersToApply }, { pagination: { page: 1 }, replaceFilters: true });
     setSearch(filtersToApply.search || '');
   };
 
@@ -154,7 +162,8 @@ export const CentralInventoryView: React.FC = () => {
     setAsignadoId('');
     setModeloId('');
     setActivo('all');
-    await loadInventory({}, { pagination: { page: 1 }, replaceFilters: true });
+    const base = activeTab === 'admin' ? { source: 'admin' as const } : {};
+    await loadInventory(base, { pagination: { page: 1 }, replaceFilters: true });
   };
 
   const checkRfidExists = async (rfid: string): Promise<boolean> => {
@@ -196,8 +205,11 @@ export const CentralInventoryView: React.FC = () => {
 
   const handleRemoveToken = async (token: string) => {
     const nextTokens = rfidTokens.filter(t => t !== token);
+    if (nextTokens.length === 0) {
+      setScanBuffer('');
+    }
     setRfidTokens(nextTokens);
-    await handleApplyFilters({ rfidTokens: nextTokens });
+    await handleApplyFilters({ rfidTokens: nextTokens, scanBuffer: nextTokens.length === 0 ? '' : scanBuffer });
   };
 
   const handleChangePage = async (nextPage: number) => {
@@ -435,96 +447,94 @@ export const CentralInventoryView: React.FC = () => {
       )}
 
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800">
-        {activeTab !== 'admin' && (
-          <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-800 flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-              <Search className="w-5 h-5" />
-              <span className="font-medium">Filtros</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
-              <input
-                type="text"
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                placeholder="Buscar por RFID o nombre"
-                value={scanBuffer}
-                onChange={handleSearchChange}
-              />
-              <div className="flex flex-wrap gap-2 col-span-full">
-                {rfidTokens.map(token => (
-                  <span
-                    key={token}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-blue-600 text-white"
-                  >
-                    {token}
-                    <button
-                      type="button"
-                      className="ml-1 text-white/80 hover:text-white"
-                      onClick={() => handleRemoveToken(token)}
-                    >×</button>
-                  </span>
-                ))}
-              </div>
-              <select
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                value={asignadoId}
-                onChange={async (e) => {
-                  const next = e.target.value;
-                  setAsignadoId(next);
-                  await handleApplyFilters({ asignadoId: next });
-                }}
-              >
-                <option value="">Asignado: todos</option>
-                {tenantOptions.map(opt => (
-                  <option key={`a-${opt.value}`} value={opt.value}><TenantOption tenant={opt.tenant} /></option>
-                ))}
-              </select>
-              <select
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                value={modeloId}
-                onChange={async (e) => {
-                  const next = e.target.value;
-                  setModeloId(next);
-                  await handleApplyFilters({ modeloId: next });
-                }}
-              >
-                <option value="">Modelo: todos</option>
-                {modeloOptions.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <select
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                value={activo}
-                onChange={async (e) => {
-                  const next = e.target.value as 'all' | 'active' | 'inactive';
-                  setActivo(next);
-                  await handleApplyFilters({ activo: next });
-                }}
-              >
-                <option value="all">Estado lógico</option>
-                <option value="active">Activos</option>
-                <option value="inactive">Inactivos</option>
-              </select>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handleClearFilters}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-              >Limpiar</button>
-              <div className="flex items-center gap-2 ml-auto text-sm text-gray-600 dark:text-gray-300">
-                <span>Tamaño página:</span>
-                <select
-                  value={pageSize}
-                  onChange={handlePageSizeChange}
-                  className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+        <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-800 flex flex-col gap-4">
+          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+            <Search className="w-5 h-5" />
+            <span className="font-medium">Filtros</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+            <input
+              type="text"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              placeholder="Buscar por RFID o nombre"
+              value={scanBuffer}
+              onChange={handleSearchChange}
+            />
+            <div className="flex flex-wrap gap-2 col-span-full">
+              {rfidTokens.map(token => (
+                <span
+                  key={token}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-blue-600 text-white"
                 >
-                  {[10, 20, 50, 100].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              </div>
+                  {token}
+                  <button
+                    type="button"
+                    className="ml-1 text-white/80 hover:text-white"
+                    onClick={() => handleRemoveToken(token)}
+                  >×</button>
+                </span>
+              ))}
+            </div>
+            <select
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              value={asignadoId}
+              onChange={async (e) => {
+                const next = e.target.value;
+                setAsignadoId(next);
+                await handleApplyFilters({ asignadoId: next });
+              }}
+            >
+              <option value="">Asignado: todos</option>
+              {tenantOptions.map(opt => (
+                <option key={`a-${opt.value}`} value={opt.value}><TenantOption tenant={opt.tenant} /></option>
+              ))}
+            </select>
+            <select
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              value={modeloId}
+              onChange={async (e) => {
+                const next = e.target.value;
+                setModeloId(next);
+                await handleApplyFilters({ modeloId: next });
+              }}
+            >
+              <option value="">Modelo: todos</option>
+              {modeloOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <select
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              value={activo}
+              onChange={async (e) => {
+                const next = e.target.value as 'all' | 'active' | 'inactive';
+                setActivo(next);
+                await handleApplyFilters({ activo: next });
+              }}
+            >
+              <option value="all">Estado lógico</option>
+              <option value="active">Activos</option>
+              <option value="inactive">Inactivos</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            >Limpiar</button>
+            <div className="flex items-center gap-2 ml-auto text-sm text-gray-600 dark:text-gray-300">
+              <span>Tamaño página:</span>
+              <select
+                value={pageSize}
+                onChange={handlePageSizeChange}
+                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+              >
+                {[10, 20, 50, 100].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
             </div>
           </div>
-        )}
+        </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
