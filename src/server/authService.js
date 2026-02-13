@@ -207,9 +207,10 @@ const authService = {
 
       // Contraseña válida → resetear estado de bloqueo
       const sessionTimeoutMinutes = normalizeSessionTimeout(user.session_timeout_minutos);
-      // Token con vencimiento absoluto amplio; la inactividad se maneja en frontend
-      const expiresInMinutes = Math.max(sessionTimeoutMinutes, ABSOLUTE_SESSION_MINUTES);
-      const expiresInCfg = `${expiresInMinutes}m`;
+      // El token debe durar bastante más que el timeout de inactividad para no expulsar al usuario activo
+      // Se fuerza un mínimo amplio (ABSOLUTE_SESSION_MINUTES, por defecto 12h) y al menos +60 min sobre la inactividad
+      const absoluteMinutes = Math.max(ABSOLUTE_SESSION_MINUTES, sessionTimeoutMinutes + 60);
+      const expiresInCfg = `${absoluteMinutes}m`;
       const expiresAtDate = calculatePasswordExpiry(
         user.ultimo_cambio_contraseña || now
       );
