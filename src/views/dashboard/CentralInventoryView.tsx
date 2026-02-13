@@ -51,7 +51,8 @@ export const CentralInventoryView: React.FC = () => {
     loadHistory
   } = useCentralInventoryController();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(''); // kept for compatibility; represents current filter string
+  const [scanBuffer, setScanBuffer] = useState(''); // current typing/scan fragment (<24)
   const [asignadoId, setAsignadoId] = useState('');
   const [modeloId, setModeloId] = useState('');
   const [activo, setActivo] = useState<'all' | 'active' | 'inactive'>('all');
@@ -114,19 +115,41 @@ export const CentralInventoryView: React.FC = () => {
     await loadInventory(baseFilters, { pagination: { page: 1 }, replaceFilters: true });
   };
 
-  const handleApplyFilters = async () => {
+  const buildFilters = (overrides: {
+    rfidTokens?: string[];
+    scanBuffer?: string;
+    asignadoId?: string;
+    modeloId?: string;
+    activo?: 'all' | 'active' | 'inactive';
+  } = {}) => {
+    const nextTokens = overrides.rfidTokens ?? rfidTokens;
+    const nextBuffer = overrides.scanBuffer ?? scanBuffer;
+    const nextAsignado = overrides.asignadoId ?? asignadoId;
+    const nextModelo = overrides.modeloId ?? modeloId;
+    const nextActivo = overrides.activo ?? activo;
+
+    const searchTerm = nextTokens.length > 0
+      ? nextTokens.join(' ')
+      : nextBuffer.trim();
+
     const next: any = {};
-    const cleanedSearch = search.trim();
-    if (cleanedSearch) next.search = cleanedSearch;
-    if (asignadoId) next.asignadoTenantId = Number(asignadoId);
-    if (modeloId) next.modeloId = Number(modeloId);
-    if (activo === 'active') next.activo = true;
-    if (activo === 'inactive') next.activo = false;
-    await loadInventory(next, { pagination: { page: 1 }, replaceFilters: true });
+    if (searchTerm) next.search = searchTerm;
+    if (nextAsignado) next.asignadoTenantId = Number(nextAsignado);
+    if (nextModelo) next.modeloId = Number(nextModelo);
+    if (nextActivo === 'active') next.activo = true;
+    if (nextActivo === 'inactive') next.activo = false;
+    return next;
+  };
+
+  const handleApplyFilters = async (overrides: Parameters<typeof buildFilters>[0] = {}) => {
+    const filtersToApply = buildFilters(overrides);
+    await loadInventory(filtersToApply, { pagination: { page: 1 }, replaceFilters: true });
+    setSearch(filtersToApply.search || '');
   };
 
   const handleClearFilters = async () => {
     setSearch('');
+    setScanBuffer('');
     setRfidTokens([]);
     setAsignadoId('');
     setModeloId('');
@@ -147,8 +170,8 @@ export const CentralInventoryView: React.FC = () => {
   const handleSearchChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.value.toUpperCase();
     if (!raw) {
-      setRfidTokens([]);
-      setSearch('');
+      setScanBuffer('');
+      await handleApplyFilters({ rfidTokens: [], scanBuffer: '' });
       return;
     }
 
@@ -166,9 +189,15 @@ export const CentralInventoryView: React.FC = () => {
       buffer = buffer.slice(24);
     }
 
-    const composed = [...nextTokens, buffer].filter(Boolean).join(' ');
     setRfidTokens(nextTokens);
-    setSearch(composed);
+    setScanBuffer(buffer);
+    await handleApplyFilters({ rfidTokens: nextTokens, scanBuffer: buffer });
+  };
+
+  const handleRemoveToken = async (token: string) => {
+    const nextTokens = rfidTokens.filter(t => t !== token);
+    setRfidTokens(nextTokens);
+    await handleApplyFilters({ rfidTokens: nextTokens });
   };
 
   const handleChangePage = async (nextPage: number) => {
@@ -417,19 +446,32 @@ export const CentralInventoryView: React.FC = () => {
                 type="text"
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 placeholder="Buscar por RFID o nombre"
-                value={search}
+                value={scanBuffer}
                 onChange={handleSearchChange}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleApplyFilters();
-                  }
-                }}
               />
+              <div className="flex flex-wrap gap-2 col-span-full">
+                {rfidTokens.map(token => (
+                  <span
+                    key={token}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-blue-600 text-white"
+                  >
+                    {token}
+                    <button
+                      type="button"
+                      className="ml-1 text-white/80 hover:text-white"
+                      onClick={() => handleRemoveToken(token)}
+                    >×</button>
+                  </span>
+                ))}
+              </div>
               <select
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 value={asignadoId}
-                onChange={(e) => setAsignadoId(e.target.value)}
+                onChange={async (e) => {
+                  const next = e.target.value;
+                  setAsignadoId(next);
+                  await handleApplyFilters({ asignadoId: next });
+                }}
               >
                 <option value="">Asignado: todos</option>
                 {tenantOptions.map(opt => (
@@ -439,7 +481,11 @@ export const CentralInventoryView: React.FC = () => {
               <select
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 value={modeloId}
-                onChange={(e) => setModeloId(e.target.value)}
+                onChange={async (e) => {
+                  const next = e.target.value;
+                  setModeloId(next);
+                  await handleApplyFilters({ modeloId: next });
+                }}
               >
                 <option value="">Modelo: todos</option>
                 {modeloOptions.map(opt => (
@@ -449,7 +495,11 @@ export const CentralInventoryView: React.FC = () => {
               <select
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 value={activo}
-                onChange={(e) => setActivo(e.target.value as 'all' | 'active' | 'inactive')}
+                onChange={async (e) => {
+                  const next = e.target.value as 'all' | 'active' | 'inactive';
+                  setActivo(next);
+                  await handleApplyFilters({ activo: next });
+                }}
               >
                 <option value="all">Estado lógico</option>
                 <option value="active">Activos</option>
@@ -457,11 +507,6 @@ export const CentralInventoryView: React.FC = () => {
               </select>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handleApplyFilters}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >Aplicar</button>
               <button
                 type="button"
                 onClick={handleClearFilters}
