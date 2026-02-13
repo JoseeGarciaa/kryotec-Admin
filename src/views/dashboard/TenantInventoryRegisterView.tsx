@@ -99,9 +99,6 @@ export const TenantInventoryRegisterView: React.FC = () => {
           .filter(tenant => tenant.esquema?.startsWith('tenant_') && tenant.esquema !== 'tenant_base')
           .sort((a, b) => a.nombre.localeCompare(b.nombre));
         setTenants(filtered);
-        if (filtered.length) {
-          setSelectedSchema(filtered[0].esquema);
-        }
       } catch (err) {
         setTenantsError(err instanceof Error ? err.message : 'Error al cargar empresas');
       } finally {
@@ -161,14 +158,6 @@ export const TenantInventoryRegisterView: React.FC = () => {
         setSedes(sedeList);
         setZonas([]);
         setSecciones([]);
-        if (modelList.length) {
-          const firstType = modelList[0].tipo || 'Sin tipo';
-          setSelectedType(firstType);
-          const firstModel = modelList.find(model => (model.tipo || 'Sin tipo') === firstType);
-          if (firstModel) {
-            setSelectedModelId(String(firstModel.modelo_id));
-          }
-        }
       } catch (err) {
         setModelsError(err instanceof Error ? err.message : 'Error al cargar metadatos del tenant');
       } finally {
@@ -384,8 +373,9 @@ export const TenantInventoryRegisterView: React.FC = () => {
             onChange={(event) => setSelectedSchema(event.target.value)}
             disabled={tenantsLoading || tenants.length === 0}
           >
-            {tenantsLoading && <option>Cargando empresas...</option>}
-            {!tenantsLoading && tenants.length === 0 && <option>No hay tenants disponibles</option>}
+            <option value="" disabled={tenants.length === 0}>Selecciona empresa</option>
+            {tenantsLoading && <option value="">Cargando empresas...</option>}
+            {!tenantsLoading && tenants.length === 0 && <option value="">No hay tenants disponibles</option>}
             {!tenantsLoading && tenants.map(tenant => (
               <option key={tenant.id} value={tenant.esquema}>
                 {tenant.nombre} ({tenant.esquema})
@@ -452,12 +442,11 @@ export const TenantInventoryRegisterView: React.FC = () => {
                   value={selectedType}
                   onChange={(event) => {
                     setSelectedType(event.target.value);
-                    const firstModel = models.find(model => (model.tipo || 'Sin tipo') === event.target.value);
-                    setSelectedModelId(firstModel ? String(firstModel.modelo_id) : '');
+                    setSelectedModelId('');
                   }}
                   disabled={modelsLoading || models.length === 0}
                 >
-                  {modelTypes.length === 0 && <option value="">Sin modelos disponibles</option>}
+                  <option value="" disabled>{modelTypes.length === 0 ? 'Sin modelos disponibles' : 'Selecciona tipo'}</option>
                   {modelTypes.map(item => (
                     <option key={item.type} value={item.type}>{item.type}</option>
                   ))}
@@ -472,7 +461,7 @@ export const TenantInventoryRegisterView: React.FC = () => {
                   onChange={(event) => setSelectedModelId(event.target.value)}
                   disabled={selectedTypeModels.length === 0}
                 >
-                  {selectedTypeModels.length === 0 && <option value="">Selecciona tipo primero</option>}
+                  <option value="" disabled>{selectedTypeModels.length === 0 ? 'Selecciona tipo primero' : 'Selecciona modelo'}</option>
                   {selectedTypeModels.map(model => (
                     <option key={model.modelo_id} value={model.modelo_id}>
                       {model.nombre_modelo}{model.volumen_litros ? ` · ${model.volumen_litros} L` : ''}
